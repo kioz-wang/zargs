@@ -52,6 +52,8 @@ TBD
 
 ## Examples
 
-Look at [code](example/main.zig)
+Look at [builtin examples](example/main.zig)
 
 More examples are coming!
+
+- [filepacker](https://github.com/kioz-wang/filepacker/blob/master/src/main.zig)
