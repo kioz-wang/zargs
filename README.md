@@ -1,2 +1,2 @@
-# command
-Another Comptime-argparse for Zig! Let's start building your command line!
+# zargs
+Another Comptime-argparse for Zig! Let's start to build your command line!

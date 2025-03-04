@@ -1,0 +1,14 @@
+.{
+    .name = "zargs",
+    .version = "0.9.0",
+    .minimum_zig_version = "0.13.0",
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+        ".gitignore",
+    },
+}
