@@ -211,7 +211,6 @@ pub const Iter = struct {
         self.cache_optarg = null;
         self.flag_termiantor = false;
         self.cache_token = null;
-        self.debug = false;
         return self;
     }
 

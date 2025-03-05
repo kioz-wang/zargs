@@ -10,55 +10,44 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const exe = b.addExecutable(.{
-        .name = "example",
-        .root_source_file = b.path("example/main.zig"),
-        .target = target,
-        .optimize = optimize,
-        .strip = true,
-    });
-    exe.root_module.addImport("zargs", mod);
-    const exe_install = b.addInstallArtifact(exe, .{});
-    exe_install.step.dependOn(&exe.step);
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(&exe_install.step);
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    const run_step = b.step("run", "Run main example");
-    run_step.dependOn(&run_cmd.step);
-
     const examples_step = b.step("examples", "Build examples");
 
     if (std.fs.cwd().openDir("example", .{ .iterate = true })) |d| {
         var it = d.iterate();
-        const example_prefix = "ex-";
-        const example_suffix = ".zig";
+        const ex_prefix = "ex-";
+        const ex_suffix = ".zig";
         while (it.next() catch null) |e| {
             if (e.kind != .file) {
                 continue;
             }
-            if (!std.mem.startsWith(u8, e.name, example_prefix)) {
+            if (!std.mem.startsWith(u8, e.name, ex_prefix)) {
                 continue;
             }
-            if (!std.mem.endsWith(u8, e.name, example_suffix)) {
+            if (!std.mem.endsWith(u8, e.name, ex_suffix)) {
                 continue;
             }
-            var exe_name = e.name[example_prefix.len..];
-            exe_name = exe_name[0..(exe_name.len - example_suffix.len)];
-            const example = b.addExecutable(.{
+            var exe_name = e.name[ex_prefix.len..];
+            exe_name = exe_name[0..(exe_name.len - ex_suffix.len)];
+            const ex_exe = b.addExecutable(.{
                 .name = exe_name,
                 .root_source_file = b.path("example").path(b, e.name),
                 .target = target,
                 .optimize = optimize,
                 .strip = true,
             });
-            example.root_module.addImport("zargs", mod);
-            const example_install = b.addInstallArtifact(example, .{});
-            example_install.step.dependOn(&example.step);
+            ex_exe.root_module.addImport("zargs", mod);
+            const ex_install = b.addInstallArtifact(ex_exe, .{});
+            ex_install.step.dependOn(&ex_exe.step);
 
-            examples_step.dependOn(&example_install.step);
+            examples_step.dependOn(&ex_install.step);
+
+            const ex_run_cmd = b.addRunArtifact(ex_exe);
+            ex_run_cmd.step.dependOn(&ex_install.step);
+            if (b.args) |args| {
+                ex_run_cmd.addArgs(args);
+            }
+            const ex_run_step = b.step(e.name[0..(e.name.len - ex_suffix.len)], b.fmt("Run example {s}", .{exe_name}));
+            ex_run_step.dependOn(&ex_run_cmd.step);
         }
     } else |err| {
         std.log.err("NotFound examples {any}", .{err});

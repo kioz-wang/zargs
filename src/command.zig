@@ -43,9 +43,9 @@ test upper {
 }
 
 pub const Iter = @import("token.zig").Iter;
+pub const parser = @import("parser.zig");
 
 pub const Command = struct {
-    const parser = @import("parser.zig");
     const meta = @import("meta.zig");
 
     pub const Builtin = struct {
