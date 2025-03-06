@@ -10,23 +10,49 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const exe = b.addExecutable(.{
-        .name = "example",
-        .root_source_file = b.path("example/main.zig"),
-        .target = target,
-        .optimize = optimize,
-        .strip = true,
-    });
-    exe.root_module.addImport("zargs", mod);
-    b.installArtifact(exe);
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    const ex_dirname = "examples";
+    const examples_step = b.step("examples", "Build examples");
 
-    const run_step = b.step("run", "Run the example");
-    run_step.dependOn(&run_cmd.step);
+    if (std.fs.cwd().openDir(ex_dirname, .{ .iterate = true })) |d| {
+        var it = d.iterate();
+        const ex_prefix = "ex-";
+        const ex_suffix = ".zig";
+        while (it.next() catch null) |e| {
+            if (e.kind != .file) {
+                continue;
+            }
+            if (!std.mem.startsWith(u8, e.name, ex_prefix)) {
+                continue;
+            }
+            if (!std.mem.endsWith(u8, e.name, ex_suffix)) {
+                continue;
+            }
+            var exe_name = e.name[ex_prefix.len..];
+            exe_name = exe_name[0..(exe_name.len - ex_suffix.len)];
+            const ex_exe = b.addExecutable(.{
+                .name = exe_name,
+                .root_source_file = b.path(ex_dirname).path(b, e.name),
+                .target = target,
+                .optimize = optimize,
+                .strip = true,
+            });
+            ex_exe.root_module.addImport("zargs", mod);
+            const ex_install = b.addInstallArtifact(ex_exe, .{});
+            ex_install.step.dependOn(&ex_exe.step);
+
+            examples_step.dependOn(&ex_install.step);
+
+            const ex_run_cmd = b.addRunArtifact(ex_exe);
+            ex_run_cmd.step.dependOn(&ex_install.step);
+            if (b.args) |args| {
+                ex_run_cmd.addArgs(args);
+            }
+            const ex_run_step = b.step(e.name[0..(e.name.len - ex_suffix.len)], b.fmt("Run example {s}", .{exe_name}));
+            ex_run_step.dependOn(&ex_run_cmd.step);
+        }
+    } else |err| {
+        std.log.warn("NotFound {s} {any}", .{ ex_dirname, err });
+    }
 
     const test_step = b.step("test", "Run unit tests");
     const run_ut = b.addRunArtifact(b.addTest(.{
