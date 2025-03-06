@@ -1,13 +1,15 @@
 const std = @import("std");
 const testing = std.testing;
 
+const String = []const u8;
+
 pub const Type = union(enum) {
     const FormatOptions = std.fmt.FormatOptions;
     pub const Opt = union(enum) {
         /// Short option that follows the prefix_short
         short: u8,
         /// Long option that follows the prefix_long
-        long: []const u8,
+        long: String,
         pub fn format(self: @This(), comptime _: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
             try writer.writeAll(@tagName(self));
             try writer.writeAll("<");
@@ -24,11 +26,11 @@ pub const Type = union(enum) {
     };
     opt: Opt,
     /// Option argument that follows the connector_optarg
-    optArg: []const u8,
+    optArg: String,
     /// Positional argument that meets after the terminator
-    posArg: []const u8,
+    posArg: String,
     /// Positional argument, and maybe Option argument
-    arg: []const u8,
+    arg: String,
 
     const Self = @This();
 
@@ -69,8 +71,8 @@ const BaseIter = union(enum) {
     const Self = @This();
 
     const List = struct {
-        list: []const []const u8,
-        fn next(self: *List) ?[]const u8 {
+        list: []const String,
+        fn next(self: *List) ?String {
             if (self.list.len == 0) {
                 return null;
             }
@@ -79,7 +81,7 @@ const BaseIter = union(enum) {
             return token;
         }
     };
-    fn next(self: *Self) ?[]const u8 {
+    fn next(self: *Self) ?String {
         return switch (self.*) {
             .Sys => |*i| i.next(),
             .General => |*i| i.next(),
@@ -90,10 +92,10 @@ const BaseIter = union(enum) {
 };
 
 pub const Config = struct {
-    prefix_long: []const u8 = "--",
-    prefix_short: []const u8 = "-",
-    connector_optarg: []const u8 = "=",
-    terminator: []const u8 = "--",
+    prefix_long: String = "--",
+    prefix_short: String = "-",
+    connector_optarg: String = "=",
+    terminator: String = "--",
 
     const Self = @This();
     const Error = error{
@@ -155,9 +157,9 @@ pub const Iter = struct {
     config: Config = undefined,
     iter: BaseIter = undefined,
     /// cache short options and maybe an argument that is belong to last option
-    cache_shorts: ?[]const u8 = null,
+    cache_shorts: ?String = null,
     /// cache an option argument
-    cache_optarg: ?[]const u8 = null,
+    cache_optarg: ?String = null,
     /// mark if the terminator is found
     flag_termiantor: bool = false,
     /// cache for next&view
@@ -177,15 +179,15 @@ pub const Iter = struct {
         try config.validate();
         return .{ .config = config, .iter = .{ .Sys = try std.process.argsWithAllocator(allocator) } };
     }
-    pub fn initGeneral(allocator: std.mem.Allocator, line: []const u8, config: Config) !Self {
+    pub fn initGeneral(allocator: std.mem.Allocator, line: String, config: Config) !Self {
         try config.validate();
         return .{ .config = config, .iter = .{ .General = try std.process.ArgIteratorGeneral(.{}).init(allocator, line) } };
     }
-    pub fn initLine(line: []const u8, delimiters: ?[]const u8, config: Config) !Self {
+    pub fn initLine(line: String, delimiters: ?String, config: Config) !Self {
         try config.validate();
         return .{ .config = config, .iter = .{ .Line = std.mem.tokenizeAny(u8, line, delimiters orelse " \t\n") } };
     }
-    pub fn initList(list: []const []const u8, config: Config) !Self {
+    pub fn initList(list: []const String, config: Config) !Self {
         try config.validate();
         return .{ .config = config, .iter = .{ .List = .{ .list = list } } };
     }
@@ -424,7 +426,7 @@ pub const Iter = struct {
     }
 
     test "nextAll" {
-        var it = try Self.initList(&[_][]const u8{ "--verbose", "-a", "po s0", "--", "--verbose" }, .{});
+        var it = try Self.initList(&[_]String{ "--verbose", "-a", "po s0", "--", "--verbose" }, .{});
         defer it.deinit();
         const tokens = try it.nextAll(testing.allocator);
         defer testing.allocator.free(tokens);
@@ -448,7 +450,7 @@ pub const Iter = struct {
     }
 
     test "nextAllComptime" {
-        comptime var it = try Self.initList(&[_][]const u8{ "--verbose", "-a", "po s0", "--", "--verbose" }, .{});
+        comptime var it = try Self.initList(&[_]String{ "--verbose", "-a", "po s0", "--", "--verbose" }, .{});
         const tokens = comptime it.nextAllComptime();
         try testing.expectEqual(4, tokens.len);
         try testing.expectEqualSlices(u8, "verbose", tokens[0].opt.long);
@@ -457,8 +459,8 @@ pub const Iter = struct {
         try testing.expectEqualSlices(u8, "--verbose", tokens[3].posArg);
     }
 
-    pub fn nextAllBase(self: *Self, allocator: std.mem.Allocator) ![]const []const u8 {
-        var tokens = std.ArrayList([]const u8).init(allocator);
+    pub fn nextAllBase(self: *Self, allocator: std.mem.Allocator) ![]const String {
+        var tokens = std.ArrayList(String).init(allocator);
         defer tokens.deinit();
         while (self.iter.next()) |token| {
             try tokens.append(token);
@@ -467,13 +469,13 @@ pub const Iter = struct {
     }
 
     test "nextAllBase" {
-        var it = try Self.initList(&[_][]const u8{ "--verbose", "-a", "po s0", "--", "--verbose" }, .{});
+        var it = try Self.initList(&[_]String{ "--verbose", "-a", "po s0", "--", "--verbose" }, .{});
         defer it.deinit();
         const tokens = try it.nextAllBase(testing.allocator);
         defer testing.allocator.free(tokens);
         try testing.expectEqualSlices(
-            []const u8,
-            &[_][]const u8{ "--verbose", "-a", "po s0", "--", "--verbose" },
+            String,
+            &[_]String{ "--verbose", "-a", "po s0", "--", "--verbose" },
             tokens,
         );
     }
