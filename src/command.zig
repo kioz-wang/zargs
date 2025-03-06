@@ -749,7 +749,7 @@ pub const Command = struct {
 
         while (it.view() catch |e| return self.errCastIter(e)) |top| {
             switch (top) {
-                .Opt => |o| {
+                .opt => |o| {
                     var hit = false;
                     if (self.use_builtin_help) {
                         if (meta.hitOpt(Builtin.help, top)) {
@@ -798,7 +798,7 @@ pub const Command = struct {
                     }
                     return Error.UnknownOpt;
                 },
-                .PosArg, .Arg => {
+                .posArg, .arg => {
                     it.flag_termiantor = true;
                     break;
                 },
@@ -840,7 +840,7 @@ pub const Command = struct {
                 }
             }
             if (self.log) |log| {
-                log("Unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().PosArg});
+                log("Unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
             }
             return Error.UnknownSubCmd;
         }
@@ -848,7 +848,7 @@ pub const Command = struct {
     }
 
     fn consume(self: Self, comptime s: []const u8, r: anytype, it: *Iter, allocator: ?std.mem.Allocator) Error!bool {
-        const c = (it.viewMust() catch unreachable).as_posArg().PosArg;
+        const c = (it.viewMust() catch unreachable).as_posArg().posArg;
         if (std.mem.eql(u8, self.name, c)) {
             _ = it.next() catch unreachable;
             _ = it.reinit(it.config);

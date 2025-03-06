@@ -5,17 +5,17 @@ pub const Type = union(enum) {
     const FormatOptions = std.fmt.FormatOptions;
     pub const Opt = union(enum) {
         /// Short option that follows the prefix_short
-        Short: u8,
+        short: u8,
         /// Long option that follows the prefix_long
-        Long: []const u8,
+        long: []const u8,
         pub fn format(self: @This(), comptime _: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
             try writer.writeAll(@tagName(self));
             try writer.writeAll("<");
             switch (self) {
-                .Short => |s| {
+                .short => |s| {
                     try std.fmt.format(writer, "{c}", .{s});
                 },
-                .Long => |l| {
+                .long => |l| {
                     try std.fmt.formatBuf(l, options, writer);
                 },
             }
@@ -27,22 +27,22 @@ pub const Type = union(enum) {
         arg: []const u8,
         opt: Opt,
     };
-    Opt: Opt,
-    OptArg: OptArg,
+    opt: Opt,
+    optArg: OptArg,
     /// Positional argument that meets after the terminator
-    PosArg: []const u8,
+    posArg: []const u8,
     /// Positional argument, and maybe Option argument
-    Arg: []const u8,
+    arg: []const u8,
 
     const Self = @This();
 
     pub fn as_posArg(self: Self) Self {
         const arg = switch (self) {
-            .Opt, .OptArg => unreachable,
-            .PosArg => return self,
-            .Arg => |a| a,
+            .opt, .optArg => unreachable,
+            .posArg => return self,
+            .arg => |a| a,
         };
-        return .{ .PosArg = arg };
+        return .{ .posArg = arg };
     }
     pub fn format(
         self: Self,
@@ -53,15 +53,15 @@ pub const Type = union(enum) {
         try writer.writeAll(@tagName(self));
         try writer.writeAll("{ ");
         switch (self) {
-            .Opt => |o| {
+            .opt => |o| {
                 try o.format(fmt, options, writer);
             },
-            .OptArg => |o| {
+            .optArg => |o| {
                 try std.fmt.formatBuf(o.arg, options, writer);
                 try writer.writeAll(", ");
                 try o.opt.format(fmt, options, writer);
             },
-            .PosArg, .Arg => |a| {
+            .posArg, .arg => |a| {
                 try std.fmt.formatBuf(a, options, writer);
             },
         }
@@ -223,7 +223,7 @@ pub const Iter = struct {
         const config = self.config;
         if (self.cache_optarg) |optarg| {
             self.cache_optarg = null;
-            return .{ .OptArg = optarg };
+            return .{ .optArg = optarg };
         }
         if (self.cache_shorts) |shorts_| {
             const s = shorts_[0];
@@ -236,15 +236,15 @@ pub const Iter = struct {
                 if (optarg.len == 0) {
                     return Error.MissingOptionArgument;
                 }
-                self.cache_optarg = .{ .arg = optarg, .opt = .{ .Short = s } };
+                self.cache_optarg = .{ .arg = optarg, .opt = .{ .short = s } };
             } else {
                 self.cache_shorts = shorts;
             }
-            return .{ .Opt = .{ .Short = s } };
+            return .{ .opt = .{ .short = s } };
         }
         const token = self.iter.next() orelse return null;
         if (self.flag_termiantor) {
-            return .{ .PosArg = token };
+            return .{ .posArg = token };
         }
         if (std.mem.eql(u8, token, config.terminator)) {
             self.flag_termiantor = true;
@@ -261,9 +261,9 @@ pub const Iter = struct {
                     return Error.MissingOptionArgument;
                 }
                 long = long[0..i];
-                self.cache_optarg = .{ .arg = optarg, .opt = .{ .Long = long } };
+                self.cache_optarg = .{ .arg = optarg, .opt = .{ .long = long } };
             }
-            return .{ .Opt = .{ .Long = long } };
+            return .{ .opt = .{ .long = long } };
         }
         if (std.mem.startsWith(u8, token, config.prefix_short)) {
             self.cache_shorts = token[config.prefix_short.len..];
@@ -272,7 +272,7 @@ pub const Iter = struct {
             }
             return self.go();
         }
-        return .{ .Arg = token };
+        return .{ .arg = token };
     }
 
     test "go, missing long option" {
@@ -299,16 +299,16 @@ pub const Iter = struct {
     test "go, long option" {
         var it = try Self.initGeneral(testing.allocator, "--verbose", .{});
         defer it.deinit();
-        try testing.expectEqualSlices(u8, "verbose", (try it.go()).?.Opt.Long);
+        try testing.expectEqualSlices(u8, "verbose", (try it.go()).?.opt.long);
         try testing.expectEqual(null, try it.go());
     }
 
     test "go, long option with arg" {
         var it = try Self.initGeneral(testing.allocator, "--verbose=hello", .{});
         defer it.deinit();
-        try testing.expectEqualSlices(u8, "verbose", (try it.go()).?.Opt.Long);
-        const optarg = (try it.go()).?.OptArg;
-        try testing.expectEqualSlices(u8, "verbose", optarg.opt.Long);
+        try testing.expectEqualSlices(u8, "verbose", (try it.go()).?.opt.long);
+        const optarg = (try it.go()).?.optArg;
+        try testing.expectEqualSlices(u8, "verbose", optarg.opt.long);
         try testing.expectEqualSlices(u8, "hello", optarg.arg);
         try testing.expectEqual(null, try it.go());
     }
@@ -316,51 +316,51 @@ pub const Iter = struct {
     test "go, short option" {
         var it = try Self.initGeneral(testing.allocator, "-v", .{});
         defer it.deinit();
-        try testing.expectEqual('v', (try it.go()).?.Opt.Short);
+        try testing.expectEqual('v', (try it.go()).?.opt.short);
         try testing.expectEqual(null, try it.go());
     }
 
     test "go, short options" {
         var it = try Self.initGeneral(testing.allocator, "-abc", .{});
         defer it.deinit();
-        try testing.expectEqual('a', (try it.go()).?.Opt.Short);
-        try testing.expectEqual('b', (try it.go()).?.Opt.Short);
-        try testing.expectEqual('c', (try it.go()).?.Opt.Short);
+        try testing.expectEqual('a', (try it.go()).?.opt.short);
+        try testing.expectEqual('b', (try it.go()).?.opt.short);
+        try testing.expectEqual('c', (try it.go()).?.opt.short);
         try testing.expectEqual(null, try it.go());
     }
 
     test "go, short option with arg" {
         var it = try Self.initGeneral(testing.allocator, "-v=hello", .{});
         defer it.deinit();
-        try testing.expectEqual('v', (try it.go()).?.Opt.Short);
-        try testing.expectEqualSlices(u8, "hello", (try it.go()).?.OptArg.arg);
+        try testing.expectEqual('v', (try it.go()).?.opt.short);
+        try testing.expectEqualSlices(u8, "hello", (try it.go()).?.optArg.arg);
         try testing.expectEqual(null, try it.go());
     }
 
     test "go, short options with arg" {
         var it = try Self.initGeneral(testing.allocator, "-abc=hello", .{});
         defer it.deinit();
-        try testing.expectEqual('a', (try it.go()).?.Opt.Short);
-        try testing.expectEqual('b', (try it.go()).?.Opt.Short);
-        try testing.expectEqual('c', (try it.go()).?.Opt.Short);
-        try testing.expectEqualSlices(u8, "hello", (try it.go()).?.OptArg.arg);
+        try testing.expectEqual('a', (try it.go()).?.opt.short);
+        try testing.expectEqual('b', (try it.go()).?.opt.short);
+        try testing.expectEqual('c', (try it.go()).?.opt.short);
+        try testing.expectEqualSlices(u8, "hello", (try it.go()).?.optArg.arg);
         try testing.expectEqual(null, try it.go());
     }
 
     test "go, general argument" {
         var it = try Self.initGeneral(testing.allocator, "pos0", .{});
         defer it.deinit();
-        try testing.expectEqualSlices(u8, "pos0", (try it.go()).?.Arg);
+        try testing.expectEqualSlices(u8, "pos0", (try it.go()).?.arg);
         try testing.expectEqual(null, try it.go());
     }
 
     test "go, positional arguments" {
         var it = try Self.initGeneral(testing.allocator, "-- pos0 -a -- --verbose", .{});
         defer it.deinit();
-        try testing.expectEqualSlices(u8, "pos0", (try it.go()).?.PosArg);
-        try testing.expectEqualSlices(u8, "-a", (try it.go()).?.PosArg);
-        try testing.expectEqualSlices(u8, "--", (try it.go()).?.PosArg);
-        try testing.expectEqualSlices(u8, "--verbose", (try it.go()).?.PosArg);
+        try testing.expectEqualSlices(u8, "pos0", (try it.go()).?.posArg);
+        try testing.expectEqualSlices(u8, "-a", (try it.go()).?.posArg);
+        try testing.expectEqualSlices(u8, "--", (try it.go()).?.posArg);
+        try testing.expectEqualSlices(u8, "--verbose", (try it.go()).?.posArg);
         try testing.expectEqual(null, try it.go());
     }
 
@@ -404,12 +404,12 @@ pub const Iter = struct {
         var it = try Self.initGeneral(testing.allocator, "-- pos0 -a -- --verbose", .{});
         defer it.deinit();
         it.debug = true;
-        try testing.expectEqualSlices(u8, "pos0", (try it.view()).?.PosArg);
-        try testing.expectEqualSlices(u8, "pos0", (try it.next()).?.PosArg);
-        try testing.expectEqualSlices(u8, "-a", (try it.next()).?.PosArg);
-        try testing.expectEqualSlices(u8, "--", (try it.view()).?.PosArg);
-        try testing.expectEqualSlices(u8, "--", (try it.next()).?.PosArg);
-        try testing.expectEqualSlices(u8, "--verbose", (try it.next()).?.PosArg);
+        try testing.expectEqualSlices(u8, "pos0", (try it.view()).?.posArg);
+        try testing.expectEqualSlices(u8, "pos0", (try it.next()).?.posArg);
+        try testing.expectEqualSlices(u8, "-a", (try it.next()).?.posArg);
+        try testing.expectEqualSlices(u8, "--", (try it.view()).?.posArg);
+        try testing.expectEqualSlices(u8, "--", (try it.next()).?.posArg);
+        try testing.expectEqualSlices(u8, "--verbose", (try it.next()).?.posArg);
         try testing.expectEqual(null, try it.next());
         try testing.expectEqual(null, try it.view());
         try testing.expectEqual(null, try it.view());
@@ -440,10 +440,10 @@ pub const Iter = struct {
         const tokens = try it.nextAll(testing.allocator);
         defer testing.allocator.free(tokens);
         try testing.expectEqual(4, tokens.len);
-        try testing.expectEqualSlices(u8, "verbose", tokens[0].Opt.Long);
-        try testing.expectEqual('a', tokens[1].Opt.Short);
-        try testing.expectEqualSlices(u8, "po s0", tokens[2].Arg);
-        try testing.expectEqualSlices(u8, "--verbose", tokens[3].PosArg);
+        try testing.expectEqualSlices(u8, "verbose", tokens[0].opt.long);
+        try testing.expectEqual('a', tokens[1].opt.short);
+        try testing.expectEqualSlices(u8, "po s0", tokens[2].arg);
+        try testing.expectEqualSlices(u8, "--verbose", tokens[3].posArg);
     }
 
     pub fn nextAllComptime(self: *Self) []const Type {
@@ -462,10 +462,10 @@ pub const Iter = struct {
         comptime var it = try Self.initList(&[_][]const u8{ "--verbose", "-a", "po s0", "--", "--verbose" }, .{});
         const tokens = comptime it.nextAllComptime();
         try testing.expectEqual(4, tokens.len);
-        try testing.expectEqualSlices(u8, "verbose", tokens[0].Opt.Long);
-        try testing.expectEqual('a', tokens[1].Opt.Short);
-        try testing.expectEqualSlices(u8, "po s0", tokens[2].Arg);
-        try testing.expectEqualSlices(u8, "--verbose", tokens[3].PosArg);
+        try testing.expectEqualSlices(u8, "verbose", tokens[0].opt.long);
+        try testing.expectEqual('a', tokens[1].opt.short);
+        try testing.expectEqualSlices(u8, "po s0", tokens[2].arg);
+        try testing.expectEqualSlices(u8, "--verbose", tokens[3].posArg);
     }
 
     pub fn nextAllBase(self: *Self, allocator: std.mem.Allocator) ![]const []const u8 {
