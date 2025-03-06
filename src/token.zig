@@ -92,7 +92,9 @@ const BaseIter = union(enum) {
 };
 
 pub const Config = struct {
+    /// 匹配时，`prefix_long`优先于`prefix_short`
     prefix_long: String = "--",
+    /// 匹配时，`prefix_long`优先于`prefix_short`
     prefix_short: String = "-",
     connector_optarg: String = "=",
     terminator: String = "--",
@@ -167,21 +169,30 @@ test trimString {
 
 const FSM = struct {
     const Error = Iter.Error;
+    fn toOptArg(s: String, connector: String) Error!Type {
+        const a = s[connector.len..];
+        if (a.len == 0) {
+            return Error.MissingOptionArgument;
+        } else {
+            return .{ .optArg = trimString(a) };
+        }
+    }
     const Short = struct {
         const Self = @This();
         s: ?String,
         connector: String,
+        _first: bool = true,
         fn go(self: *Self) Error!?Type {
             if (self.s) |s| {
                 if (std.mem.startsWith(u8, s, self.connector)) {
-                    self.s = null;
-                    const a = s[self.connector.len..];
-                    if (a.len == 0) {
-                        return Error.MissingOptionArgument;
-                    } else {
-                        return .{ .optArg = trimString(a) };
+                    if (self._first) {
+                        return Error.MissingShortOption;
                     }
+                    const t = try toOptArg(s, self.connector);
+                    self.s = null;
+                    return t;
                 } else {
+                    self._first = false;
                     self.s = s[1..];
                     return .{ .opt = .{ .short = s[0] } };
                 }
@@ -190,12 +201,13 @@ const FSM = struct {
             }
         }
     };
-    test "FSM, Short" {
+    test "FSM, Short, normal" {
         var fsm: Short = .{ .s = "abc=hello", .connector = "=" };
         try testing.expectEqual('a', (try fsm.go()).?.opt.short);
         try testing.expectEqual('b', (try fsm.go()).?.opt.short);
         try testing.expectEqual('c', (try fsm.go()).?.opt.short);
         try testing.expectEqualStrings("hello", (try fsm.go()).?.optArg);
+        try testing.expectEqual(null, try fsm.go());
         try testing.expectEqual(null, try fsm.go());
     }
     test "FSM, Short, empty argument" {
@@ -203,14 +215,94 @@ const FSM = struct {
         try testing.expectEqual('a', (try fsm.go()).?.opt.short);
         try testing.expectEqualStrings("", (try fsm.go()).?.optArg);
         try testing.expectEqual(null, try fsm.go());
+        try testing.expectEqual(null, try fsm.go());
+    }
+    test "FSM, Short, argument with space" {
+        var fsm: Short = .{ .s = "a=\" a\"", .connector = "=" };
+        try testing.expectEqual('a', (try fsm.go()).?.opt.short);
+        try testing.expectEqualStrings(" a", (try fsm.go()).?.optArg);
+        try testing.expectEqual(null, try fsm.go());
+        try testing.expectEqual(null, try fsm.go());
     }
     test "FSM, Short, MissingOptionArgument" {
         var fsm: Short = .{ .s = "a=", .connector = "=" };
         try testing.expectEqual('a', (try fsm.go()).?.opt.short);
         try testing.expectError(Error.MissingOptionArgument, fsm.go());
+        try testing.expectError(Error.MissingOptionArgument, fsm.go());
+    }
+    test "FSM, Short, MissingShortOption" {
+        var fsm: Short = .{ .s = "=", .connector = "=" };
+        try testing.expectError(Error.MissingShortOption, fsm.go());
+        try testing.expectError(Error.MissingShortOption, fsm.go());
+    }
+    const Long = struct {
+        const Self = @This();
+        s: ?String,
+        connector: String,
+        _first: bool = true,
+        fn go(self: *Self) Error!?Type {
+            if (self.s) |s| {
+                if (std.mem.indexOf(u8, s, self.connector)) |i| {
+                    if (i == 0) {
+                        if (self._first) {
+                            return Error.MissingLongOption;
+                        }
+                        const t = try toOptArg(s, self.connector);
+                        self.s = null;
+                        return t;
+                    } else {
+                        self._first = false;
+                        self.s = s[i..];
+                        return .{ .opt = .{ .long = trimString(s[0..i]) } };
+                    }
+                } else {
+                    self.s = null;
+                    return .{ .opt = .{ .long = trimString(s) } };
+                }
+            } else {
+                return null;
+            }
+        }
+    };
+    test "FSM, Long, normal" {
+        var fsm: Long = .{ .s = "word=hello", .connector = "=" };
+        try testing.expectEqualStrings("word", (try fsm.go()).?.opt.long);
+        try testing.expectEqualStrings("hello", (try fsm.go()).?.optArg);
+        try testing.expectEqual(null, try fsm.go());
         try testing.expectEqual(null, try fsm.go());
     }
-    const Long = struct {};
+    test "FSM, Long, empty argument" {
+        var fsm: Long = .{ .s = "word=\"\"", .connector = "=" };
+        try testing.expectEqualStrings("word", (try fsm.go()).?.opt.long);
+        try testing.expectEqualStrings("", (try fsm.go()).?.optArg);
+        try testing.expectEqual(null, try fsm.go());
+        try testing.expectEqual(null, try fsm.go());
+    }
+    test "FSM, Long, argument with space" {
+        var fsm: Long = .{ .s = "word=\" a\"", .connector = "=" };
+        try testing.expectEqualStrings("word", (try fsm.go()).?.opt.long);
+        try testing.expectEqualStrings(" a", (try fsm.go()).?.optArg);
+        try testing.expectEqual(null, try fsm.go());
+        try testing.expectEqual(null, try fsm.go());
+    }
+    test "FSM, Long, MissingOptionArgument" {
+        var fsm: Long = .{ .s = "word=", .connector = "=" };
+        try testing.expectEqualStrings("word", (try fsm.go()).?.opt.long);
+        try testing.expectError(Error.MissingOptionArgument, fsm.go());
+        try testing.expectError(Error.MissingOptionArgument, fsm.go());
+    }
+    test "FSM, Long, MissingLongOption" {
+        var fsm: Long = .{ .s = "=", .connector = "=" };
+        try testing.expectError(Error.MissingLongOption, fsm.go());
+        try testing.expectError(Error.MissingLongOption, fsm.go());
+    }
+    test "FSM, Long, mess" {
+        var fsm: Long = .{ .s = "\" word\"=\"\"", .connector = "=" };
+        try testing.expectEqualStrings(" word", (try fsm.go()).?.opt.long);
+        try testing.expectEqualStrings("", (try fsm.go()).?.optArg);
+        try testing.expectEqual(null, try fsm.go());
+        try testing.expectEqual(null, try fsm.go());
+    }
 };
 
 pub const Iter = struct {
