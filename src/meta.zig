@@ -170,8 +170,7 @@ pub const OptArg = struct {
                     return Error.Missing;
                 };
                 s = switch (t) {
-                    .optArg => |o| o.arg,
-                    .arg => |a| a,
+                    .optArg, .arg => |a| a,
                     else => {
                         if (self.meta.log) |log| {
                             log("{s}: Expect {s} but {}", .{ opt, self.arg_name, t });

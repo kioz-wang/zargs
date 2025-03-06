@@ -236,7 +236,7 @@ pub const Command = struct {
             self.use_builtin_help = false;
         }
         if (short == null and long == null) {
-            @compileError("opt(Arg)<" ++ name ++ "> at least one of short or long is required");
+            @compileError("opt(Arg):" ++ name ++ " at least one of short or long is required");
         }
         if (short) |s| self.checkShort(s);
         if (long) |l| self.checkLong(l);
@@ -256,7 +256,7 @@ pub const Command = struct {
     ) *Self {
         self.checkOpt(name, config.short, config.long);
         if (T != bool and @typeInfo(T) != .Int) {
-            @compileError("opt<" ++ name ++ "> not accept " ++ @typeName(T));
+            @compileError("opt:" ++ name ++ " not accept " ++ @typeName(T));
         }
         var m: meta.Meta = .{ .name = name, .T = T, .help = config.help, .log = self.log };
         if (config.default) |d| {
@@ -316,11 +316,11 @@ pub const Command = struct {
         const info = @typeInfo(T);
         if (info == .Pointer) {
             if (info.Pointer.size != .Slice or !info.Pointer.is_const) {
-                @compileError("optArg<" ++ name ++ "> not accept " ++ @typeName(T));
+                @compileError("optArg:" ++ name ++ " not accept " ++ @typeName(T));
             }
             if (T != []const u8) {
                 if (config.default != null) {
-                    @compileError("optArg<" ++ name ++ "> not support default for Slice");
+                    @compileError("optArg:" ++ name ++ " not support default for Slice");
                 }
             }
         }
@@ -392,7 +392,7 @@ pub const Command = struct {
         },
     ) *Self {
         if (self.use_subCmd) |s| {
-            @compileError("posArg<" ++ name ++ "> not accept because subCmd<" ++ s ++ "> exist");
+            @compileError("posArg:" ++ name ++ " not accept because subCmd<" ++ s ++ "> exist");
         }
         self.checkName(name);
         var m: meta.Meta = .{ .name = name, .T = T, .help = config.help, .log = self.log };
@@ -765,7 +765,7 @@ pub const Command = struct {
                             if (!hitOpts.add(m.meta.name)) {
                                 if (m.meta.T != bool) break;
                                 if (self.log) |log| {
-                                    log("opt<{s}> repeat with {}", .{ m.meta.name, o });
+                                    log("opt:{s} repeat with {}", .{ m.meta.name, o });
                                 }
                                 return Error.RepeatOpt;
                             }
@@ -776,7 +776,7 @@ pub const Command = struct {
                     inline for (self._optArgs) |m| {
                         if (m.meta.isSlice() and allocator == null) {
                             if (self.log) |log| {
-                                log("optArg<{s}> allocator is required", .{m.meta.name});
+                                log("optArg:{s} allocator is required", .{m.meta.name});
                             }
                             return Error.Allocator;
                         }
@@ -785,7 +785,7 @@ pub const Command = struct {
                             if (!hitOpts.add(m.meta.name)) {
                                 if (m.meta.isSlice()) break;
                                 if (self.log) |log| {
-                                    log("optArg<{s}> repeat with {}", .{ m.meta.name, o });
+                                    log("optArg:{s} repeat with {}", .{ m.meta.name, o });
                                 }
                                 return Error.RepeatOpt;
                             }
@@ -810,7 +810,7 @@ pub const Command = struct {
                 if (!m.meta.isSlice() and !hitOpts.contain(m.meta.name)) {
                     if (self.log) |log| {
                         const u = comptime m.usage();
-                        log("optArg<{s}> is required, but not found {s}", .{ m.meta.name, u });
+                        log("optArg:{s} is required, but not found {s}", .{ m.meta.name, u });
                     }
                     return Error.MissingOptArg;
                 }

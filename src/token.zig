@@ -22,13 +22,9 @@ pub const Type = union(enum) {
             try writer.writeAll(">");
         }
     };
-    /// Option argument that follows the connector_optarg
-    pub const OptArg = struct {
-        arg: []const u8,
-        opt: Opt,
-    };
     opt: Opt,
-    optArg: OptArg,
+    /// Option argument that follows the connector_optarg
+    optArg: []const u8,
     /// Positional argument that meets after the terminator
     posArg: []const u8,
     /// Positional argument, and maybe Option argument
@@ -51,21 +47,16 @@ pub const Type = union(enum) {
         writer: anytype,
     ) @TypeOf(writer).Error!void {
         try writer.writeAll(@tagName(self));
-        try writer.writeAll("{ ");
+        try writer.writeAll("<");
         switch (self) {
             .opt => |o| {
                 try o.format(fmt, options, writer);
             },
-            .optArg => |o| {
-                try std.fmt.formatBuf(o.arg, options, writer);
-                try writer.writeAll(", ");
-                try o.opt.format(fmt, options, writer);
-            },
-            .posArg, .arg => |a| {
+            .optArg, .posArg, .arg => |a| {
                 try std.fmt.formatBuf(a, options, writer);
             },
         }
-        try writer.writeAll(" }");
+        try writer.writeAll(">");
     }
 };
 
@@ -166,7 +157,7 @@ pub const Iter = struct {
     /// cache short options and maybe an argument that is belong to last option
     cache_shorts: ?[]const u8 = null,
     /// cache an option argument
-    cache_optarg: ?Type.OptArg = null,
+    cache_optarg: ?[]const u8 = null,
     /// mark if the terminator is found
     flag_termiantor: bool = false,
     /// cache for next&view
@@ -236,7 +227,7 @@ pub const Iter = struct {
                 if (optarg.len == 0) {
                     return Error.MissingOptionArgument;
                 }
-                self.cache_optarg = .{ .arg = optarg, .opt = .{ .short = s } };
+                self.cache_optarg = optarg;
             } else {
                 self.cache_shorts = shorts;
             }
@@ -261,7 +252,7 @@ pub const Iter = struct {
                     return Error.MissingOptionArgument;
                 }
                 long = long[0..i];
-                self.cache_optarg = .{ .arg = optarg, .opt = .{ .long = long } };
+                self.cache_optarg = optarg;
             }
             return .{ .opt = .{ .long = long } };
         }
@@ -307,9 +298,7 @@ pub const Iter = struct {
         var it = try Self.initGeneral(testing.allocator, "--verbose=hello", .{});
         defer it.deinit();
         try testing.expectEqualSlices(u8, "verbose", (try it.go()).?.opt.long);
-        const optarg = (try it.go()).?.optArg;
-        try testing.expectEqualSlices(u8, "verbose", optarg.opt.long);
-        try testing.expectEqualSlices(u8, "hello", optarg.arg);
+        try testing.expectEqualSlices(u8, "hello", (try it.go()).?.optArg);
         try testing.expectEqual(null, try it.go());
     }
 
@@ -333,7 +322,7 @@ pub const Iter = struct {
         var it = try Self.initGeneral(testing.allocator, "-v=hello", .{});
         defer it.deinit();
         try testing.expectEqual('v', (try it.go()).?.opt.short);
-        try testing.expectEqualSlices(u8, "hello", (try it.go()).?.optArg.arg);
+        try testing.expectEqualSlices(u8, "hello", (try it.go()).?.optArg);
         try testing.expectEqual(null, try it.go());
     }
 
@@ -343,7 +332,7 @@ pub const Iter = struct {
         try testing.expectEqual('a', (try it.go()).?.opt.short);
         try testing.expectEqual('b', (try it.go()).?.opt.short);
         try testing.expectEqual('c', (try it.go()).?.opt.short);
-        try testing.expectEqualSlices(u8, "hello", (try it.go()).?.optArg.arg);
+        try testing.expectEqualSlices(u8, "hello", (try it.go()).?.optArg);
         try testing.expectEqual(null, try it.go());
     }
 
