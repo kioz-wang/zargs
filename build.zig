@@ -10,9 +10,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const ex_dirname = "examples";
     const examples_step = b.step("examples", "Build examples");
 
-    if (std.fs.cwd().openDir("example", .{ .iterate = true })) |d| {
+    if (std.fs.cwd().openDir(ex_dirname, .{ .iterate = true })) |d| {
         var it = d.iterate();
         const ex_prefix = "ex-";
         const ex_suffix = ".zig";
@@ -30,7 +31,7 @@ pub fn build(b: *std.Build) void {
             exe_name = exe_name[0..(exe_name.len - ex_suffix.len)];
             const ex_exe = b.addExecutable(.{
                 .name = exe_name,
-                .root_source_file = b.path("example").path(b, e.name),
+                .root_source_file = b.path(ex_dirname).path(b, e.name),
                 .target = target,
                 .optimize = optimize,
                 .strip = true,
@@ -50,7 +51,7 @@ pub fn build(b: *std.Build) void {
             ex_run_step.dependOn(&ex_run_cmd.step);
         }
     } else |err| {
-        std.log.err("NotFound examples {any}", .{err});
+        std.log.warn("NotFound {s} {any}", .{ ex_dirname, err });
     }
 
     const test_step = b.step("test", "Run unit tests");
