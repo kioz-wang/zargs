@@ -270,8 +270,13 @@ pub const Config = struct {
 };
 
 fn trimString(s: String) String {
-    const t = std.mem.trim(u8, s, " \t\n");
-    return if (t[0] == '"' and t[t.len - 1] == '"') t[0 .. t.len - 1][1..] else t;
+    var t = std.mem.trim(u8, s, " \t\n");
+    if (t.len >= 2) {
+        if (t[0] == '"' and t[t.len - 1] == '"') {
+            t = t[0 .. t.len - 1][1..];
+        }
+    }
+    return t;
 }
 
 test trimString {
@@ -279,6 +284,8 @@ test trimString {
     try testing.expectEqualStrings("\"ab", trimString("\"ab "));
     try testing.expectEqualStrings("ab", trimString("\"ab\" "));
     try testing.expectEqualStrings("", trimString("\"\" "));
+    try testing.expectEqualStrings("", trimString(" "));
+    try testing.expectEqualStrings("a", trimString(" a"));
 }
 
 const FSM = struct {
@@ -707,24 +714,69 @@ const FSM = struct {
 };
 
 pub const Iter = struct {
+    const Self = @This();
     pub const Error = FSM.Error;
-    pub const It = IterWrapper(FSM.Token, Error!?Type, "!?");
+    const It = IterWrapper(FSM.Token, Error!?Type, "!?");
 
-    pub fn init(allocator: std.mem.Allocator, config: Config) !It {
+    it: It,
+
+    pub fn init(allocator: std.mem.Allocator, config: Config) !Self {
         try config.validate();
-        return It.init(try FSM.Token.init(.{ .sys = try std.process.argsWithAllocator(allocator) }, config));
+        const it = It.init(try FSM.Token.init(.{ .sys = try std.process.argsWithAllocator(allocator) }, config));
+        return .{ .it = it };
     }
-    pub fn initGeneral(allocator: std.mem.Allocator, line: String, config: Config) !It {
+    pub fn initGeneral(allocator: std.mem.Allocator, line: String, config: Config) !Self {
         try config.validate();
-        return It.init(try FSM.Token.init(.{ .general = try std.process.ArgIteratorGeneral(.{}).init(allocator, line) }, config));
+        const it = It.init(try FSM.Token.init(.{ .general = try std.process.ArgIteratorGeneral(.{}).init(allocator, line) }, config));
+        return .{ .it = it };
     }
-    pub fn initLine(line: String, delimiters: ?String, config: Config) !It {
+    pub fn initLine(line: String, delimiters: ?String, config: Config) !Self {
         try config.validate();
-        return It.init(try FSM.Token.init(.{ .line = std.mem.tokenizeAny(u8, line, delimiters orelse " \t\n") }, config));
+        const it = It.init(try FSM.Token.init(.{ .line = std.mem.tokenizeAny(u8, line, delimiters orelse " \t\n") }, config));
+        return .{ .it = it };
     }
-    pub fn initList(list: []const String, config: Config) !It {
+    pub fn initList(list: []const String, config: Config) !Self {
         try config.validate();
-        return It.init(try FSM.Token.init(.{ .list = .{ .list = list } }, config));
+        const it = It.init(try FSM.Token.init(.{ .list = .{ .list = list } }, config));
+        return .{ .it = it };
+    }
+    pub fn deinit(self: *Self) void {
+        self.it.deinit();
+    }
+    pub fn next(self: *Self) Error!?Type {
+        return self.it.next();
+    }
+    pub fn nextMust(self: *Self) !Type {
+        return (try self.next()) orelse error.NoMore;
+    }
+    pub fn view(self: *Self) Error!?Type {
+        return self.it.view();
+    }
+    pub fn viewMust(self: *Self) !Type {
+        return (try self.view()) orelse error.NoMore;
+    }
+    /// 😵 TODO
+    pub fn nextAllBase(self: *Self, allocator: std.mem.Allocator) ![]const String {
+        var items = std.ArrayList(String).init(allocator);
+        defer items.deinit();
+        while (self.it.it.it.next()) |item| {
+            try items.append(item);
+        }
+        self.it.it._state = .end;
+        return try items.toOwnedSlice();
+    }
+    /// 😵 TODO
+    pub fn fsm_to_pos(self: *Self) void {
+        self.it.it._state = .pos;
+    }
+    /// 😵 TODO
+    pub fn reinit(self: *Self) void {
+        self.it.it._state = .begin;
+        self.it.cache = null;
+        self.it.it.it.cache = null;
+    }
+    pub fn debug(self: *Self, b: bool) void {
+        self.it.debug = b;
     }
 };
 

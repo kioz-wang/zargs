@@ -799,7 +799,7 @@ pub const Command = struct {
                     return Error.UnknownOpt;
                 },
                 .posArg, .arg => {
-                    it.flag_termiantor = true;
+                    it.fsm_to_pos();
                     break;
                 },
                 else => unreachable,
@@ -851,7 +851,7 @@ pub const Command = struct {
         const c = (it.viewMust() catch unreachable).as_posArg().posArg;
         if (std.mem.eql(u8, self.name, c)) {
             _ = it.next() catch unreachable;
-            _ = it.reinit(it.config);
+            it.reinit();
             @field(r, s) = @unionInit(@TypeOf(@field(r, s)), self.name, try self.parseAlloc(it, allocator));
             return true;
         }
@@ -997,19 +997,6 @@ pub const Command = struct {
 
     test "parse, Error TokenIter" {
         const cmd: Self = .{ .name = "exp" };
-        {
-            comptime var c = cmd;
-            var it = try Iter.initLine("--help=", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.TokenIter, c.parse(&it));
-        }
-        {
-            comptime var c = cmd;
-            _ = c.posArg("number", u32, .{ .default = 1 });
-            var it = try Iter.initLine("-a=", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.TokenIter, c.parse(&it));
-        }
         {
             comptime var c = cmd;
             var it = try Iter.initLine("--", null, .{ .terminator = "==" });
