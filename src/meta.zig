@@ -36,11 +36,11 @@ pub const Meta = struct {
 };
 
 pub fn hitOpt(self: anytype, opt: token.Type) bool {
-    switch (opt.Opt) {
-        .Short => |s| {
+    switch (opt.opt) {
+        .short => |s| {
             if (s == self.short) return true;
         },
-        .Long => |l| {
+        .long => |l| {
             if (self.long) |long|
                 if (std.mem.eql(u8, long, l)) return true;
         },
@@ -148,13 +148,13 @@ pub const OptArg = struct {
                         }
                         return Error.Missing;
                     };
-                    if (t != .Arg) {
+                    if (t != .arg) {
                         if (self.meta.log) |log| {
                             log("{s}: Expect {s}[{d}] but {}", .{ opt, self.arg_name, i, t });
                         }
                         return Error.Missing;
                     }
-                    s = t.Arg;
+                    s = t.arg;
                     item.* = self.meta.parseAny(s) orelse {
                         if (self.meta.log) |log| {
                             log("{s}: Parse {s}[{d}] but fail from {s}", .{ opt, self.arg_name, i, s });
@@ -170,8 +170,7 @@ pub const OptArg = struct {
                     return Error.Missing;
                 };
                 s = switch (t) {
-                    .OptArg => |o| o.arg,
-                    .Arg => |a| a,
+                    .optArg, .arg => |a| a,
                     else => {
                         if (self.meta.log) |log| {
                             log("{s}: Expect {s} but {}", .{ opt, self.arg_name, t });
@@ -235,7 +234,7 @@ pub const PosArg = struct {
                     }
                     return Error.Missing;
                 };
-                s = t.as_posArg().PosArg;
+                s = t.as_posArg().posArg;
                 item.* = self.meta.parseAny(s) orelse {
                     if (self.meta.log) |log| {
                         log("Parse {s}[{d}] but fail from {s}", .{ self.arg_name, i, s });
@@ -250,7 +249,7 @@ pub const PosArg = struct {
                 }
                 return Error.Missing;
             };
-            s = t.as_posArg().PosArg;
+            s = t.as_posArg().posArg;
             var value = self.meta.parseAny(s) orelse {
                 if (self.meta.log) |log| {
                     log("Parse {s} but fail from {s}", .{ self.arg_name, s });

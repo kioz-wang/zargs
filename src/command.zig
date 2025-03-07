@@ -236,7 +236,7 @@ pub const Command = struct {
             self.use_builtin_help = false;
         }
         if (short == null and long == null) {
-            @compileError("opt(Arg)<" ++ name ++ "> at least one of short or long is required");
+            @compileError("opt(Arg):" ++ name ++ " at least one of short or long is required");
         }
         if (short) |s| self.checkShort(s);
         if (long) |l| self.checkLong(l);
@@ -256,7 +256,7 @@ pub const Command = struct {
     ) *Self {
         self.checkOpt(name, config.short, config.long);
         if (T != bool and @typeInfo(T) != .Int) {
-            @compileError("opt<" ++ name ++ "> not accept " ++ @typeName(T));
+            @compileError("opt:" ++ name ++ " not accept " ++ @typeName(T));
         }
         var m: meta.Meta = .{ .name = name, .T = T, .help = config.help, .log = self.log };
         if (config.default) |d| {
@@ -316,11 +316,11 @@ pub const Command = struct {
         const info = @typeInfo(T);
         if (info == .Pointer) {
             if (info.Pointer.size != .Slice or !info.Pointer.is_const) {
-                @compileError("optArg<" ++ name ++ "> not accept " ++ @typeName(T));
+                @compileError("optArg:" ++ name ++ " not accept " ++ @typeName(T));
             }
             if (T != []const u8) {
                 if (config.default != null) {
-                    @compileError("optArg<" ++ name ++ "> not support default for Slice");
+                    @compileError("optArg:" ++ name ++ " not support default for Slice");
                 }
             }
         }
@@ -392,7 +392,7 @@ pub const Command = struct {
         },
     ) *Self {
         if (self.use_subCmd) |s| {
-            @compileError("posArg<" ++ name ++ "> not accept because subCmd<" ++ s ++ "> exist");
+            @compileError("posArg:" ++ name ++ " not accept because subCmd<" ++ s ++ "> exist");
         }
         self.checkName(name);
         var m: meta.Meta = .{ .name = name, .T = T, .help = config.help, .log = self.log };
@@ -749,7 +749,7 @@ pub const Command = struct {
 
         while (it.view() catch |e| return self.errCastIter(e)) |top| {
             switch (top) {
-                .Opt => |o| {
+                .opt => |o| {
                     var hit = false;
                     if (self.use_builtin_help) {
                         if (meta.hitOpt(Builtin.help, top)) {
@@ -765,7 +765,7 @@ pub const Command = struct {
                             if (!hitOpts.add(m.meta.name)) {
                                 if (m.meta.T != bool) break;
                                 if (self.log) |log| {
-                                    log("opt<{s}> repeat with {}", .{ m.meta.name, o });
+                                    log("opt:{s} repeat with {}", .{ m.meta.name, o });
                                 }
                                 return Error.RepeatOpt;
                             }
@@ -776,7 +776,7 @@ pub const Command = struct {
                     inline for (self._optArgs) |m| {
                         if (m.meta.isSlice() and allocator == null) {
                             if (self.log) |log| {
-                                log("optArg<{s}> allocator is required", .{m.meta.name});
+                                log("optArg:{s} allocator is required", .{m.meta.name});
                             }
                             return Error.Allocator;
                         }
@@ -785,7 +785,7 @@ pub const Command = struct {
                             if (!hitOpts.add(m.meta.name)) {
                                 if (m.meta.isSlice()) break;
                                 if (self.log) |log| {
-                                    log("optArg<{s}> repeat with {}", .{ m.meta.name, o });
+                                    log("optArg:{s} repeat with {}", .{ m.meta.name, o });
                                 }
                                 return Error.RepeatOpt;
                             }
@@ -798,8 +798,8 @@ pub const Command = struct {
                     }
                     return Error.UnknownOpt;
                 },
-                .PosArg, .Arg => {
-                    it.flag_termiantor = true;
+                .posArg, .arg => {
+                    it.fsm_to_pos();
                     break;
                 },
                 else => unreachable,
@@ -810,7 +810,7 @@ pub const Command = struct {
                 if (!m.meta.isSlice() and !hitOpts.contain(m.meta.name)) {
                     if (self.log) |log| {
                         const u = comptime m.usage();
-                        log("optArg<{s}> is required, but not found {s}", .{ m.meta.name, u });
+                        log("optArg:{s} is required, but not found {s}", .{ m.meta.name, u });
                     }
                     return Error.MissingOptArg;
                 }
@@ -840,7 +840,7 @@ pub const Command = struct {
                 }
             }
             if (self.log) |log| {
-                log("Unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().PosArg});
+                log("Unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
             }
             return Error.UnknownSubCmd;
         }
@@ -848,10 +848,10 @@ pub const Command = struct {
     }
 
     fn consume(self: Self, comptime s: []const u8, r: anytype, it: *Iter, allocator: ?std.mem.Allocator) Error!bool {
-        const c = (it.viewMust() catch unreachable).as_posArg().PosArg;
+        const c = (it.viewMust() catch unreachable).as_posArg().posArg;
         if (std.mem.eql(u8, self.name, c)) {
             _ = it.next() catch unreachable;
-            _ = it.reinit(it.config);
+            it.reinit();
             @field(r, s) = @unionInit(@TypeOf(@field(r, s)), self.name, try self.parseAlloc(it, allocator));
             return true;
         }
@@ -997,19 +997,6 @@ pub const Command = struct {
 
     test "parse, Error TokenIter" {
         const cmd: Self = .{ .name = "exp" };
-        {
-            comptime var c = cmd;
-            var it = try Iter.initLine("--help=", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.TokenIter, c.parse(&it));
-        }
-        {
-            comptime var c = cmd;
-            _ = c.posArg("number", u32, .{ .default = 1 });
-            var it = try Iter.initLine("-a=", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.TokenIter, c.parse(&it));
-        }
         {
             comptime var c = cmd;
             var it = try Iter.initLine("--", null, .{ .terminator = "==" });

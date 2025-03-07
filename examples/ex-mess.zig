@@ -68,7 +68,7 @@ pub fn main() !void {
     // var it = try Iter.initLine("-vv --int 1 --bool t --lastc hi --word ok --3word a b c 1", null, .{});
     // var it = try Iter.initLine("a", null, .{});
     defer it.deinit();
-    // it.debug = true;
+    // it.debug(true);
 
     const args = cmd.parseAlloc(&it, allocator) catch |e| {
         std.debug.print("\nError => {}\n", .{e});
@@ -76,7 +76,7 @@ pub fn main() !void {
         std.process.exit(1);
     };
     defer cmd.destory(&args, allocator);
-    // it.debug = false;
+    // it.debug(false);
     std.debug.print("{}\n\n", .{args});
 
     switch (args.sub) {
@@ -90,8 +90,7 @@ pub fn main() !void {
 
     if ((try it.view()) != null) {
         std.debug.print("\nRemain command line input:\n\t", .{});
-        // const remain = try it.nextAllBase(allocator);
-        const remain = try it.reinit(.{}).nextAll(allocator);
+        const remain = try it.nextAllBase(allocator);
         defer allocator.free(remain);
         std.debug.print("{s}\n", .{remain});
     }

@@ -53,7 +53,7 @@ pub fn main() !void {
     _ = try it.next();
     defer it.deinit();
 
-    // it.debug = true;
+    // it.debug(true);
 
     const args = try cmd.parseAlloc(&it, allocator);
     defer cmd.destory(&args, allocator);
@@ -68,8 +68,7 @@ pub fn main() !void {
             }
         },
         .remain => |_| {
-            // FIXME first num of remaining has been abandoned
-            const nums = try it.reinit(.{}).nextAllBase(allocator);
+            const nums = try it.nextAllBase(allocator);
             defer allocator.free(nums);
             for (nums) |s| {
                 const n = any(@TypeOf(sum), s) orelse {
