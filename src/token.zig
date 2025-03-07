@@ -104,6 +104,9 @@ fn IterWrapper(I: type, R: type, specifier: ?[]const u8) type {
             self.log("\x1b[92mview\x1b[90m{s}\x1b[0m {" ++ (specifier orelse "") ++ "}\n", .{ s, item });
             return item;
         }
+        pub fn init(it: I) Self {
+            return .{ .it = it };
+        }
         pub fn deinit(self: *Self) void {
             if (@hasDecl(I, "deinit")) {
                 self.it.deinit();
@@ -137,7 +140,7 @@ test "Wrap Compile, E!T" {
 }
 
 test "Wrap, normal" {
-    var it: IterWrapper(ListIter(u32), ?u32, "?") = .{ .it = .{ .list = &[_]u32{ 1, 2, 3, 4 } } };
+    var it = IterWrapper(ListIter(u32), ?u32, "?").init(.{ .list = &[_]u32{ 1, 2, 3, 4 } });
     it.debug = true;
     defer it.deinit();
     try testing.expectEqual(1, it.view().?);
@@ -152,7 +155,7 @@ test "Wrap, normal" {
 }
 
 test "Wrap, nextAll" {
-    var it: IterWrapper(ListIter(u32), ?u32, "?") = .{ .it = .{ .list = &[_]u32{ 1, 2, 3, 4 } } };
+    var it = IterWrapper(ListIter(u32), ?u32, "?").init(.{ .list = &[_]u32{ 1, 2, 3, 4 } });
     it.debug = true;
     defer it.deinit();
     try testing.expectEqual(1, it.view().?);
@@ -394,7 +397,7 @@ const FSM = struct {
             }
         }
         test "Wrap, FSM, Short" {
-            var it: IterWrapper(Short, Error!?Type, "!?") = .{ .it = Short.init("ac=hello", "=") };
+            var it = IterWrapper(Short, Error!?Type, "!?").init(Short.init("ac=hello", "="));
             it.debug = true;
             defer it.deinit();
             try testing.expectEqual('a', (try it.view()).?.opt.short);
@@ -507,7 +510,8 @@ const FSM = struct {
     };
     const Token = struct {
         const Self = @This();
-        it: IterWrapper(BaseIter, ?String, "?s"),
+        const It = IterWrapper(BaseIter, ?String, "?s");
+        it: It,
         config: Config,
         _state: State = .begin,
         const State = union(enum) {
@@ -566,7 +570,7 @@ const FSM = struct {
         }
         fn init(it: BaseIter, config: Config) !Self {
             try config.validate();
-            return .{ .it = .{ .it = it }, .config = config };
+            return .{ .it = It.init(it), .config = config };
         }
         fn deinit(self: *Self) void {
             self.it.deinit();
@@ -708,19 +712,19 @@ pub const Iter = struct {
 
     pub fn init(allocator: std.mem.Allocator, config: Config) !It {
         try config.validate();
-        return try FSM.Token.init(.{ .sys = try std.process.argsWithAllocator(allocator) }, config);
+        return It.init(try FSM.Token.init(.{ .sys = try std.process.argsWithAllocator(allocator) }, config));
     }
     pub fn initGeneral(allocator: std.mem.Allocator, line: String, config: Config) !It {
         try config.validate();
-        return try FSM.Token.init(.{ .general = try std.process.ArgIteratorGeneral(.{}).init(allocator, line) }, config);
+        return It.init(try FSM.Token.init(.{ .general = try std.process.ArgIteratorGeneral(.{}).init(allocator, line) }, config));
     }
     pub fn initLine(line: String, delimiters: ?String, config: Config) !It {
         try config.validate();
-        return try FSM.Token.init(.{ .line = std.mem.tokenizeAny(u8, line, delimiters orelse " \t\n") }, config);
+        return It.init(try FSM.Token.init(.{ .line = std.mem.tokenizeAny(u8, line, delimiters orelse " \t\n") }, config));
     }
     pub fn initList(list: []const String, config: Config) !It {
         try config.validate();
-        return try FSM.Token.init(.{ .list = .{ .list = list } }, config);
+        return It.init(try FSM.Token.init(.{ .list = .{ .list = list } }, config));
     }
 };
 
