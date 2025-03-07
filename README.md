@@ -52,7 +52,29 @@ TBD
 
 ## Examples
 
-Look at [builtin examples](example/main.zig)
+### builtin
+
+Look at [here](examples/)
+
+To build all examples:
+
+```bash
+zig build examples
+```
+
+To list all examples, all step prefixed `ex-` are examples:
+
+```bash
+zig build -l
+```
+
+To execute an example:
+
+```bash
+zig build ex-01.add -- -h
+```
+
+### more
 
 More examples are coming!
 
