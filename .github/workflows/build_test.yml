@@ -1,0 +1,33 @@
+name: Build examples and test all
+
+on:
+  pull_request:
+    branches: ["main"]
+
+  push:
+    branches:
+    - ci-test/*
+
+  workflow_dispatch:
+    
+permissions:
+  contents: read
+
+concurrency:
+  group: "build-test"
+  cancel-in-progress: false
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build examples
+        run: zig build examples
+      - name: Test
+        run: zig build test

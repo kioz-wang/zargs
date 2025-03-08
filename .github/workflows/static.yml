@@ -10,6 +10,7 @@ on:
     branches:
     - main
     - docs/*
+    - ci-test/*
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -36,8 +37,6 @@ jobs:
     steps:
       - name: Setup Zig
         uses: mlugg/setup-zig@v1
-        with:
-          version: 0.13.0
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Pages
@@ -47,7 +46,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
           path: './zig-out/docs'
       - name: Deploy to GitHub Pages
         id: deployment
