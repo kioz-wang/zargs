@@ -56,7 +56,7 @@ pub fn main() !void {
     // it.debug(true);
 
     const args = try cmd.parseAlloc(&it, allocator);
-    defer cmd.destory(&args, allocator);
+    defer cmd.destroy(&args, allocator);
 
     std.log.debug("parse done for {s}", .{@tagName(args.use)});
 

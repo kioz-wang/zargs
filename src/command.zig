@@ -674,7 +674,7 @@ pub const Command = struct {
         _ = cmd.Result();
     }
 
-    pub fn destory(self: Self, r: *const self.Result(), allocator: std.mem.Allocator) void {
+    pub fn destroy(self: Self, r: *const self.Result(), allocator: std.mem.Allocator) void {
         inline for (self._optArgs) |m| {
             if (@typeInfo(m.meta.T) == .Pointer) {
                 allocator.free(@field(r, m.meta.name));
@@ -689,7 +689,7 @@ pub const Command = struct {
             inline for (self._subCmds) |c| {
                 if (std.enums.nameCast(std.meta.Tag(self.SubCmdUnion()), c.name) == @field(r, s)) {
                     const sub = &@field(@field(r, s), c.name);
-                    c.destory(sub, allocator);
+                    c.destroy(sub, allocator);
                     break;
                 }
             }
