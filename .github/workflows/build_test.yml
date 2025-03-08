@@ -13,10 +13,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: "build-test"
-  cancel-in-progress: false
-
 jobs:
   build-test:
     runs-on: self-hosted
