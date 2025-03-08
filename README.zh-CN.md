@@ -224,7 +224,7 @@ const args = try cmd.parse(&it);
 
 - 提供对带不定数量参数的选项的支持
 - 为每个字符串重新分配内存，避免野指针
-- 使用 `cmd.destory(&args, allocator)` 释放内存
+- 使用 `cmd.destroy(&args, allocator)` 释放内存
 
 ### 编译时生成 usage 和 help
 

@@ -75,7 +75,7 @@ pub fn main() !void {
         std.debug.print("{s}\n", .{cmd.usage()});
         std.process.exit(1);
     };
-    defer cmd.destory(&args, allocator);
+    defer cmd.destroy(&args, allocator);
     // it.debug(false);
     std.debug.print("{}\n\n", .{args});
 

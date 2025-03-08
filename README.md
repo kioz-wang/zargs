@@ -224,7 +224,7 @@ Simply call `.parse` to generate the parser and argument structure. There is als
 
 - Provides support for options with a variable number of arguments.
 - Reallocates memory for each string to avoid dangling pointers.
-- Use `cmd.destory(&args, allocator)` to free memory.
+- Use `cmd.destroy(&args, allocator)` to free memory.
 
 ### Compile-Time Usage and Help Generation
 
