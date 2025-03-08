@@ -38,6 +38,8 @@ jobs:
     steps:
       - name: Setup Zig
         uses: mlugg/setup-zig@v1
+        with:
+          version: 0.14.0
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Pages
