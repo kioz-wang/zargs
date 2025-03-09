@@ -1,8 +1,7 @@
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
-const Iter = zargs.Iter;
-const any = zargs.parser.any;
+const TokenIter = zargs.TokenIter;
 
 var sum: i32 = 0;
 pub fn main() !void {
@@ -20,7 +19,7 @@ pub fn main() !void {
         .help = "Give me an integer to add",
         .parseFn = struct {
             fn f(s: []const u8) ?i32 {
-                const n = any(i32, s) orelse return null;
+                const n = zargs.parseAny(i32, s) orelse return null;
                 std.log.info("add {d}", .{n});
                 sum += n;
                 return n;
@@ -49,7 +48,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    var it = try Iter.init(allocator, .{});
+    var it = try TokenIter.init(allocator, .{});
     _ = try it.next();
     defer it.deinit();
 
@@ -71,7 +70,7 @@ pub fn main() !void {
             const nums = try it.nextAllBase(allocator);
             defer allocator.free(nums);
             for (nums) |s| {
-                const n = any(@TypeOf(sum), s) orelse {
+                const n = zargs.parseAny(@TypeOf(sum), s) orelse {
                     std.log.err("Fail to parse {s} to {s}", .{ s, @typeName(@TypeOf(sum)) });
                     std.process.exit(1);
                 };

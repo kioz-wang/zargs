@@ -1,7 +1,32 @@
 const std = @import("std");
 const testing = std.testing;
+const iter = @import("iter.zig");
 
 const String = []const u8;
+
+pub const BaseIter = union(enum) {
+    const Self = @This();
+    sys: std.process.ArgIterator,
+    general: std.process.ArgIteratorGeneral(.{}),
+    line: std.mem.TokenIterator(u8, .any),
+    list: iter.ListIter(String),
+
+    pub fn go(self: *Self) ?String {
+        return switch (self.*) {
+            .sys => |*i| i.next(),
+            .general => |*i| i.next(),
+            .line => |*i| i.next(),
+            .list => |*i| i.go(),
+        };
+    }
+    pub fn deinit(self: *Self) void {
+        switch (self.*) {
+            .sys => |*i| i.deinit(),
+            .general => |*i| i.deinit(),
+            else => {},
+        }
+    }
+};
 
 pub const Type = union(enum) {
     const FormatOptions = std.fmt.FormatOptions;
@@ -59,148 +84,6 @@ pub const Type = union(enum) {
             },
         }
         try writer.writeAll(">");
-    }
-};
-
-fn IterWrapper(I: type, R: type, specifier: ?[]const u8) type {
-    if (!@hasDecl(I, "go")) {
-        @compileError(std.fmt.comptimePrint("Require {s}.go", .{@typeName(I)}));
-    }
-    const is_ErrorUnion = @typeInfo(R) == .ErrorUnion;
-    const BaseR = switch (@typeInfo(R)) {
-        .Optional => |info| info.child,
-        .ErrorUnion => |info| switch (@typeInfo(info.payload)) {
-            .Optional => |info_| info_.child,
-            else => @compileError(std.fmt.comptimePrint("Require {s}.go return E!?T instead of {s}", .{ @typeName(I), @typeName(R) })),
-        },
-        else => @compileError(std.fmt.comptimePrint("Require {s}.go return (E!)?T instead of {s}", .{ @typeName(I), @typeName(R) })),
-    };
-    return struct {
-        const Self = @This();
-        it: I,
-        cache: ?R = null,
-        debug: bool = false,
-        fn log(self: *const Self, comptime fmt: []const u8, args: anytype) void {
-            if (!self.debug) return;
-            std.debug.print(fmt, args);
-        }
-        pub fn next(self: *Self) R {
-            var s: []const u8 = "";
-            const item = if (self.cache) |i| blk: {
-                self.cache = null;
-                s = "(Cached)";
-                break :blk i;
-            } else self.it.go();
-            self.log("\x1b[95mnext\x1b[90m{s}\x1b[0m {" ++ (specifier orelse "") ++ "}\n", .{ s, item });
-            return item;
-        }
-        pub fn view(self: *Self) R {
-            var s: []const u8 = "(Cached)";
-            if (self.cache == null) {
-                self.cache = self.it.go();
-                s = "";
-            }
-            const item = self.cache.?;
-            self.log("\x1b[92mview\x1b[90m{s}\x1b[0m {" ++ (specifier orelse "") ++ "}\n", .{ s, item });
-            return item;
-        }
-        pub fn init(it: I) Self {
-            return .{ .it = it };
-        }
-        pub fn deinit(self: *Self) void {
-            if (@hasDecl(I, "deinit")) {
-                self.it.deinit();
-            }
-        }
-        pub fn nextAll(self: *Self, allocator: std.mem.Allocator) ![]const BaseR {
-            var items = std.ArrayList(BaseR).init(allocator);
-            defer items.deinit();
-            while (if (is_ErrorUnion) (try self.next()) else self.next()) |item| {
-                try items.append(item);
-            }
-            return try items.toOwnedSlice();
-        }
-    };
-}
-
-test "Wrap Compile, T" {
-    // error: Require token.ListIter(i32).go return (E!)?T instead of i32
-    const skip = true;
-    if (skip)
-        return error.SkipZigTest;
-    _ = IterWrapper(ListIter(i32), i32, null);
-}
-
-test "Wrap Compile, E!T" {
-    // error: Require token.ListIter(i32).go return E!?T instead of error{Compile}!i32
-    const skip = true;
-    if (skip)
-        return error.SkipZigTest;
-    _ = IterWrapper(ListIter(i32), error{Compile}!i32, null);
-}
-
-test "Wrap, normal" {
-    var it = IterWrapper(ListIter(u32), ?u32, "?").init(.{ .list = &[_]u32{ 1, 2, 3, 4 } });
-    it.debug = true;
-    defer it.deinit();
-    try testing.expectEqual(1, it.view().?);
-    try testing.expectEqual(1, it.view().?);
-    try testing.expectEqual(1, it.next().?);
-    try testing.expectEqual(2, it.next().?);
-    try testing.expectEqual(3, it.next().?);
-    try testing.expectEqual(4, it.view().?);
-    try testing.expectEqual(4, it.next().?);
-    try testing.expectEqual(null, it.view());
-    try testing.expectEqual(null, it.next());
-}
-
-test "Wrap, nextAll" {
-    var it = IterWrapper(ListIter(u32), ?u32, "?").init(.{ .list = &[_]u32{ 1, 2, 3, 4 } });
-    it.debug = true;
-    defer it.deinit();
-    try testing.expectEqual(1, it.view().?);
-    const remain = try it.nextAll(testing.allocator);
-    defer testing.allocator.free(remain);
-    try testing.expectEqualSlices(u32, &[_]u32{ 1, 2, 3, 4 }, remain);
-    try testing.expectEqual(null, it.next());
-}
-
-fn ListIter(T: type) type {
-    return struct {
-        const Self = @This();
-        list: []const T,
-        fn go(self: *Self) ?T {
-            if (self.list.len == 0) {
-                return null;
-            }
-            const item = self.list[0];
-            self.list = self.list[1..];
-            return item;
-        }
-    };
-}
-
-const BaseIter = union(enum) {
-    const Self = @This();
-    sys: std.process.ArgIterator,
-    general: std.process.ArgIteratorGeneral(.{}),
-    line: std.mem.TokenIterator(u8, .any),
-    list: ListIter(String),
-
-    fn go(self: *Self) ?String {
-        return switch (self.*) {
-            .sys => |*i| i.next(),
-            .general => |*i| i.next(),
-            .line => |*i| i.next(),
-            .list => |*i| i.go(),
-        };
-    }
-    fn deinit(self: *Self) void {
-        switch (self.*) {
-            .sys => |*i| i.deinit(),
-            .general => |*i| i.deinit(),
-            else => {},
-        }
     }
 };
 
@@ -299,7 +182,7 @@ const FSM = struct {
         connector: String,
         _state: State,
         const State = union(enum) { begin: String, end, optArg: String, multi: String };
-        fn go(self: *Self) Error!?Type {
+        pub fn go(self: *Self) Error!?Type {
             while (true) {
                 switch (self._state) {
                     .begin => |s| {
@@ -404,7 +287,7 @@ const FSM = struct {
             }
         }
         test "Wrap, FSM, Short" {
-            var it = IterWrapper(Short, Error!?Type, "!?").init(Short.init("ac=hello", "="));
+            var it = iter.Wrapper(Short, Error!?Type, "!?").init(Short.init("ac=hello", "="));
             it.debug = true;
             defer it.deinit();
             try testing.expectEqual('a', (try it.view()).?.opt.short);
@@ -422,7 +305,7 @@ const FSM = struct {
         connector: String,
         _state: State,
         const State = union(enum) { begin: String, end, optArg: String };
-        fn go(self: *Self) Error!?Type {
+        pub fn go(self: *Self) Error!?Type {
             while (true) {
                 switch (self._state) {
                     .begin => |s| {
@@ -517,7 +400,7 @@ const FSM = struct {
     };
     const Token = struct {
         const Self = @This();
-        const It = IterWrapper(BaseIter, ?String, "?s");
+        const It = iter.Wrapper(BaseIter, ?String, "?s");
         it: It,
         config: Config,
         _state: State = .begin,
@@ -529,7 +412,7 @@ const FSM = struct {
             short: FSM.Short,
             long: FSM.Long,
         };
-        fn go(self: *Self) Error!?Type {
+        pub fn go(self: *Self) Error!?Type {
             while (true) {
                 switch (self._state) {
                     .begin, .next => {
@@ -716,7 +599,7 @@ const FSM = struct {
 pub const Iter = struct {
     const Self = @This();
     pub const Error = FSM.Error;
-    const It = IterWrapper(FSM.Token, Error!?Type, "!?");
+    const It = iter.Wrapper(FSM.Token, Error!?Type, "!?");
 
     it: It,
 

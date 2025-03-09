@@ -1,6 +1,6 @@
 # zargs
 
-> other language: [zh-CN](README.zh-CN.md)
+> other language: [中文简体](README.zh-CN.md)
 
 Another Comptime-argparse for Zig! Let's start to build your command line!
 
@@ -8,8 +8,7 @@ Another Comptime-argparse for Zig! Let's start to build your command line!
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
-const Iter = zargs.Iter;
-const any = zargs.parser.any;
+const TokenIter = zargs.TokenIter;
 
 pub fn main() !void {
     comptime var cmd: Command = .{ .name = "demo", .use_subCmd = "action", .description = "This is a simple demo" };
@@ -20,7 +19,7 @@ pub fn main() !void {
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    var it = try Iter.init(allocator, .{});
+    var it = try TokenIter.init(allocator, .{});
     defer it.deinit();
     _ = try it.next();
 
@@ -93,6 +92,14 @@ if (b.args) |args| {
 const run_step = b.step("run", "Run the app");
 run_step.dependOn(&run_cmd.step);
 ```
+
+After importing the `zargs`, you will obtain the iterator (`TokenIter`), command builder (`Command`), and universal parsing function (`parseAny`):
+
+```zig
+const zargs = @import("zargs");
+```
+
+> For more information and usage details about these three powerful tools, please refer to the [documentation](#APIs).
 
 ## Features
 
@@ -225,6 +232,12 @@ Simply call `.parse` to generate the parser and argument structure. There is als
 - Provides support for options with a variable number of arguments.
 - Reallocates memory for each string to avoid dangling pointers.
 - Use `cmd.destroy(&args, allocator)` to free memory.
+
+#### Retrieving Remaining Command-Line Arguments
+
+When the parser has completed its task, if you still need to handle the remaining arguments manually, you can call the iterator's `nextAllBase` method.
+
+If further parsing of the arguments is required, you can use the `parseAny` function.
 
 ### Compile-Time Usage and Help Generation
 
