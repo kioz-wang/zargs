@@ -1,8 +1,7 @@
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
-const Iter = zargs.Iter;
-const any = zargs.parser.any;
+const TokenIter = zargs.TokenIter;
 
 pub fn main() !void {
     comptime var cmd: Command = .{ .name = "demo", .use_subCmd = "action", .description = "This is a simple demo" };
@@ -13,7 +12,7 @@ pub fn main() !void {
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    var it = try Iter.init(allocator, .{});
+    var it = try TokenIter.init(allocator, .{});
     defer it.deinit();
     _ = try it.next();
 

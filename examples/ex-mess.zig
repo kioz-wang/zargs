@@ -1,7 +1,7 @@
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
-const Iter = zargs.Iter;
+const TokenIter = zargs.TokenIter;
 
 fn limitPlusOne(s: []const u8) ?u32 {
     const limit = std.fmt.parseInt(u32, s, 0) catch return null;
@@ -63,7 +63,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    var it = try Iter.init(allocator, .{});
+    var it = try TokenIter.init(allocator, .{});
     _ = try it.next();
     // var it = try Iter.initLine("-vv --int 1 --bool t --lastc hi --word ok --3word a b c 1", null, .{});
     // var it = try Iter.initLine("a", null, .{});
