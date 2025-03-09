@@ -8,8 +8,7 @@
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
-const Iter = zargs.Iter;
-const any = zargs.parser.any;
+const TokenIter = zargs.TokenIter;
 
 pub fn main() !void {
     comptime var cmd: Command = .{ .name = "demo", .use_subCmd = "action", .description = "This is a simple demo" };
@@ -20,7 +19,7 @@ pub fn main() !void {
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    var it = try Iter.init(allocator, .{});
+    var it = try TokenIter.init(allocator, .{});
     defer it.deinit();
     _ = try it.next();
 
@@ -93,6 +92,14 @@ if (b.args) |args| {
 const run_step = b.step("run", "Run the app");
 run_step.dependOn(&run_cmd.step);
 ```
+
+在源代码中导入后，你将获得迭代器（`TokenIter`）、命令构建器（`Command`）、通用解析函数（`parseAny`）：
+
+```zig
+const zargs = @import("zargs");
+```
+
+> 有关以上三大利器的更多信息和用法，请翻阅[文档](#APIs)。
 
 ## 特性
 
@@ -225,6 +232,12 @@ const args = try cmd.parse(&it);
 - 提供对带不定数量参数的选项的支持
 - 为每个字符串重新分配内存，避免野指针
 - 使用 `cmd.destroy(&args, allocator)` 释放内存
+
+#### 获取剩余的命令行参数
+
+当解析器完成任务后，如果仍需要自行处理余下的参数，可以调用迭代器的 `nextAllBase` 方法。
+
+如果仍需要对参数进行解析，可以使用 `parseAny` 函数。
 
 ### 编译时生成 usage 和 help
 
