@@ -3,11 +3,9 @@ name: Deploy static content to Pages
 
 on:
   # Runs on pushes targeting the default branch
-  pull_request:
-    branches: ["main"]
-
   push:
     branches:
+    - main
     - docs/*
     - ci-test/*
 
