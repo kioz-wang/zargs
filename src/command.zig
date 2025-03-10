@@ -3,6 +3,7 @@ const testing = std.testing;
 
 pub const TokenIter = @import("token.zig").Iter;
 const parser = @import("parser.zig");
+/// Universal parsing function
 pub const parseAny = parser.any;
 
 fn StringSet(capacity: comptime_int) type {
@@ -46,6 +47,7 @@ test upper {
     try testing.expectEqualStrings("UPPER", &upper("upPer"));
 }
 
+/// Command builder
 pub const Command = struct {
     const meta = @import("meta.zig");
 
@@ -79,8 +81,11 @@ pub const Command = struct {
     _posArgs: []const meta.PosArg = &.{},
     _subCmds: []const Self = &.{},
 
+    /// Use subcommands, specifying the name of the subcommand's enum union field.
     use_subCmd: ?[:0]const u8 = null,
-
+    /// Use the built-in `help` option (short option `-h`, long option `--help`; if matched, output the help message and terminate the program).
+    ///
+    /// It is enabled by default, but if a `opt` or `arg` named "help" is added, it will automatically be disabled.
     use_builtin_help: bool = true,
 
     fn checkName(self: *const Self, name: [:0]const u8) void {
@@ -243,6 +248,7 @@ pub const Command = struct {
         if (long) |l| self.checkLong(l);
     }
 
+    /// Add a `singleOpt`.
     pub fn opt(
         self: *Self,
         name: [:0]const u8,
@@ -298,7 +304,7 @@ pub const Command = struct {
         comptime var cmd: Self = .{ .name = "test" };
         _ = cmd.opt("name", f32, .{ .short = 'n' });
     }
-
+    /// Add an `optArg`.
     pub fn optArg(
         self: *Self,
         name: [:0]const u8,
@@ -379,7 +385,7 @@ pub const Command = struct {
         comptime var cmd: Self = .{ .name = "test" };
         _ = cmd.optArg("num", []const u32, .{ .short = 'n', .default = &[_]u32{ 1, 2 } });
     }
-
+    /// Add a `posArg`.
     pub fn posArg(
         self: *Self,
         name: [:0]const u8,

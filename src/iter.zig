@@ -3,6 +3,9 @@ const testing = std.testing;
 
 const String = []const u8;
 
+/// Wrap an iterator type that has a `go` method, adding caching features (`next` and `view`) to it.
+///
+/// The type `R` is the return type of the `go` method, which could be `?T` or `E!?T`. The `specifier` is the format string for the type `R`.
 pub fn Wrapper(I: type, R: type, specifier: ?[]const u8) type {
     if (!@hasDecl(I, "go")) {
         @compileError(std.fmt.comptimePrint("Require {s}.go", .{@typeName(I)}));
@@ -18,13 +21,16 @@ pub fn Wrapper(I: type, R: type, specifier: ?[]const u8) type {
     };
     return struct {
         const Self = @This();
+        /// An iterator with a `go` method
         it: I,
         cache: ?R = null,
+        /// If set to `true`, the cache status will be displayed when calling `next` and `view`.
         debug: bool = false,
         fn log(self: *const Self, comptime fmt: []const u8, args: anytype) void {
             if (!self.debug) return;
             std.debug.print(fmt, args);
         }
+        /// If a cache exists, it will be consumed and returned; otherwise, the `go` method will be called.
         pub fn next(self: *Self) R {
             var s: []const u8 = "";
             const item = if (self.cache) |i| blk: {
@@ -35,6 +41,7 @@ pub fn Wrapper(I: type, R: type, specifier: ?[]const u8) type {
             self.log("\x1b[95mnext\x1b[90m{s}\x1b[0m {" ++ (specifier orelse "") ++ "}\n", .{ s, item });
             return item;
         }
+        /// If no cache exists, the `go` method will be called, and the result will be stored in the cache. The cache is then returned.
         pub fn view(self: *Self) R {
             var s: []const u8 = "(Cached)";
             if (self.cache == null) {
@@ -48,11 +55,13 @@ pub fn Wrapper(I: type, R: type, specifier: ?[]const u8) type {
         pub fn init(it: I) Self {
             return .{ .it = it };
         }
+        /// If the iterator has a `deinit` method, it will be called.
         pub fn deinit(self: *Self) void {
             if (@hasDecl(I, "deinit")) {
                 self.it.deinit();
             }
         }
+        /// Complete the remaining iteration.
         pub fn nextAll(self: *Self, allocator: std.mem.Allocator) ![]const BaseR {
             var items = std.ArrayList(BaseR).init(allocator);
             defer items.deinit();
@@ -106,9 +115,11 @@ test "Wrap, nextAll" {
     try testing.expectEqual(null, it.next());
 }
 
+/// A list iterator type with a `go` method that returns a value of type `?T`.
 pub fn ListIter(T: type) type {
     return struct {
         const Self = @This();
+        /// A list used for iteration.
         list: []const T,
         pub fn go(self: *Self) ?T {
             if (self.list.len == 0) {
