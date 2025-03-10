@@ -4,11 +4,16 @@ const iter = @import("iter.zig");
 
 const String = []const u8;
 
-pub const BaseIter = union(enum) {
+/// The original iterator that iterates over the raw string.
+const BaseIter = union(enum) {
     const Self = @This();
+    /// System iterator, get real command line arguments.
     sys: std.process.ArgIterator,
+    /// General iterator, splits command line arguments from a one-line string.
     general: std.process.ArgIteratorGeneral(.{}),
+    /// Line iterator, same as regular iterator, but you can specify delimiters.
     line: std.mem.TokenIterator(u8, .any),
+    /// List iterator, iterates over a list of strings.
     list: iter.ListIter(String),
 
     pub fn go(self: *Self) ?String {
@@ -50,7 +55,7 @@ pub const Type = union(enum) {
         }
     };
     opt: Opt,
-    /// Option argument that follows the connector_optarg
+    /// Option argument that follows the connector
     optArg: String,
     /// Positional argument that meets after the terminator
     posArg: String,
@@ -87,14 +92,16 @@ pub const Type = union(enum) {
     }
 };
 
+/// Used for parsing the original string.
 pub const Config = struct {
-    /// 匹配时，`terminator`优先于`prefix_long`
+    /// During matching, the `terminator` takes precedence over `prefix_long`.
     terminator: String = "--",
-    /// 匹配时，`prefix_long`优先于`prefix_short`
+    /// During matching, the `prefix_long` takes precedence over `prefix_short`.
     prefix_long: String = "--",
-    /// 匹配时，`prefix_long`优先于`prefix_short`
+    /// During matching, the `prefix_long` takes precedence over `prefix_short`.
     prefix_short: String = "-",
-    connector_optarg: String = "=",
+    /// Used as a connector between `singleArgOpt` and its argument.
+    connector: String = "=",
 
     const Self = @This();
     const Error = error{
@@ -116,7 +123,7 @@ pub const Config = struct {
         if (self.prefix_short.len == 0) {
             return Error.PrefixShortEmpty;
         }
-        if (self.connector_optarg.len == 0) {
+        if (self.connector.len == 0) {
             return Error.ConnectorOptArgEmpty;
         }
         if (self.terminator.len == 0) {
@@ -131,7 +138,7 @@ pub const Config = struct {
         if (std.mem.indexOfAny(u8, self.prefix_short, " ")) |_| {
             return Error.PrefixShortHasSpace;
         }
-        if (std.mem.indexOfAny(u8, self.connector_optarg, " ")) |_| {
+        if (std.mem.indexOfAny(u8, self.connector, " ")) |_| {
             return Error.ConnectorOptArgHasSpace;
         }
         if (std.mem.indexOfAny(u8, self.terminator, " ")) |_| {
@@ -142,16 +149,17 @@ pub const Config = struct {
     test "Config validate" {
         try testing.expectError(Error.PrefixLongEmpty, (Self{ .prefix_long = "" }).validate());
         try testing.expectError(Error.PrefixShortEmpty, (Self{ .prefix_short = "" }).validate());
-        try testing.expectError(Error.ConnectorOptArgEmpty, (Self{ .connector_optarg = "" }).validate());
+        try testing.expectError(Error.ConnectorOptArgEmpty, (Self{ .connector = "" }).validate());
         try testing.expectError(Error.TerminatorEmpty, (Self{ .terminator = "" }).validate());
         try testing.expectError(Error.PrefixLongShortEqual, (Self{ .prefix_long = "-", .prefix_short = "-" }).validate());
         try testing.expectError(Error.PrefixLongHasSpace, (Self{ .prefix_long = "a b" }).validate());
         try testing.expectError(Error.PrefixShortHasSpace, (Self{ .prefix_short = "a b" }).validate());
-        try testing.expectError(Error.ConnectorOptArgHasSpace, (Self{ .connector_optarg = "a b" }).validate());
+        try testing.expectError(Error.ConnectorOptArgHasSpace, (Self{ .connector = "a b" }).validate());
         try testing.expectError(Error.TerminatorHasSpace, (Self{ .terminator = "a b" }).validate());
     }
 };
 
+/// First, trim whitespace characters, then trim double quotes (if they exist).
 fn trimString(s: String) String {
     var t = std.mem.trim(u8, s, " \t\n");
     if (t.len >= 2) {
@@ -171,6 +179,7 @@ test trimString {
     try testing.expectEqualStrings("a", trimString(" a"));
 }
 
+/// Iterators based on a Finite State Machine (FSM).
 const FSM = struct {
     const Error = error{
         MissingOptionArgument,
@@ -398,6 +407,7 @@ const FSM = struct {
             try testing.expectEqual(null, try fsm.go());
         }
     };
+    /// Iterate over the original iterator and parse.
     const Token = struct {
         const Self = @This();
         const It = iter.Wrapper(BaseIter, ?String, "?s");
@@ -425,12 +435,12 @@ const FSM = struct {
                             } else if (std.mem.startsWith(u8, item, self.config.prefix_long)) {
                                 self._state = .{ .long = Long.init(
                                     item[self.config.prefix_long.len..],
-                                    self.config.connector_optarg,
+                                    self.config.connector,
                                 ) };
                             } else if (std.mem.startsWith(u8, item, self.config.prefix_short)) {
                                 self._state = .{ .short = Short.init(
                                     item[self.config.prefix_short.len..],
-                                    self.config.connector_optarg,
+                                    self.config.connector,
                                 ) };
                             } else {
                                 self._state = .next;
@@ -638,21 +648,17 @@ pub const Iter = struct {
     pub fn viewMust(self: *Self) !Type {
         return (try self.view()) orelse error.NoMore;
     }
-    /// 😵 TODO
+    /// Complete the remaining iteration on the original iterator, then terminate the internal FSM.
     pub fn nextAllBase(self: *Self, allocator: std.mem.Allocator) ![]const String {
-        var items = std.ArrayList(String).init(allocator);
-        defer items.deinit();
-        while (self.it.it.it.next()) |item| {
-            try items.append(item);
-        }
+        const items = try self.it.it.it.nextAll(allocator);
         self.it.it._state = .end;
-        return try items.toOwnedSlice();
+        return items;
     }
-    /// 😵 TODO
+    /// Update the internal FSM so that only `posArg`s are returned afterward.
     pub fn fsm_to_pos(self: *Self) void {
         self.it.it._state = .pos;
     }
-    /// 😵 TODO
+    /// Reset the state of the internal FSM. Only used for subcommand parsing.
     pub fn reinit(self: *Self) void {
         self.it.it._state = .begin;
         self.it.cache = null;

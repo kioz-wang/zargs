@@ -112,7 +112,7 @@ Flexible for real and test scenarios
 - Line iterator (`initLine`): same as regular iterator, but you can specify delimiters.
 - List iterator (`initList`): iterates over a list of strings.
 
-Short option prefixes (`-`), long option prefixes (`--`), concatenators (`=`), option terminators (`--`) can be customized for iterators (see [presentation](#presentation) for usage scenarios).
+Short option prefixes (`-`), long option prefixes (`--`), connectors (`=`), option terminators (`--`) can be customized for iterators (see [presentation](#presentation) for usage scenarios).
 
 ### Options, Arguments, Subcommands
 
