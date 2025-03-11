@@ -81,6 +81,8 @@ pub const Command = struct {
     _posArgs: []const meta.PosArg = &.{},
     _subCmds: []const Self = &.{},
 
+    _callBackFn: ?*const anyopaque = null,
+
     /// Use subcommands, specifying the name of the subcommand's enum union field.
     use_subCmd: ?[:0]const u8 = null,
     /// Use the built-in `help` option (short option `-h`, long option `--help`; if matched, output the help message and terminate the program).
@@ -652,7 +654,7 @@ pub const Command = struct {
         };
     }
 
-    fn Result(self: Self) type {
+    pub fn Result(self: Self) type {
         var r = @typeInfo(struct {}).Struct;
         for (self._opts) |m| {
             r.fields = r.fields ++ [_]StructField{m.meta.toField()};
@@ -679,6 +681,10 @@ pub const Command = struct {
             return error.SkipZigTest;
         comptime var cmd: Self = .{ .name = "test", .use_subCmd = "sub" };
         _ = cmd.Result();
+    }
+
+    pub fn callBack(self: *Self, f: fn (*self.Result()) void) void {
+        self._callBackFn = @ptrCast(&f);
     }
 
     pub fn destroy(self: Self, r: *const self.Result(), allocator: std.mem.Allocator) void {
@@ -841,28 +847,29 @@ pub const Command = struct {
                 }
                 return Error.MissingSubCmd;
             }
+            const t = (it.viewMust() catch unreachable).as_posArg().posArg;
+            var hit = false;
             inline for (self._subCmds) |c| {
-                if (try c.consume(s, &r, it, allocator)) {
-                    return r;
+                if (std.mem.eql(u8, c.name, t)) {
+                    _ = it.next() catch unreachable;
+                    it.reinit();
+                    @field(r, s) = @unionInit(self.SubCmdUnion(), c.name, try c.parseAlloc(it, allocator));
+                    hit = true;
+                    break;
                 }
             }
-            if (self.log) |log| {
-                log("Unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
+            if (!hit) {
+                if (self.log) |log| {
+                    log("Unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
+                }
+                return Error.UnknownSubCmd;
             }
-            return Error.UnknownSubCmd;
+        }
+        if (self._callBackFn) |f| {
+            const p: *const fn (*self.Result()) void = @ptrCast(@alignCast(f));
+            p(&r);
         }
         return r;
-    }
-
-    fn consume(self: Self, comptime s: []const u8, r: anytype, it: *TokenIter, allocator: ?std.mem.Allocator) Error!bool {
-        const c = (it.viewMust() catch unreachable).as_posArg().posArg;
-        if (std.mem.eql(u8, self.name, c)) {
-            _ = it.next() catch unreachable;
-            it.reinit();
-            @field(r, s) = @unionInit(@TypeOf(@field(r, s)), self.name, try self.parseAlloc(it, allocator));
-            return true;
-        }
-        return false;
     }
 
     test "parse, Error RepeatOpt" {
