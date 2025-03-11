@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
     const ex_dirname = "examples";
     const examples_step = b.step("examples", "Build examples");
 
-    if (std.fs.cwd().openDir(ex_dirname, .{ .iterate = true })) |d| {
+    if ((std.fs.openDirAbsolute(b.build_root.path.?, .{}) catch unreachable).openDir(ex_dirname, .{ .iterate = true })) |d| {
         var it = d.iterate();
         const ex_prefix = "ex-";
         const ex_suffix = ".zig";
