@@ -6,11 +6,11 @@ pub fn any(T: type, s: []const u8) ?T {
         return s;
     }
     return switch (@typeInfo(T)) {
-        .Int => std.fmt.parseInt(T, s, 0) catch null,
-        .Float => std.fmt.parseFloat(T, s) catch null,
-        .Bool => Builtin.parseBoolean(s),
-        .Enum => if (@hasDecl(T, "parser")) T.parser(s) else std.meta.stringToEnum(T, s),
-        .Struct => if (@hasDecl(T, "parser")) T.parser(s) else @compileError("require a public parser for " ++ @typeName(T)),
+        .int => std.fmt.parseInt(T, s, 0) catch null,
+        .float => std.fmt.parseFloat(T, s) catch null,
+        .bool => Builtin.parseBoolean(s),
+        .@"enum" => if (@hasDecl(T, "parser")) T.parser(s) else std.meta.stringToEnum(T, s),
+        .@"struct" => if (@hasDecl(T, "parser")) T.parser(s) else @compileError("require a public parser for " ++ @typeName(T)),
         else => {
             @compileError("unable parse to " ++ @typeName(T));
         },
@@ -42,9 +42,9 @@ pub fn Base(T: type) type {
     if (T == []const u8) return T;
     const info = @typeInfo(T);
     return switch (info) {
-        .Array => |i| i.child,
-        .Pointer => |i| i.child,
-        .Optional => |i| i.child,
+        .array => |i| i.child,
+        .pointer => |i| i.child,
+        .optional => |i| i.child,
         else => T,
     };
 }

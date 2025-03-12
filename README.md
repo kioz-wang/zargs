@@ -161,8 +161,6 @@ A callback (`.callBackFn`) can be configured, which will be executed after match
 
 A command cannot have both positional arguments and subcommands simultaneously.
 
-> Currently, setting callbacks for subcommands is not supported.
-
 #### Representation
 
 For the parser, except for accumulative options and options with a variable number of arguments, no option can appear more than once.
@@ -211,7 +209,7 @@ Double quotes can be used to avoid iterator ambiguity, e.g., to pass a negative 
 --num \"-1\"
 ```
 
-> Since the shell removes double quotes, escape characters are also needed!
+> Since the shell removes double quotes, escape characters are also required! If a connector is used, escaping is unnecessary: `--num="-1"`.
 
 ### Compile-Time Command Construction
 
@@ -220,6 +218,17 @@ comptime var cmd: Command = .{ .name = "demo" };
 ```
 
 A command can be defined in a single line, with additional configurations like version, description, author, homepage, etc. Use chaining to add options (`opt`), options with arguments (`optArg`), positional arguments (`posArg`), or subcommands (`subCmd`).
+
+#### CallBackFn for Command
+
+```zig
+comptime cmd.callBack(struct {
+        const C = cmd;
+        fn f(_: *C.Result()) void {
+            std.debug.print("CallBack of {s}\n", .{ C.name });
+        }
+    }.f);
+```
 
 ### Compile-Time Parser Generation
 

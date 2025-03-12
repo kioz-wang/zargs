@@ -13,13 +13,13 @@ pub const Meta = struct {
     callBackFn: ?*const anyopaque = null,
 
     pub fn isSlice(self: Meta) bool {
-        return @typeInfo(self.T) == .Pointer and self.T != []const u8;
+        return @typeInfo(self.T) == .pointer and self.T != []const u8;
     }
 
     pub fn toField(self: Meta) std.builtin.Type.StructField {
         return .{
             .alignment = @alignOf(self.T),
-            .default_value = self.default,
+            .default_value_ptr = self.default,
             .is_comptime = false,
             .name = self.name,
             .type = self.T,
@@ -64,7 +64,7 @@ const Usage = struct {
         return u;
     }
     fn arg(name: []const u8, info: std.builtin.Type) []const u8 {
-        return print("{{{s}{s}}}", .{ if (info == .Array) print("[{d}]", .{info.Array.len}) else "", name });
+        return print("{{{s}{s}}}", .{ if (info == .array) print("[{d}]", .{info.array.len}) else "", name });
     }
     fn optional(has_default: bool, u: []const u8) []const u8 {
         return if (has_default) print("[{s}]", .{u}) else u;
@@ -129,7 +129,7 @@ pub const OptArg = struct {
                     Usage.arg(self.arg_name, @typeInfo(self.meta.T)),
                 }),
             ),
-            if (@typeInfo(self.meta.T) == .Pointer and self.meta.T != []const u8) "..." else "",
+            if (@typeInfo(self.meta.T) == .pointer and self.meta.T != []const u8) "..." else "",
         });
     }
     pub fn help(self: Self) []const u8 {
@@ -140,7 +140,7 @@ pub const OptArg = struct {
         if (hitOpt(self, opt)) {
             _ = it.next() catch unreachable;
             var s: []const u8 = undefined;
-            if (@typeInfo(self.meta.T) == .Array) {
+            if (@typeInfo(self.meta.T) == .array) {
                 for (&@field(r, self.meta.name), 0..) |*item, i| {
                     const t = it.nextMust() catch |err| {
                         if (self.meta.log) |log| {
@@ -226,7 +226,7 @@ pub const PosArg = struct {
     }
     pub fn consume(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.Allocator) Error!void {
         var s: []const u8 = undefined;
-        if (@typeInfo(self.meta.T) == .Array) {
+        if (@typeInfo(self.meta.T) == .array) {
             for (&@field(r, self.meta.name), 0..) |*item, i| {
                 const t = it.nextMust() catch |err| {
                     if (self.meta.log) |log| {

@@ -264,7 +264,7 @@ pub const Command = struct {
         },
     ) *Self {
         self.checkOpt(name, config.short, config.long);
-        if (T != bool and @typeInfo(T) != .Int) {
+        if (T != bool and @typeInfo(T) != .int) {
             @compileError("opt:" ++ name ++ " not accept " ++ @typeName(T));
         }
         var m: meta.Meta = .{ .name = name, .T = T, .help = config.help, .log = self.log };
@@ -323,8 +323,8 @@ pub const Command = struct {
     ) *Self {
         self.checkOpt(name, config.short, config.long);
         const info = @typeInfo(T);
-        if (info == .Pointer) {
-            if (info.Pointer.size != .Slice or !info.Pointer.is_const) {
+        if (info == .pointer) {
+            if (info.pointer.size != .slice or !info.pointer.is_const) {
                 @compileError("optArg:" ++ name ++ " not accept " ++ @typeName(T));
             }
             if (T != []const u8) {
@@ -628,13 +628,13 @@ pub const Command = struct {
             e = e ++ [_]EnumField{.{ .name = m.name, .value = i }};
             u = u ++ [_]UnionField{.{ .name = m.name, .type = m.Result(), .alignment = @alignOf(m.Result()) }};
         }
-        const E = @Type(.{ .Enum = .{
+        const E = @Type(.{ .@"enum" = .{
             .tag_type = std.math.IntFittingRange(0, e.len - 1),
             .fields = e,
             .decls = &.{},
             .is_exhaustive = true,
         } });
-        const U = @Type(.{ .Union = .{
+        const U = @Type(.{ .@"union" = .{
             .layout = .auto,
             .tag_type = E,
             .fields = u,
@@ -647,7 +647,7 @@ pub const Command = struct {
         const U = self.SubCmdUnion();
         return .{
             .alignment = @alignOf(U),
-            .default_value = null,
+            .default_value_ptr = null,
             .is_comptime = false,
             .name = self.use_subCmd.?,
             .type = U,
@@ -655,7 +655,7 @@ pub const Command = struct {
     }
 
     pub fn Result(self: Self) type {
-        var r = @typeInfo(struct {}).Struct;
+        var r = @typeInfo(struct {}).@"struct";
         for (self._opts) |m| {
             r.fields = r.fields ++ [_]StructField{m.meta.toField()};
         }
@@ -671,7 +671,7 @@ pub const Command = struct {
             }
             r.fields = r.fields ++ [_]StructField{self.subCmdField()};
         }
-        return @Type(.{ .Struct = r });
+        return @Type(.{ .@"struct" = r });
     }
 
     test "subCmd, Compile, no cmds has been added" {
@@ -689,12 +689,12 @@ pub const Command = struct {
 
     pub fn destroy(self: Self, r: *const self.Result(), allocator: std.mem.Allocator) void {
         inline for (self._optArgs) |m| {
-            if (@typeInfo(m.meta.T) == .Pointer) {
+            if (@typeInfo(m.meta.T) == .pointer) {
                 allocator.free(@field(r, m.meta.name));
             }
         }
         inline for (self._posArgs) |m| {
-            if (@typeInfo(m.meta.T) == .Pointer) {
+            if (@typeInfo(m.meta.T) == .pointer) {
                 allocator.free(@field(r, m.meta.name));
             }
         }
@@ -752,9 +752,9 @@ pub const Command = struct {
         hitOpts.init();
 
         var r = std.mem.zeroInit(self.Result(), if (self.use_subCmd) |s| blk: {
-            comptime var info = @typeInfo(struct {}).Struct;
+            comptime var info = @typeInfo(struct {}).@"struct";
             info.fields = info.fields ++ [_]StructField{self.subCmdField()};
-            const I = @Type(.{ .Struct = info });
+            const I = @Type(.{ .@"struct" = info });
             var i: I = undefined;
             @field(i, s) = undefined;
             break :blk i;
