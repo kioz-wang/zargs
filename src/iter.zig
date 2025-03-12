@@ -10,11 +10,11 @@ pub fn Wrapper(I: type, R: type, specifier: ?[]const u8) type {
     if (!@hasDecl(I, "go")) {
         @compileError(std.fmt.comptimePrint("Require {s}.go", .{@typeName(I)}));
     }
-    const is_ErrorUnion = @typeInfo(R) == .ErrorUnion;
+    const is_ErrorUnion = @typeInfo(R) == .error_union;
     const BaseR = switch (@typeInfo(R)) {
-        .Optional => |info| info.child,
-        .ErrorUnion => |info| switch (@typeInfo(info.payload)) {
-            .Optional => |info_| info_.child,
+        .optional => |info| info.child,
+        .error_union => |info| switch (@typeInfo(info.payload)) {
+            .optional => |info_| info_.child,
             else => @compileError(std.fmt.comptimePrint("Require {s}.go return E!?T instead of {s}", .{ @typeName(I), @typeName(R) })),
         },
         else => @compileError(std.fmt.comptimePrint("Require {s}.go return (E!)?T instead of {s}", .{ @typeName(I), @typeName(R) })),
