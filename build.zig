@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
     const ex_dirname = "examples";
     const examples_step = b.step("examples", "Build examples");
 
-    if ((std.fs.openDirAbsolute(b.build_root.path.?, .{}) catch unreachable).openDir(ex_dirname, .{ .iterate = true })) |d| {
+    if ((std.fs.openDirAbsolute(b.build_root.path.?, .{}) catch unreachable).openDir(ex_dirname, .{ .iterate = true }) catch null) |d| {
         var it = d.iterate();
         const ex_prefix = "ex-";
         const ex_suffix = ".zig";
@@ -50,8 +50,6 @@ pub fn build(b: *std.Build) void {
             const ex_run_step = b.step(e.name[0..(e.name.len - ex_suffix.len)], b.fmt("Run example {s}", .{exe_name}));
             ex_run_step.dependOn(&ex_run_cmd.step);
         }
-    } else |err| {
-        std.log.warn("NotFound {s} {any}", .{ ex_dirname, err });
     }
 
     const test_step = b.step("test", "Run unit tests");
