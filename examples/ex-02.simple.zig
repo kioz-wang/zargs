@@ -10,7 +10,7 @@ pub fn main() !void {
     comptime var remove: Command = .{ .name = "remove" };
     _ = cmd.subCmd(install.posArg("name", []const u8, .{}).*).subCmd(remove.posArg("name", []const u8, .{}).*);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
     var it = try TokenIter.init(allocator, .{});
     defer it.deinit();

@@ -34,7 +34,7 @@ pub fn main() !void {
         }
     }.f);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
     var it = try TokenIter.init(allocator, .{});
     defer it.deinit();

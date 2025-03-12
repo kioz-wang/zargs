@@ -45,7 +45,7 @@ pub fn main() !void {
 
     _ = cmd.subCmd(add_remain).subCmd(add_optArgs).subCmd(add_optArgs_auto_per).subCmd(add_optArgs_auto_cb);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
 
     var it = try TokenIter.init(allocator, .{});

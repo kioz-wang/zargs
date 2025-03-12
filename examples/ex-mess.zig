@@ -60,7 +60,7 @@ pub fn main() !void {
     _ = cmd.opt("verbose", u8, .{ .short = 'v' });
     _ = cmd.subCmd(sub0).subCmd(.{ .name = "sub1", .description = "This is an empty subCmd" });
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
 
     var it = try TokenIter.init(allocator, .{});
