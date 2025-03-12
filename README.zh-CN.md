@@ -161,8 +161,6 @@ const zargs = @import("zargs");
 
 一个命令不可同时存在位置参数和子命令。
 
-> 暂不支持为子命令设置回调。
-
 #### 表现形式
 
 对解析器来说，除了累加选项和带不定数量参数的选项，任何选项都不可以重复出现。
@@ -211,7 +209,7 @@ const zargs = @import("zargs");
 --num \"-1\"
 ```
 
-> 由于 shell 会移除双引号，所以还需要使用转义符！
+> 由于 shell 会移除双引号，所以还需要使用转义符！ 如果使用了连接符，则不需要转义：`--num="-1"`。
 
 ### 编译时命令构建
 
@@ -220,6 +218,17 @@ comptime var cmd: Command = .{ .name = "demo" };
 ```
 
 单行语句即可定义一个命令，可额外配置版本、描述、作者、主页等信息。使用链式调用添加选项（`opt`）、带参数选项（`optArg`）、位置参数（`posArg`）或子命令（`subCmd`）。
+
+#### 为命令添加回调
+
+```zig
+comptime cmd.callBack(struct {
+        const C = cmd;
+        fn f(_: *C.Result()) void {
+            std.debug.print("CallBack of {s}\n", .{ C.name });
+        }
+    }.f);
+```
 
 ### 编译时生成解析器
 
