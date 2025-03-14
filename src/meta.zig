@@ -12,6 +12,30 @@ pub const Meta = struct {
     parseFn: ?*const anyopaque = null,
     callBackFn: ?*const anyopaque = null,
 
+    pub fn init(name: [:0]const u8, T: type) Meta {
+        return .{ .name = name, .T = T };
+    }
+    pub fn help_(m: Meta, s: []const u8) Meta {
+        var meta = m;
+        meta.help = s;
+        return meta;
+    }
+    pub fn default_(m: Meta, d: m.T) Meta {
+        var meta = m;
+        meta.default = @ptrCast(&d);
+        return meta;
+    }
+    pub fn parseFn_(m: Meta, f: parser.Fn(parser.Base(m.T))) Meta {
+        var meta = m;
+        meta.parseFn = @ptrCast(&f);
+        return meta;
+    }
+    pub fn callBackFn_(m: Meta, f: fn (*m.T) void) Meta {
+        var meta = m;
+        meta.callBackFn = @ptrCast(&f);
+        return meta;
+    }
+
     pub fn isSlice(self: Meta) bool {
         return @typeInfo(self.T) == .pointer and self.T != []const u8;
     }
@@ -83,6 +107,40 @@ pub const Opt = struct {
     long: ?[]const u8 = null,
 
     const Self = @This();
+
+    pub fn init(name: [:0]const u8, T: type) Self {
+        return .{ .meta = Meta.init(name, T) };
+    }
+    pub fn help_(self: Self, s: []const u8) Self {
+        var m = self;
+        m.meta = self.meta.help_(s);
+        return m;
+    }
+    pub fn default_(self: Self, d: self.meta.T) Self {
+        var m = self;
+        m.meta = self.meta.default_(d);
+        return m;
+    }
+    pub fn parseFn_(self: Self, f: parser.Fn(parser.Base(self.meta.T))) Self {
+        var m = self;
+        m.meta = self.meta.parseFn_(f);
+        return m;
+    }
+    pub fn callBackFn_(self: Self, f: fn (*self.meta.T) void) Self {
+        var m = self;
+        m.meta = self.meta.callBackFn_(f);
+        return m;
+    }
+    pub fn short_(self: Self, s: u8) Self {
+        var m = self;
+        m.short = s;
+        return m;
+    }
+    pub fn long_(self: Self, s: []const u8) Self {
+        var m = self;
+        m.long = s;
+        return m;
+    }
 
     pub fn usage(self: Self) []const u8 {
         return Usage.print("{s}{s}", .{

@@ -5,6 +5,10 @@ pub const TokenIter = @import("token.zig").Iter;
 const parser = @import("parser.zig");
 /// Universal parsing function
 pub const parseAny = parser.any;
+const meta = @import("meta.zig");
+pub const Opt = meta.Opt;
+pub const OptArg = meta.OptArg;
+pub const PosArg = meta.PosArg;
 
 fn StringSet(capacity: comptime_int) type {
     const S = []const u8;
@@ -49,8 +53,6 @@ test upper {
 
 /// Command builder
 pub const Command = struct {
-    const meta = @import("meta.zig");
-
     pub const Builtin = struct {
         pub fn logFn(comptime fmt: []const u8, args: anytype) void {
             std.debug.print(fmt ++ "\n", args);
@@ -89,6 +91,10 @@ pub const Command = struct {
     ///
     /// It is enabled by default, but if a `opt` or `arg` named "help" is added, it will automatically be disabled.
     use_builtin_help: bool = true,
+
+    pub fn init(name: [:0]const u8, use_subCmd: ?[:0]const u8) Self {
+        return .{ .name = name, .use_subCmd = use_subCmd };
+    }
 
     fn checkName(self: *const Self, name: [:0]const u8) void {
         for (self._opts) |m| {
@@ -238,7 +244,7 @@ pub const Command = struct {
         _ = cmd.opt("opt1", u32, .{ .long = "long" });
     }
 
-    fn checkOpt(self: *Self, name: [:0]const u8, short: ?u8, long: ?[]const u8) void {
+    fn checkOpt(self: *const Self, name: [:0]const u8, short: ?u8, long: ?[]const u8) void {
         self.checkName(name);
         if (std.mem.eql(u8, Builtin.help.meta.name, name)) {
             self.use_builtin_help = false;
@@ -248,6 +254,10 @@ pub const Command = struct {
         }
         if (short) |s| self.checkShort(s);
         if (long) |l| self.checkLong(l);
+    }
+
+    fn checkOpt_(self: Self, name: [:0]const u8, short: ?u8, long: ?[]const u8) void {
+        self.checkOpt(name, short, long);
     }
 
     /// Add a `singleOpt`.
@@ -287,6 +297,42 @@ pub const Command = struct {
             .long = config.long,
         }};
         return self;
+    }
+
+    pub fn opt_(
+        self: Self,
+        name: [:0]const u8,
+        T: type,
+        config: struct {
+            default: ?T = null,
+            help: ?[]const u8 = null,
+            short: ?u8 = null,
+            long: ?[]const u8 = null,
+            callBackFn: ?fn (*T) void = null,
+        },
+    ) Self {
+        var command = self;
+        return command.opt(name, T, .{
+            .default = config.default,
+            .help = config.help,
+            .short = config.short,
+            .long = config.long,
+            .callBackFn = config.callBackFn,
+        }).*;
+    }
+
+    pub fn opt__(self: Self, _opt: Opt) Self {
+        return self.opt_(
+            _opt.meta.name,
+            _opt.meta.T,
+            .{
+                .default = null,
+                .help = _opt.meta.help,
+                .short = _opt.short,
+                .long = _opt.long,
+                .callBackFn = null,
+            },
+        );
     }
 
     test "opt, Compile, short and long" {
@@ -350,6 +396,32 @@ pub const Command = struct {
             .arg_name = config.arg_name orelse &upper(name),
         }};
         return self;
+    }
+
+    pub fn optArg_(
+        self: Self,
+        name: [:0]const u8,
+        T: type,
+        config: struct {
+            default: ?T = null,
+            help: ?[]const u8 = null,
+            short: ?u8 = null,
+            long: ?[]const u8 = null,
+            arg_name: ?[]const u8 = null,
+            parseFn: ?parser.Fn(parser.Base(T)) = null,
+            callBackFn: ?fn (*T) void = null,
+        },
+    ) Self {
+        var command = self;
+        return command.optArg(name, T, .{
+            .default = config.default,
+            .help = config.help,
+            .short = config.short,
+            .long = config.long,
+            .arg_name = config.arg_name,
+            .parseFn = config.parseFn,
+            .callBackFn = config.callBackFn,
+        }).*;
     }
 
     test "optArg, Compile, short and long" {
@@ -421,6 +493,28 @@ pub const Command = struct {
         return self;
     }
 
+    pub fn posArg_(
+        self: Self,
+        name: [:0]const u8,
+        T: type,
+        config: struct {
+            default: ?T = null,
+            help: ?[]const u8 = null,
+            arg_name: ?[]const u8 = null,
+            parseFn: ?parser.Fn(parser.Base(T)) = null,
+            callBackFn: ?fn (*T) void = null,
+        },
+    ) Self {
+        var command = self;
+        return command.posArg(name, T, .{
+            .default = config.default,
+            .help = config.help,
+            .arg_name = config.arg_name,
+            .parseFn = config.parseFn,
+            .callBackFn = config.callBackFn,
+        }).*;
+    }
+
     test "posArg, Compile, conflict with subCmd" {
         // error: posArg<pos> not accept because subCmd<name> exist
         const skip = true;
@@ -456,6 +550,11 @@ pub const Command = struct {
         self.checkSubCmd(c.name);
         self._subCmds = self._subCmds ++ [_]Self{c};
         return self;
+    }
+
+    pub fn subCmd_(self: Self, c: Self) Self {
+        var command = self;
+        return command.subCmd(c).*;
     }
 
     test "subCmd, Compile, not accept" {
