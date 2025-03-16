@@ -2,13 +2,20 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
+const Meta = zargs.Meta;
 
 pub fn main() !void {
-    comptime var cmd: Command = .{ .name = "demo", .use_subCmd = "action", .description = "This is a simple demo" };
-    _ = cmd.opt("verbose", u32, .{ .short = 'v' }).optArg("output", []const u8, .{ .short = 'o', .long = "out" });
-    comptime var install: Command = .{ .name = "install" };
-    comptime var remove: Command = .{ .name = "remove" };
-    _ = cmd.subCmd(install.posArg("name", []const u8, .{}).*).subCmd(remove.posArg("name", []const u8, .{}).*);
+    const cmd = Command.new("demo").requireSub("action")
+        .arg(Meta.opt("verbose", u32)
+            .short('v')
+            .help("help of verbose"))
+        .arg(Meta.optArg("output", []const u8)
+            .short('o')
+            .long("out"))
+        .sub(Command.new("install")
+            .arg(Meta.posArg("name", []const u8)))
+        .sub(Command.new("remove")
+        .arg(Meta.posArg("name", []const u8)));
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();

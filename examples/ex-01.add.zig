@@ -2,22 +2,23 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
+const Meta = zargs.Meta;
 
 var sum: i32 = 0;
 pub fn main() !void {
-    comptime var cmd: Command = .{ .name = "add", .use_subCmd = "use" };
-
-    const add_remain: Command = .{ .name = "remain", .description = "summary remain args" };
-
-    comptime var add_optArgs: Command = .{ .name = "opt", .description = "summary optArgs" };
-    _ = add_optArgs.optArg("nums", []const i32, .{ .short = 'n', .long = "num", .help = "Give me an integer to add" });
-
-    comptime var add_optArgs_auto_per: Command = .{ .name = "opt_auto_per", .description = "summary optArgs automatically" };
-    _ = add_optArgs_auto_per.optArg("nums", []const i32, .{
-        .short = 'n',
-        .long = "num",
-        .help = "Give me an integer to add",
-        .parseFn = struct {
+    const add_remain = Command.new("remain").about("summary remain args");
+    const add_optArgs = Command.new("opt").about("summary optArgs")
+        .arg(
+        Meta.optArg("nums", []const i32)
+            .short('n').long("num")
+            .help("Give me an integer"),
+    );
+    const add_optArgs_auto_per = Command.new("opt_auto_per").about("summary optArgs automatically")
+        .arg(Meta.optArg("nums", []const i32)
+        .short('n').long("num")
+        .help("Give me an integer")
+        .parseFn(
+        struct {
             fn f(s: []const u8) ?i32 {
                 const n = zargs.parseAny(i32, s) orelse return null;
                 std.log.info("add {d}", .{n});
@@ -25,14 +26,13 @@ pub fn main() !void {
                 return n;
             }
         }.f,
-    });
-
-    comptime var add_optArgs_auto_cb: Command = .{ .name = "opt_auto_cb", .description = "summary optArgs automatically" };
-    _ = add_optArgs_auto_cb.optArg("nums", []const i32, .{
-        .short = 'n',
-        .long = "num",
-        .help = "Give me an integer to add",
-        .callBackFn = struct {
+    ));
+    const add_optArgs_auto_cb = Command.new("opt_auto_cb").about("summary optArgs automatically")
+        .arg(
+        Meta.optArg("nums", []const i32)
+            .short('n').long("num")
+            .help("Give me an integer to add")
+            .callBackFn(struct {
             fn f(v: *[]const i32) void {
                 if (v.len != 0) {
                     const n = v.*[v.len - 1];
@@ -40,10 +40,13 @@ pub fn main() !void {
                     sum += n;
                 }
             }
-        }.f,
-    });
+        }.f),
+    );
 
-    _ = cmd.subCmd(add_remain).subCmd(add_optArgs).subCmd(add_optArgs_auto_per).subCmd(add_optArgs_auto_cb);
+    const cmd = Command.new("add").requireSub("use")
+        .sub(add_remain).sub(add_optArgs)
+        .sub(add_optArgs_auto_per)
+        .sub(add_optArgs_auto_cb);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
