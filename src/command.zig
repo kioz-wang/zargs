@@ -6,29 +6,20 @@ pub const TokenIter = @import("token.zig").Iter;
 const parser = @import("parser.zig");
 /// Universal parsing function
 pub const parseAny = parser.any;
-const meta = @import("meta.zig");
-pub const Meta = meta.Meta;
+pub const Meta = @import("meta.zig").Meta;
 
 /// Command builder
 pub const Command = struct {
-    pub const Builtin = struct {
-        pub fn logFn(comptime fmt: []const u8, args: anytype) void {
-            std.debug.print(fmt ++ "\n", args);
-        }
-        const help = meta.Meta.opt("help", bool)
-            .help("Show this help then exit")
-            .short('h')
-            .long("help");
-    };
-
     const Self = @This();
 
-    log: ?*const @TypeOf(std.debug.print) = Builtin.logFn,
+    fn _log(self: Self, comptime fmt: []const u8, args: anytype) void {
+        std.debug.print(h.print("command({s}) {s}\n", .{ self.name, fmt }), args);
+    }
 
     name: [:0]const u8,
     common: Common = .{},
 
-    _args: []const meta.Meta = &.{},
+    _args: []const Meta = &.{},
     _subs: []const Self = &.{},
     _stat: struct {
         opt: u32 = 0,
@@ -36,6 +27,13 @@ pub const Command = struct {
         posArg: u32 = 0,
         subCmd: u32 = 0,
     } = .{},
+    /// Use the built-in `help` option (short option `-h`, long option `--help`; if matched, output the help message and terminate the program).
+    ///
+    /// It is enabled by default, but if a `opt` or `arg` named "help" is added, it will automatically be disabled.
+    _builtin_help: ?Meta = Meta.opt("help", bool)
+        .help("Show this help then exit")
+        .short('h')
+        .long("help"),
 
     const Common = struct {
         version: ?[]const u8 = null,
@@ -44,11 +42,7 @@ pub const Command = struct {
         homepage: ?[]const u8 = null,
         callBackFn: ?*const anyopaque = null,
         /// Use subcommands, specifying the name of the subcommand's enum union field.
-        use_subCmd: ?[:0]const u8 = null,
-        /// Use the built-in `help` option (short option `-h`, long option `--help`; if matched, output the help message and terminate the program).
-        ///
-        /// It is enabled by default, but if a `opt` or `arg` named "help" is added, it will automatically be disabled.
-        use_builtin_help: bool = true,
+        subName: ?[:0]const u8 = null,
     };
 
     pub fn new(name: [:0]const u8) Self {
@@ -76,7 +70,7 @@ pub const Command = struct {
     }
     pub fn requireSub(self: Self, s: [:0]const u8) Self {
         var c = self;
-        c.common.use_subCmd = s;
+        c.common.subName = s;
         return c;
     }
 
@@ -116,7 +110,7 @@ pub const Command = struct {
     //     if (skip)
     //         return error.SkipZigTest;
     //     const sub: Self = .{ .name = "sub" };
-    //     comptime var cmd: Self = .{ .name = "test", .use_subCmd = "name" };
+    //     comptime var cmd: Self = .{ .name = "test", .subName = "name" };
     //     _ = cmd.subCmd(sub);
     //     _ = cmd.opt("name", u32, .{ .short = 'c' });
     // }
@@ -161,8 +155,8 @@ pub const Command = struct {
     //     _ = cmd.opt("opt1", u32, .{ .long = "long" });
     // }
 
-    fn _checkInName(self: *const Self, m: meta.Meta) void {
-        if (self.common.use_subCmd) |s| {
+    fn _checkInName(self: *const Self, m: Meta) void {
+        if (self.common.subName) |s| {
             if (m.class == .posArg) {
                 @compileError(h.print("{} not accept because subCmd<{s}>", .{ m, s }));
             }
@@ -177,8 +171,7 @@ pub const Command = struct {
         }
     }
     fn _checkInShort(self: *const Self, short: u8) void {
-        if (self.common.use_builtin_help) {
-            const m = Builtin.help;
+        if (self._builtin_help) |m| {
             if (m.common.short == short) {
                 @compileError(h.print("{c} already used by Builtin {}", .{ short, m }));
             }
@@ -192,8 +185,7 @@ pub const Command = struct {
         }
     }
     fn _checkInLong(self: *const Self, long: []const u8) void {
-        if (self.common.use_builtin_help) {
-            const m = Builtin.help;
+        if (self._builtin_help) |m| {
             if (m.common.long) |l| {
                 if (std.mem.eql(u8, l, long)) {
                     @compileError(h.print("{s} already used by Builtin {}", .{ long, m }));
@@ -210,24 +202,25 @@ pub const Command = struct {
             }
         }
     }
-    fn _checkIn(self: *Self, m: meta.Meta) void {
+    fn _checkIn(self: *Self, m: Meta) void {
         self._checkInName(m);
         if (m.class == .opt or m.class == .optArg) {
-            if (std.mem.eql(u8, m.name, Builtin.help.name)) {
-                self.common.use_builtin_help = false;
+            if (self._builtin_help) |n| {
+                if (std.mem.eql(u8, m.name, n.name)) {
+                    self._builtin_help = null;
+                }
             }
             if (m.common.short) |short| self._checkInShort(short);
             if (m.common.long) |long| self._checkInLong(long);
         }
     }
 
-    pub fn arg(self: Self, m: meta.Meta) Self {
+    pub fn arg(self: Self, m: Meta) Self {
         var c = self;
         var a = m;
         a._checkOut();
         c._checkIn(a);
-        a._log = Builtin.logFn;
-        c._args = c._args ++ [_]meta.Meta{a};
+        c._args = c._args ++ [_]Meta{a};
         switch (m.class) {
             .opt => c._stat.opt += 1,
             .optArg => c._stat.optArg += 1,
@@ -296,7 +289,7 @@ pub const Command = struct {
     //     if (skip)
     //         return error.SkipZigTest;
     //     const sub: Self = .{ .name = "sub" };
-    //     comptime var cmd: Self = .{ .name = "test", .use_subCmd = "name" };
+    //     comptime var cmd: Self = .{ .name = "test", .subName = "name" };
     //     _ = cmd.subCmd(sub);
     //     _ = cmd.posArg("pos", u32, .{});
     // }
@@ -304,7 +297,7 @@ pub const Command = struct {
     fn _checkInCmdName(self: *const Self, name: [:0]const u8) void {
         for (self._subs) |c| {
             if (std.mem.eql(u8, c.name, name)) {
-                @compileError(self.common.use_subCmd.? ++ "." ++ name ++ " alreay exist");
+                @compileError(self.common.subName.? ++ "." ++ name ++ " alreay exist");
             }
         }
     }
@@ -314,13 +307,13 @@ pub const Command = struct {
     //     const skip = true;
     //     if (skip)
     //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test", .use_subCmd = "sub" };
+    //     comptime var cmd: Self = .{ .name = "test", .subName = "sub" };
     //     _ = cmd.subCmd(.{ .name = "sub0" }).subCmd(.{ .name = "sub0" });
     // }
 
     pub fn sub(self: Self, cmd: Self) Self {
-        if (self.common.use_subCmd == null) {
-            @compileError("?." ++ cmd.name ++ " not accept because use_subCmd is null");
+        if (self.common.subName == null) {
+            @compileError(h.print(".requireSub(subName) first then add command({s})", .{cmd.name}));
         }
         var c = self;
         c._checkInCmdName(cmd.name);
@@ -330,7 +323,7 @@ pub const Command = struct {
     }
 
     // test "subCmd, Compile, not accept" {
-    //     // error: ?.sub not accept because use_subCmd is null
+    //     // error: ?.sub not accept because subName is null
     //     const skip = true;
     //     if (skip)
     //         return error.SkipZigTest;
@@ -340,8 +333,8 @@ pub const Command = struct {
 
     fn usagePre(self: Self) []const u8 {
         var s: []const u8 = self.name;
-        if (self.common.use_builtin_help) {
-            s = h.print("{s} {s}", .{ s, Builtin.help._usage() });
+        if (self._builtin_help) |m| {
+            s = h.print("{s} {s}", .{ s, m._usage() });
         }
         for (self._args) |m| {
             if (m.class != .opt) continue;
@@ -403,7 +396,7 @@ pub const Command = struct {
     // }
 
     // test "usage with subCmds" {
-    //     comptime var cmd: Self = .{ .name = "exp", .log = null, .use_subCmd = "sub" };
+    //     comptime var cmd: Self = .{ .name = "exp", .log = null, .subName = "sub" };
     //     _ = cmd.opt("verbose", u8, .{ .short = 'v' }).opt("help", bool, .{ .long = "help", .short = 'h' });
     //     _ = cmd.optArg("int", u32, .{ .long = "int" });
     //     _ = cmd.subCmd(.{ .name = "install" }).subCmd(.{ .name = "remove" }).subCmd(.{ .name = "version" });
@@ -434,11 +427,11 @@ pub const Command = struct {
         if (common.homepage) |s| {
             msg = msg ++ "Homepage " ++ s;
         }
-        if (self._stat.opt != 0 or common.use_builtin_help) {
+        if (self._stat.opt != 0 or self._builtin_help != null) {
             msg = msg ++ "\n\nOptions:";
         }
-        if (common.use_builtin_help) {
-            msg = msg ++ "\n" ++ Builtin.help._help();
+        if (self._builtin_help) |m| {
+            msg = msg ++ "\n" ++ m._help();
         }
         for (self._args) |m| {
             if (m.class != .opt) continue;
@@ -476,7 +469,7 @@ pub const Command = struct {
     }
 
     // test "help" {
-    //     comptime var cmd: Self = .{ .name = "exp", .log = null, .use_subCmd = "sub" };
+    //     comptime var cmd: Self = .{ .name = "exp", .log = null, .subName = "sub" };
     //     _ = cmd.opt("verbose", u8, .{ .short = 'v' }).optArg("int", i32, .{ .long = "int", .help = "Give me an integer" });
     //     _ = cmd.subCmd(.{ .name = "install" }).subCmd(.{ .name = "remove", .description = "Remove something" }).subCmd(.{ .name = "version" });
 
@@ -528,7 +521,7 @@ pub const Command = struct {
             .alignment = @alignOf(U),
             .default_value_ptr = null,
             .is_comptime = false,
-            .name = self.common.use_subCmd.?,
+            .name = self.common.subName.?,
             .type = U,
         };
     }
@@ -538,9 +531,9 @@ pub const Command = struct {
         for (self._args) |m| {
             r.fields = r.fields ++ [_]StructField{m._toField()};
         }
-        if (self.common.use_subCmd) |s| {
-            if (self._subs.len == 0) {
-                @compileError("subCmd<" ++ s ++ "> use_subCmd is given, but no cmds has been added");
+        if (self.common.subName) |s| {
+            if (self._stat.subCmd == 0) {
+                @compileError("subCmd<" ++ s ++ "> subName is given, but no cmds has been added");
             }
             r.fields = r.fields ++ [_]StructField{self.subCmdField()};
         }
@@ -548,11 +541,11 @@ pub const Command = struct {
     }
 
     // test "subCmd, Compile, no cmds has been added" {
-    //     // error: subCmd<sub> use_subCmd is given, but no cmds has been added
+    //     // error: subCmd<sub> subName is given, but no cmds has been added
     //     const skip = true;
     //     if (skip)
     //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test", .use_subCmd = "sub" };
+    //     comptime var cmd: Self = .{ .name = "test", .subName = "sub" };
     //     _ = cmd.Result();
     // }
 
@@ -566,7 +559,7 @@ pub const Command = struct {
                 allocator.free(@field(r, m.name));
             }
         }
-        if (self.common.use_subCmd) |s| {
+        if (self.common.subName) |s| {
             inline for (self._subs) |c| {
                 if (std.enums.nameCast(std.meta.Tag(self.SubCmdUnion()), c.name) == @field(r, s)) {
                     const a = &@field(@field(r, s), c.name);
@@ -591,18 +584,14 @@ pub const Command = struct {
     };
 
     fn errCastIter(self: Self, cap: TokenIter.Error) Error {
-        if (self.log) |log| {
-            log("TokenIter Error <{any}>", .{cap});
-        }
+        self._log("Error <{any}> from TokenIter", .{cap});
         return Error.TokenIter;
     }
 
     fn errCastMeta(self: Self, cap: Meta.Error, is_pos: bool) Error {
         return switch (cap) {
             Meta.Error.Allocator => blk: {
-                if (self.log) |log| {
-                    log("Allocator Error <{any}>", .{cap});
-                }
+                self._log("Error <{any}> from Allocator", .{cap});
                 break :blk Error.Allocator;
             },
             Meta.Error.Invalid => if (is_pos) Error.InvalidPosArg else Error.InvalidOptArg,
@@ -619,7 +608,7 @@ pub const Command = struct {
         var matched: h.StringSet(self._stat.opt + self._stat.optArg) = .{};
         matched.init();
 
-        var r = std.mem.zeroInit(self.Result(), if (self.common.use_subCmd) |s| blk: {
+        var r = std.mem.zeroInit(self.Result(), if (self.common.subName) |s| blk: {
             comptime var info = @typeInfo(struct {}).@"struct";
             info.fields = info.fields ++ [_]StructField{self.subCmdField()};
             const I = @Type(.{ .@"struct" = info });
@@ -632,32 +621,26 @@ pub const Command = struct {
             switch (top) {
                 .opt => |o| {
                     var hit = false;
-                    if (self.common.use_builtin_help) {
-                        if (Builtin.help._match(top)) {
-                            if (self.log) |log| {
-                                log("{s}", .{self.help()});
-                            }
+                    if (self._builtin_help) |m| {
+                        if (m._match(top)) {
+                            std.debug.print("{s}\n", .{self.help()});
                             std.process.exit(1);
                         }
                     }
                     inline for (self._args) |m| {
                         if (m.class == .posArg) continue;
-                        hit = m._consume(&r, it, allocator) catch unreachable;
+                        hit = m._consume(&r, it, allocator) catch |e| return self.errCastMeta(e, false);
                         if (hit) {
                             if (!matched.add(m.name)) {
                                 if ((m.class == .opt and m.T != bool) or (m.class == .optArg and m._isSlice())) break;
-                                if (self.log) |log| {
-                                    log("{} repeat with {}", .{ m, o });
-                                }
+                                self._log("match {} again with {}", .{ m, o });
                                 return Error.RepeatOpt;
                             }
                             break;
                         }
                     }
                     if (hit) continue;
-                    if (self.log) |log| {
-                        log("Unknown option {}", .{o});
-                    }
+                    self._log("unknown option {}", .{o});
                     return Error.UnknownOpt;
                 },
                 .posArg, .arg => {
@@ -671,10 +654,8 @@ pub const Command = struct {
             if (m.class != .optArg) continue;
             if (m.common.default == null) {
                 if (!m._isSlice() and !matched.contain(m.name)) {
-                    if (self.log) |log| {
-                        const u = comptime m._usage();
-                        log("{} is required, but not found {s}", .{ m, u });
-                    }
+                    const u = comptime m._usage();
+                    self._log("requires {} but not found: {s}", .{ m, u });
                     return Error.MissingOptArg;
                 }
             }
@@ -692,11 +673,9 @@ pub const Command = struct {
                 _ = m._consume(&r, it, allocator) catch |e| return self.errCastMeta(e, true);
             }
         }
-        if (self.common.use_subCmd) |s| {
+        if (self.common.subName) |s| {
             if ((it.view() catch |e| return self.errCastIter(e)) == null) {
-                if (self.log) |log| {
-                    log("subCmd<" ++ s ++ "> is required, but not found", .{});
-                }
+                self._log("requires subCmd<{s}> but not found", .{s});
                 return Error.MissingSubCmd;
             }
             const t = (it.viewMust() catch unreachable).as_posArg().posArg;
@@ -711,9 +690,7 @@ pub const Command = struct {
                 }
             }
             if (!hit) {
-                if (self.log) |log| {
-                    log("Unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
-                }
+                self._log("unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
                 return Error.UnknownSubCmd;
             }
         }
@@ -838,7 +815,7 @@ pub const Command = struct {
     // }
 
     // test "parse, Error MissingSubCmd" {
-    //     comptime var cmd: Self = .{ .name = "exp", .use_subCmd = "sub" };
+    //     comptime var cmd: Self = .{ .name = "exp", .subName = "sub" };
     //     _ = cmd.subCmd(.{ .name = "sub0" }).subCmd(.{ .name = "sub1" });
     //     var it = try TokenIter.initLine("", null, .{});
     //     defer it.deinit();
@@ -846,7 +823,7 @@ pub const Command = struct {
     // }
 
     // test "parse, Error UnknownSubCmd" {
-    //     comptime var cmd: Self = .{ .name = "exp", .use_subCmd = "sub" };
+    //     comptime var cmd: Self = .{ .name = "exp", .subName = "sub" };
     //     _ = cmd.subCmd(.{ .name = "sub0" }).subCmd(.{ .name = "sub1" });
     //     var it = try TokenIter.initLine("abc", null, .{});
     //     defer it.deinit();

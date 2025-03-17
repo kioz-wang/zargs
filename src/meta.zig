@@ -5,12 +5,11 @@ const h = @import("helper.zig");
 
 pub const Meta = struct {
     const Self = @This();
-    _log: ?*const @TypeOf(std.debug.print) = null,
 
     name: [:0]const u8,
     T: type,
-    common: Common = .{},
     class: Class,
+    common: Common = .{},
 
     const Common = struct {
         help: ?[]const u8 = null,
@@ -26,32 +25,38 @@ pub const Meta = struct {
     pub fn format(self: Self, comptime _: []const u8, _: h.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
         try writer.writeAll(h.print("{s}({s},{s})", .{ @tagName(self.class), self.name, @typeName(self.T) }));
     }
+    fn _log(self: Self, comptime fmt: []const u8, args: anytype) void {
+        std.debug.print(h.print("{} {s}\n", .{ self, fmt }), args);
+    }
     pub fn opt(name: [:0]const u8, T: type) Self {
+        const m: Self = .{ .name = name, .T = T, .class = .opt };
         // Check T
         if (T != bool and @typeInfo(T) != .int) {
-            @compileError(h.print("opt:{s} not accept {s}", .{ name, @typeName(T) }));
+            @compileError(h.print("{} illegal type", .{m}));
         }
         // Initialize Meta
-        return .{ .name = name, .T = T, .class = .opt };
+        return m;
     }
     pub fn optArg(name: [:0]const u8, T: type) Self {
+        const m: Self = .{ .name = name, .T = T, .class = .optArg };
         // Check T
         const info = @typeInfo(T);
         if (info == .pointer) {
             if (info.pointer.size != .slice or !info.pointer.is_const) {
-                @compileError(h.print("optArg:{s} not accept {s}", .{ name, @typeName(T) }));
+                @compileError(h.print("{} illegal type", .{m}));
             }
         }
         // Initialize Meta
-        return .{ .name = name, .T = T, .class = .optArg };
+        return m;
     }
     pub fn posArg(name: [:0]const u8, T: type) Self {
+        const m: Self = .{ .name = name, .T = T, .class = .posArg };
         // Check T
         if (@typeInfo(T) == .pointer and T != []const u8) {
-            @compileError(h.print("posArg:{s} not accept {s}", .{ name, @typeName(T) }));
+            @compileError(h.print("{} illegal type", .{m}));
         }
         // Initialize Meta
-        return .{ .name = name, .T = T, .class = .posArg };
+        return m;
     }
     pub fn help(self: Self, s: []const u8) Self {
         var m = self;
@@ -89,7 +94,7 @@ pub const Meta = struct {
         var m = self;
         switch (m.class) {
             .opt, .optArg => m.common.short = c,
-            .posArg => @compileError(h.print("{} unable set short", self)),
+            .posArg => @compileError(h.print("{} not support short", self)),
         }
         return m;
     }
@@ -97,14 +102,14 @@ pub const Meta = struct {
         var m = self;
         switch (m.class) {
             .opt, .optArg => m.common.long = s,
-            .posArg => @compileError(h.print("{} unable set long", self)),
+            .posArg => @compileError(h.print("{} not support long", self)),
         }
         return m;
     }
     pub fn argName(self: Self, s: []const u8) Self {
         var m = self;
         switch (m.class) {
-            .opt => @compileError(h.print("{} unable set argName", self)),
+            .opt => @compileError(h.print("{} not support argName", self)),
             .optArg, .posArg => m.common.argName = s,
         }
         return m;
@@ -125,7 +130,7 @@ pub const Meta = struct {
         if (self.class == .opt or self.class == .optArg) {
             // Check short and long
             if (self.common.short == null and self.common.long == null) {
-                @compileError(h.print("{} need one of short or long", .{self}));
+                @compileError(h.print("{} requires short or long", .{self}));
             }
         }
         if (self.class == .optArg or self.class == .posArg) {
@@ -223,45 +228,33 @@ pub const Meta = struct {
             if (@typeInfo(self.T) == .array) {
                 for (&@field(r, self.name), 0..) |*item, i| {
                     const t = it.nextMust() catch |err| {
-                        if (self._log) |log| {
-                            log("{s}: Expect {s}[{d}] but {any}", .{ prefix, self.common.argName.?, i, err });
-                        }
+                        self._log("requires {s}[{d}] after {s} but {any}", .{ self.common.argName.?, i, prefix, err });
                         return Error.Missing;
                     };
                     if (t != .arg) {
-                        if (self._log) |log| {
-                            log("{s}: Expect {s}[{d}] but {}", .{ prefix, self.common.argName.?, i, t });
-                        }
+                        self._log("requires {s}[{d}] after {s} but {}", .{ self.common.argName.?, i, prefix, t });
                         return Error.Missing;
                     }
                     s = t.arg;
                     item.* = self._parseAny(s) orelse {
-                        if (self._log) |log| {
-                            log("{s}: Parse {s}[{d}] but fail from {s}", .{ prefix, self.common.argName.?, i, s });
-                        }
+                        self._log("unable to parse {s} to {s}[{d}]", .{ s, self.common.argName.?, i });
                         return Error.Invalid;
                     };
                 }
             } else {
                 const t = it.nextMust() catch |err| {
-                    if (self._log) |log| {
-                        log("{s}: Expect {s} but {any}", .{ prefix, self.common.argName.?, err });
-                    }
+                    self._log("requires {s} after {s} but {any}", .{ self.common.argName.?, prefix, err });
                     return Error.Missing;
                 };
                 s = switch (t) {
                     .optArg, .arg => |a| a,
                     else => {
-                        if (self._log) |log| {
-                            log("{s}: Expect {s} but {}", .{ prefix, self.common.argName.?, t });
-                        }
+                        self._log("requires {s} after {s} but {}", .{ self.common.argName.?, prefix, t });
                         return Error.Missing;
                     },
                 };
                 var value = self._parseAny(s) orelse {
-                    if (self._log) |log| {
-                        log("{s}: Parse {s} but fail from {s}", .{ prefix, self.common.argName.?, s });
-                    }
+                    self._log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
                     return Error.Invalid;
                 };
                 if (self.T == []const u8) {
@@ -273,9 +266,7 @@ pub const Meta = struct {
                 }
                 @field(r, self.name) = if (comptime self._isSlice()) blk: {
                     if (allocator == null) {
-                        if (self._log) |log| {
-                            log("{} allocator is required", .{self});
-                        }
+                        self._log("requires allocator", .{});
                         return Error.Allocator;
                     }
                     var list = std.ArrayList(parser.Base(self.T)).initCapacity(allocator.?, @field(r, self.name).len + 1) catch return Error.Allocator;
@@ -294,31 +285,23 @@ pub const Meta = struct {
         if (@typeInfo(self.T) == .array) {
             for (&@field(r, self.name), 0..) |*item, i| {
                 const t = it.nextMust() catch |err| {
-                    if (self._log) |log| {
-                        log("Expect {s}[{d}] but {any}", .{ self.common.argName.?, i, err });
-                    }
+                    self._log("requires {s}[{d}] but {any}", .{ self.common.argName.?, i, err });
                     return Error.Missing;
                 };
                 s = t.as_posArg().posArg;
                 item.* = self._parseAny(s) orelse {
-                    if (self._log) |log| {
-                        log("Parse {s}[{d}] but fail from {s}", .{ self.common.argName.?, i, s });
-                    }
+                    self._log("unable to parse {s} to {s}[{d}]", .{ s, self.common.argName.?, i });
                     return Error.Invalid;
                 };
             }
         } else {
             const t = it.nextMust() catch |err| {
-                if (self._log) |log| {
-                    log("Expect {s} but {any}", .{ self.common.argName.?, err });
-                }
+                self._log("requires {s} but {any}", .{ self.common.argName.?, err });
                 return Error.Missing;
             };
             s = t.as_posArg().posArg;
             var value = self._parseAny(s) orelse {
-                if (self._log) |log| {
-                    log("Parse {s} but fail from {s}", .{ self.common.argName.?, s });
-                }
+                self._log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
                 return Error.Invalid;
             };
             if (self.T == []const u8) {
