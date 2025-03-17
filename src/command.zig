@@ -206,7 +206,7 @@ pub const Command = struct {
     fn _checkInName(self: *const Self, m: meta.Meta) void {
         if (self.common.use_subCmd) |s| {
             if (m.class == .posArg) {
-                @compileError(print("posArg:{s} not accept because subCmd<{s}>", .{ m.name, s }));
+                @compileError(print("{} not accept because subCmd<{s}>", .{ m, s }));
             }
             if (std.mem.eql(u8, s, m.name)) {
                 @compileError(print("{s} already exist as subCmd", .{m.name}));
@@ -214,7 +214,7 @@ pub const Command = struct {
         }
         for (self._args) |a| {
             if (std.mem.eql(u8, m.name, a.name)) {
-                @compileError(print("{s} already exist as {s}", .{ m.name, @tagName(a.class) }));
+                @compileError(print("{} already exist as {}", .{ m, a }));
             }
         }
     }
@@ -222,13 +222,13 @@ pub const Command = struct {
         if (self.common.use_builtin_help) {
             const m = Builtin.help;
             if (m.common.short == short) {
-                @compileError([_]u8{short} ++ " alreay used by Builtin opt<" ++ m.name ++ ">");
+                @compileError(print("{c} already used by Builtin {}", .{ short, m }));
             }
         }
         for (self._args) |a| {
             if (a.class == .opt or a.class == .optArg) {
                 if (a.common.short == short) {
-                    @compileError(print("short {c} already used by {s}{s}", .{ short, a.name, @tagName(a.class) }));
+                    @compileError(print("short {c} already used by {}", .{ short, a }));
                 }
             }
         }
@@ -238,7 +238,7 @@ pub const Command = struct {
             const m = Builtin.help;
             if (m.common.long) |l| {
                 if (std.mem.eql(u8, l, long)) {
-                    @compileError(long ++ " alreay used by Builtin optArg<" ++ m.name ++ ">");
+                    @compileError(print("{s} already used by Builtin {}", .{ long, m }));
                 }
             }
         }
@@ -246,7 +246,7 @@ pub const Command = struct {
             if (a.class == .opt or a.class == .optArg) {
                 if (a.common.long) |l| {
                     if (std.mem.eql(u8, l, long)) {
-                        @compileError(print("long {s} already used by {s}{s}", .{ long, a.name, @tagName(a.class) }));
+                        @compileError(print("long {s} already used by {}", .{ long, a }));
                     }
                 }
             }
@@ -689,7 +689,7 @@ pub const Command = struct {
                             if (!matched.add(m.name)) {
                                 if ((m.class == .opt and m.T != bool) or (m.class == .optArg and m._isSlice())) break;
                                 if (self.log) |log| {
-                                    log("{s}:{s} repeat with {}", .{ @tagName(m.class), m.name, o });
+                                    log("{} repeat with {}", .{ m, o });
                                 }
                                 return Error.RepeatOpt;
                             }
@@ -715,7 +715,7 @@ pub const Command = struct {
                 if (!m._isSlice() and !matched.contain(m.name)) {
                     if (self.log) |log| {
                         const u = comptime m._usage();
-                        log("optArg:{s} is required, but not found {s}", .{ m.name, u });
+                        log("{} is required, but not found {s}", .{ m, u });
                     }
                     return Error.MissingOptArg;
                 }

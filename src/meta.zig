@@ -9,6 +9,7 @@ fn upper(comptime str: []const u8) [str.len]u8 {
     _ = std.ascii.upperString(s[0..], str);
     return s;
 }
+const FormatOptions = std.fmt.FormatOptions;
 
 pub const Meta = struct {
     const Self = @This();
@@ -30,6 +31,9 @@ pub const Meta = struct {
     };
     const Class = enum { opt, optArg, posArg };
 
+    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        try writer.writeAll(print("{s}({s},{s})", .{ @tagName(self.class), self.name, @typeName(self.T) }));
+    }
     pub fn opt(name: [:0]const u8, T: type) Self {
         // Check T
         if (T != bool and @typeInfo(T) != .int) {
@@ -67,7 +71,7 @@ pub const Meta = struct {
         // Check
         if (m.class == .optArg) {
             if (@typeInfo(m.T) == .pointer and m.T != []const u8) {
-                @compileError(print("optArg:{s} not support default", .{m.name}));
+                @compileError(print("{} not support default", .{self}));
             }
         }
         // Set
@@ -78,7 +82,7 @@ pub const Meta = struct {
         var m = self;
         // Check
         if (m.class == .opt) {
-            @compileError(print("opt:{s} not support parseFn", .{m.name}));
+            @compileError(print("{} not support parseFn", .{self}));
         }
         // Set
         m.common.parseFn = @ptrCast(&f);
@@ -93,7 +97,7 @@ pub const Meta = struct {
         var m = self;
         switch (m.class) {
             .opt, .optArg => m.common.short = c,
-            .posArg => @compileError(print("unable set short for posArg<{s}>", m.name)),
+            .posArg => @compileError(print("{} unable set short", self)),
         }
         return m;
     }
@@ -101,14 +105,14 @@ pub const Meta = struct {
         var m = self;
         switch (m.class) {
             .opt, .optArg => m.common.long = s,
-            .posArg => @compileError(print("unable set long for posArg<{s}>", m.name)),
+            .posArg => @compileError(print("{} unable set long", self)),
         }
         return m;
     }
     pub fn argName(self: Self, s: []const u8) Self {
         var m = self;
         switch (m.class) {
-            .opt => @compileError(print("unable set argName for opt<{s}>", m.name)),
+            .opt => @compileError(print("{} unable set argName", self)),
             .optArg, .posArg => m.common.argName = s,
         }
         return m;
@@ -129,7 +133,7 @@ pub const Meta = struct {
         if (self.class == .opt or self.class == .optArg) {
             // Check short and long
             if (self.common.short == null and self.common.long == null) {
-                @compileError(print("{s}:{s} need one of short or long", .{ @tagName(self.class), self.name }));
+                @compileError(print("{} need one of short or long", .{self}));
             }
         }
         if (self.class == .optArg or self.class == .posArg) {
@@ -278,7 +282,7 @@ pub const Meta = struct {
                 @field(r, self.name) = if (comptime self._isSlice()) blk: {
                     if (allocator == null) {
                         if (self._log) |log| {
-                            log("optArg:{s} allocator is required", .{self.name});
+                            log("{} allocator is required", .{self});
                         }
                         return Error.Allocator;
                     }
