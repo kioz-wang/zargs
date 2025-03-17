@@ -1,5 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
+const h = @import("helper.zig");
 
 pub const TokenIter = @import("token.zig").Iter;
 const parser = @import("parser.zig");
@@ -7,49 +8,6 @@ const parser = @import("parser.zig");
 pub const parseAny = parser.any;
 const meta = @import("meta.zig");
 pub const Meta = meta.Meta;
-
-const print = std.fmt.comptimePrint;
-
-fn StringSet(capacity: comptime_int) type {
-    const S = []const u8;
-    const A = std.ArrayListUnmanaged(S);
-    return struct {
-        base: A = undefined,
-        buffer: [capacity]S = undefined,
-        fn init(self: *@This()) void {
-            self.base = A.initBuffer(self.buffer[0..]);
-        }
-        fn contain(self: *const @This(), s: S) bool {
-            return for (self.base.items) |item| {
-                if (std.mem.eql(u8, item, s)) break true;
-            } else false;
-        }
-        fn add(self: *@This(), s: S) bool {
-            if (self.contain(s)) return false;
-            self.base.appendAssumeCapacity(s);
-            return true;
-        }
-    };
-}
-
-test StringSet {
-    var set: StringSet(2) = .{};
-    set.init();
-    try testing.expect(!set.contain("a"));
-    try testing.expect(set.add("a"));
-    try testing.expect(set.contain("a"));
-    try testing.expect(!set.add("a"));
-}
-
-fn upper(comptime str: []const u8) [str.len]u8 {
-    var s = std.mem.zeroes([str.len]u8);
-    _ = std.ascii.upperString(s[0..], str);
-    return s;
-}
-
-test upper {
-    try testing.expectEqualStrings("UPPER", &upper("upPer"));
-}
 
 /// Command builder
 pub const Command = struct {
@@ -206,15 +164,15 @@ pub const Command = struct {
     fn _checkInName(self: *const Self, m: meta.Meta) void {
         if (self.common.use_subCmd) |s| {
             if (m.class == .posArg) {
-                @compileError(print("{} not accept because subCmd<{s}>", .{ m, s }));
+                @compileError(h.print("{} not accept because subCmd<{s}>", .{ m, s }));
             }
             if (std.mem.eql(u8, s, m.name)) {
-                @compileError(print("{s} already exist as subCmd", .{m.name}));
+                @compileError(h.print("{s} already exist as subCmd", .{m.name}));
             }
         }
         for (self._args) |a| {
             if (std.mem.eql(u8, m.name, a.name)) {
-                @compileError(print("{} already exist as {}", .{ m, a }));
+                @compileError(h.print("{} already exist as {}", .{ m, a }));
             }
         }
     }
@@ -222,13 +180,13 @@ pub const Command = struct {
         if (self.common.use_builtin_help) {
             const m = Builtin.help;
             if (m.common.short == short) {
-                @compileError(print("{c} already used by Builtin {}", .{ short, m }));
+                @compileError(h.print("{c} already used by Builtin {}", .{ short, m }));
             }
         }
         for (self._args) |a| {
             if (a.class == .opt or a.class == .optArg) {
                 if (a.common.short == short) {
-                    @compileError(print("short {c} already used by {}", .{ short, a }));
+                    @compileError(h.print("short {c} already used by {}", .{ short, a }));
                 }
             }
         }
@@ -238,7 +196,7 @@ pub const Command = struct {
             const m = Builtin.help;
             if (m.common.long) |l| {
                 if (std.mem.eql(u8, l, long)) {
-                    @compileError(print("{s} already used by Builtin {}", .{ long, m }));
+                    @compileError(h.print("{s} already used by Builtin {}", .{ long, m }));
                 }
             }
         }
@@ -246,7 +204,7 @@ pub const Command = struct {
             if (a.class == .opt or a.class == .optArg) {
                 if (a.common.long) |l| {
                     if (std.mem.eql(u8, l, long)) {
-                        @compileError(print("long {s} already used by {}", .{ long, a }));
+                        @compileError(h.print("long {s} already used by {}", .{ long, a }));
                     }
                 }
             }
@@ -383,15 +341,15 @@ pub const Command = struct {
     fn usagePre(self: Self) []const u8 {
         var s: []const u8 = self.name;
         if (self.common.use_builtin_help) {
-            s = print("{s} {s}", .{ s, Builtin.help._usage() });
+            s = h.print("{s} {s}", .{ s, Builtin.help._usage() });
         }
         for (self._args) |m| {
             if (m.class != .opt) continue;
-            s = print("{s} {s}", .{ s, m._usage() });
+            s = h.print("{s} {s}", .{ s, m._usage() });
         }
         for (self._args) |m| {
             if (m.class != .optArg) continue;
-            s = print("{s} {s}", .{ s, m._usage() });
+            s = h.print("{s} {s}", .{ s, m._usage() });
         }
         if (self._stat.posArg != 0 or self._stat.subCmd != 0) {
             s = s ++ " [--]";
@@ -399,12 +357,12 @@ pub const Command = struct {
         for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default == null)
-                s = print("{s} {s}", .{ s, m._usage() });
+                s = h.print("{s} {s}", .{ s, m._usage() });
         }
         for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default != null)
-                s = print("{s} {s}", .{ s, m._usage() });
+                s = h.print("{s} {s}", .{ s, m._usage() });
         }
         if (self._stat.subCmd != 0) {
             s = s ++ " {";
@@ -419,7 +377,7 @@ pub const Command = struct {
     }
 
     pub fn usage(self: Self) *const [self.usagePre().len:0]u8 {
-        return print("{s}", .{comptime self.usagePre()});
+        return h.print("{s}", .{comptime self.usagePre()});
     }
 
     // test "usage without subCmds" {
@@ -505,7 +463,7 @@ pub const Command = struct {
         }
         for (self._subs) |c| {
             if (c.common.about) |s| {
-                msg = msg ++ "\n" ++ print("{s:<30} {s}", .{ c.name, s });
+                msg = msg ++ "\n" ++ h.print("{s:<30} {s}", .{ c.name, s });
             } else {
                 msg = msg ++ "\n" ++ c.name;
             }
@@ -514,7 +472,7 @@ pub const Command = struct {
     }
 
     pub fn help(self: Self) *const [self.helpPre().len:0]u8 {
-        return print("{s}", .{comptime self.helpPre()});
+        return h.print("{s}", .{comptime self.helpPre()});
     }
 
     // test "help" {
@@ -658,7 +616,7 @@ pub const Command = struct {
     }
 
     pub fn parseAlloc(self: Self, it: *TokenIter, allocator: ?std.mem.Allocator) Error!self.Result() {
-        var matched: StringSet(self._stat.opt + self._stat.optArg) = .{};
+        var matched: h.StringSet(self._stat.opt + self._stat.optArg) = .{};
         matched.init();
 
         var r = std.mem.zeroInit(self.Result(), if (self.common.use_subCmd) |s| blk: {

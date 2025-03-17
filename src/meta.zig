@@ -1,15 +1,7 @@
 const std = @import("std");
 const token = @import("token.zig");
 const parser = @import("parser.zig");
-
-const print = std.fmt.comptimePrint;
-
-fn upper(comptime str: []const u8) [str.len]u8 {
-    var s = std.mem.zeroes([str.len]u8);
-    _ = std.ascii.upperString(s[0..], str);
-    return s;
-}
-const FormatOptions = std.fmt.FormatOptions;
+const h = @import("helper.zig");
 
 pub const Meta = struct {
     const Self = @This();
@@ -31,13 +23,13 @@ pub const Meta = struct {
     };
     const Class = enum { opt, optArg, posArg };
 
-    pub fn format(self: Self, comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-        try writer.writeAll(print("{s}({s},{s})", .{ @tagName(self.class), self.name, @typeName(self.T) }));
+    pub fn format(self: Self, comptime _: []const u8, _: h.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        try writer.writeAll(h.print("{s}({s},{s})", .{ @tagName(self.class), self.name, @typeName(self.T) }));
     }
     pub fn opt(name: [:0]const u8, T: type) Self {
         // Check T
         if (T != bool and @typeInfo(T) != .int) {
-            @compileError(print("opt:{s} not accept {s}", .{ name, @typeName(T) }));
+            @compileError(h.print("opt:{s} not accept {s}", .{ name, @typeName(T) }));
         }
         // Initialize Meta
         return .{ .name = name, .T = T, .class = .opt };
@@ -47,7 +39,7 @@ pub const Meta = struct {
         const info = @typeInfo(T);
         if (info == .pointer) {
             if (info.pointer.size != .slice or !info.pointer.is_const) {
-                @compileError(print("optArg:{s} not accept {s}", .{ name, @typeName(T) }));
+                @compileError(h.print("optArg:{s} not accept {s}", .{ name, @typeName(T) }));
             }
         }
         // Initialize Meta
@@ -56,7 +48,7 @@ pub const Meta = struct {
     pub fn posArg(name: [:0]const u8, T: type) Self {
         // Check T
         if (@typeInfo(T) == .pointer and T != []const u8) {
-            @compileError(print("posArg:{s} not accept {s}", .{ name, @typeName(T) }));
+            @compileError(h.print("posArg:{s} not accept {s}", .{ name, @typeName(T) }));
         }
         // Initialize Meta
         return .{ .name = name, .T = T, .class = .posArg };
@@ -71,7 +63,7 @@ pub const Meta = struct {
         // Check
         if (m.class == .optArg) {
             if (@typeInfo(m.T) == .pointer and m.T != []const u8) {
-                @compileError(print("{} not support default", .{self}));
+                @compileError(h.print("{} not support default", .{self}));
             }
         }
         // Set
@@ -82,7 +74,7 @@ pub const Meta = struct {
         var m = self;
         // Check
         if (m.class == .opt) {
-            @compileError(print("{} not support parseFn", .{self}));
+            @compileError(h.print("{} not support parseFn", .{self}));
         }
         // Set
         m.common.parseFn = @ptrCast(&f);
@@ -97,7 +89,7 @@ pub const Meta = struct {
         var m = self;
         switch (m.class) {
             .opt, .optArg => m.common.short = c,
-            .posArg => @compileError(print("{} unable set short", self)),
+            .posArg => @compileError(h.print("{} unable set short", self)),
         }
         return m;
     }
@@ -105,14 +97,14 @@ pub const Meta = struct {
         var m = self;
         switch (m.class) {
             .opt, .optArg => m.common.long = s,
-            .posArg => @compileError(print("{} unable set long", self)),
+            .posArg => @compileError(h.print("{} unable set long", self)),
         }
         return m;
     }
     pub fn argName(self: Self, s: []const u8) Self {
         var m = self;
         switch (m.class) {
-            .opt => @compileError(print("{} unable set argName", self)),
+            .opt => @compileError(h.print("{} unable set argName", self)),
             .optArg, .posArg => m.common.argName = s,
         }
         return m;
@@ -133,13 +125,13 @@ pub const Meta = struct {
         if (self.class == .opt or self.class == .optArg) {
             // Check short and long
             if (self.common.short == null and self.common.long == null) {
-                @compileError(print("{} need one of short or long", .{self}));
+                @compileError(h.print("{} need one of short or long", .{self}));
             }
         }
         if (self.class == .optArg or self.class == .posArg) {
             // Set argName if
             if (self.common.argName == null) {
-                self.common.argName = &upper(self.name);
+                self.common.argName = &h.upper(self.name);
             }
         }
     }
@@ -180,14 +172,14 @@ pub const Meta = struct {
     }
     pub fn _usage(self: Self) []const u8 {
         return switch (self.class) {
-            .opt => print("{s}{s}", .{
+            .opt => h.print("{s}{s}", .{
                 Usage.optional(true, Usage.opt(self.common.short, self.common.long)),
                 if (self.T == bool) "" else "...",
             }),
-            .optArg => print("{s}{s}", .{
+            .optArg => h.print("{s}{s}", .{
                 Usage.optional(
                     self.common.default != null,
-                    print("{s} {s}", .{
+                    h.print("{s} {s}", .{
                         Usage.opt(self.common.short, self.common.long),
                         Usage.arg(self.common.argName.?, @typeInfo(self.T)),
                     }),
@@ -202,7 +194,7 @@ pub const Meta = struct {
     }
     pub fn _help(self: Self) []const u8 {
         return if (self.common.help) |s|
-            print("{s:<30} {s}", .{ self._usage(), s })
+            h.print("{s:<30} {s}", .{ self._usage(), s })
         else
             self._usage();
     }
@@ -370,9 +362,9 @@ const Usage = struct {
         return u;
     }
     fn arg(name: []const u8, info: std.builtin.Type) []const u8 {
-        return print("{{{s}{s}}}", .{ if (info == .array) print("[{d}]", .{info.array.len}) else "", name });
+        return h.print("{{{s}{s}}}", .{ if (info == .array) h.print("[{d}]", .{info.array.len}) else "", name });
     }
     fn optional(has_default: bool, u: []const u8) []const u8 {
-        return if (has_default) print("[{s}]", .{u}) else u;
+        return if (has_default) h.print("[{s}]", .{u}) else u;
     }
 };

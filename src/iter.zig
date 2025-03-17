@@ -1,7 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
-
-const String = []const u8;
+const String = @import("helper.zig").String;
 
 /// Wrap an iterator type that has a `go` method, adding caching features (`next` and `view`) to it.
 ///
