@@ -6,7 +6,7 @@ pub const TokenIter = @import("token.zig").Iter;
 const parser = @import("parser.zig");
 /// Universal parsing function
 pub const parseAny = parser.any;
-pub const Meta = @import("meta.zig").Meta;
+pub const Meta = @import("Meta.zig");
 
 /// Command builder
 pub const Command = struct {

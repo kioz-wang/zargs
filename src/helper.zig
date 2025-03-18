@@ -46,3 +46,25 @@ test upper {
 }
 
 pub const FormatOptions = std.fmt.FormatOptions;
+
+pub const Usage = struct {
+    pub fn opt(short: ?u8, long: ?[]const u8) []const u8 {
+        var usage: []const u8 = "";
+        if (short) |s| {
+            usage = print("-{c}", .{s});
+        }
+        if (short != null and long != null) {
+            usage = print("{s}|", .{usage});
+        }
+        if (long) |l| {
+            usage = print("{s}--{s}", .{ usage, l });
+        }
+        return usage;
+    }
+    pub fn arg(name: []const u8, info: std.builtin.Type) []const u8 {
+        return print("{{{s}{s}}}", .{ if (info == .array) print("[{d}]", .{info.array.len}) else "", name });
+    }
+    pub fn optional(has_default: bool, u: []const u8) []const u8 {
+        return if (has_default) print("[{s}]", .{u}) else u;
+    }
+};
