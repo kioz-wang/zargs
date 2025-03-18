@@ -1,9 +1,10 @@
 const std = @import("std");
 const testing = std.testing;
 const h = @import("helper.zig");
+const String = h.String;
 
-pub fn any(T: type, s: []const u8) ?T {
-    if (T == []const u8) {
+pub fn any(T: type, s: String) ?T {
+    if (T == String) {
         return s;
     }
     return switch (@typeInfo(T)) {
@@ -36,11 +37,11 @@ test "any, Compile, unable" {
 }
 
 pub fn Fn(T: type) type {
-    return fn ([]const u8) ?T;
+    return fn (String) ?T;
 }
 
 pub fn Base(T: type) type {
-    if (T == []const u8) return T;
+    if (T == String) return T;
     const info = @typeInfo(T);
     return switch (info) {
         .array => |i| i.child,

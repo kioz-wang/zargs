@@ -25,107 +25,107 @@ const Class = enum { opt, optArg, posArg };
 pub fn format(self: Self, comptime _: []const u8, _: h.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
     try writer.writeAll(h.print("{s}({s},{s})", .{ @tagName(self.class), self.name, @typeName(self.T) }));
 }
-fn _log(self: Self, comptime fmt: []const u8, args: anytype) void {
+fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
     std.debug.print(h.print("{} {s}\n", .{ self, fmt }), args);
 }
 
 pub fn opt(name: [:0]const u8, T: type) Self {
-    const m: Self = .{ .name = name, .T = T, .class = .opt };
+    const meta: Self = .{ .name = name, .T = T, .class = .opt };
     // Check T
     if (T != bool and @typeInfo(T) != .int) {
-        @compileError(h.print("{} illegal type", .{m}));
+        @compileError(h.print("{} illegal type", .{meta}));
     }
     // Initialize Meta
-    return m;
+    return meta;
 }
 pub fn optArg(name: [:0]const u8, T: type) Self {
-    const m: Self = .{ .name = name, .T = T, .class = .optArg };
+    const meta: Self = .{ .name = name, .T = T, .class = .optArg };
     // Check T
     const info = @typeInfo(T);
     if (info == .pointer) {
         if (info.pointer.size != .slice or !info.pointer.is_const) {
-            @compileError(h.print("{} illegal type", .{m}));
+            @compileError(h.print("{} illegal type", .{meta}));
         }
     }
     // Initialize Meta
-    return m;
+    return meta;
 }
 pub fn posArg(name: [:0]const u8, T: type) Self {
-    const m: Self = .{ .name = name, .T = T, .class = .posArg };
+    const meta: Self = .{ .name = name, .T = T, .class = .posArg };
     // Check T
-    if (@typeInfo(T) == .pointer and T != []const u8) {
-        @compileError(h.print("{} illegal type", .{m}));
+    if (@typeInfo(T) == .pointer and T != String) {
+        @compileError(h.print("{} illegal type", .{meta}));
     }
     // Initialize Meta
-    return m;
+    return meta;
 }
 pub fn help(self: Self, s: []const u8) Self {
-    var m = self;
-    m.common.help = s;
-    return m;
+    var meta = self;
+    meta.common.help = s;
+    return meta;
 }
-pub fn default(self: Self, d: self.T) Self {
-    var m = self;
+pub fn default(self: Self, v: self.T) Self {
+    var meta = self;
     // Check
-    if (m.class == .optArg) {
-        if (@typeInfo(m.T) == .pointer and m.T != []const u8) {
+    if (meta.class == .optArg) {
+        if (@typeInfo(meta.T) == .pointer and meta.T != String) {
             @compileError(h.print("{} not support default", .{self}));
         }
     }
     // Set
-    m.common.default = @ptrCast(&d);
-    return m;
+    meta.common.default = @ptrCast(&v);
+    return meta;
 }
 pub fn parseFn(self: Self, f: parser.Fn(parser.Base(self.T))) Self {
-    var m = self;
+    var meta = self;
     // Check
-    if (m.class == .opt) {
+    if (meta.class == .opt) {
         @compileError(h.print("{} not support parseFn", .{self}));
     }
     // Set
-    m.common.parseFn = @ptrCast(&f);
-    return m;
+    meta.common.parseFn = @ptrCast(&f);
+    return meta;
 }
 pub fn callBackFn(self: Self, f: fn (*self.T) void) Self {
-    var m = self;
-    m.common.callBackFn = @ptrCast(&f);
-    return m;
+    var meta = self;
+    meta.common.callBackFn = @ptrCast(&f);
+    return meta;
 }
 pub fn short(self: Self, c: u8) Self {
-    var m = self;
-    switch (m.class) {
-        .opt, .optArg => m.common.short = c,
+    var meta = self;
+    switch (meta.class) {
+        .opt, .optArg => meta.common.short = c,
         .posArg => @compileError(h.print("{} not support short", self)),
     }
-    return m;
+    return meta;
 }
 pub fn long(self: Self, s: []const u8) Self {
-    var m = self;
-    switch (m.class) {
-        .opt, .optArg => m.common.long = s,
+    var meta = self;
+    switch (meta.class) {
+        .opt, .optArg => meta.common.long = s,
         .posArg => @compileError(h.print("{} not support long", self)),
     }
-    return m;
+    return meta;
 }
 pub fn argName(self: Self, s: []const u8) Self {
-    var m = self;
-    switch (m.class) {
+    var meta = self;
+    switch (meta.class) {
         .opt => @compileError(h.print("{} not support argName", self)),
-        .optArg, .posArg => m.common.argName = s,
+        .optArg, .posArg => meta.common.argName = s,
     }
-    return m;
+    return meta;
 }
 
 pub fn _checkOut(self: Self) Self {
-    var m = self;
+    var meta = self;
     if (self.class == .opt) {
         // Set default `default`
         if (self.common.default == null) {
             if (self.T == bool) {
-                m.common.default = @ptrCast(&false);
+                meta.common.default = @ptrCast(&false);
             } else {
-                const zero: m.T = 0;
-                m.common.default = @ptrCast(&zero);
+                const zero: meta.T = 0;
+                meta.common.default = @ptrCast(&zero);
             }
         }
     }
@@ -138,10 +138,10 @@ pub fn _checkOut(self: Self) Self {
     if (self.class == .optArg or self.class == .posArg) {
         // Set argName if
         if (self.common.argName == null) {
-            m.common.argName = &h.upper(self.name);
+            meta.common.argName = &h.upper(self.name);
         }
     }
-    return m;
+    return meta;
 }
 
 pub fn _toField(self: Self) std.builtin.Type.StructField {
@@ -154,7 +154,7 @@ pub fn _toField(self: Self) std.builtin.Type.StructField {
     };
 }
 // TODO conside parseAnyAlloc
-pub fn _parseAny(self: Self, s: []const u8) ?parser.Base(self.T) {
+pub fn _parseAny(self: Self, s: String) ?parser.Base(self.T) {
     if (self.common.parseFn) |f| {
         const p: *const parser.Fn(parser.Base(self.T)) = @ptrCast(@alignCast(f));
         return p(s);
@@ -165,8 +165,8 @@ pub fn _match(self: Self, t: token.Type) bool {
     std.debug.assert(t == .opt);
     std.debug.assert(self.class != .posArg);
     switch (t.opt) {
-        .short => |s| {
-            if (s == self.common.short) return true;
+        .short => |c| {
+            if (c == self.common.short) return true;
         },
         .long => |s| {
             if (self.common.long) |l| {
@@ -225,40 +225,40 @@ fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.A
     const prefix = it.viewMust() catch unreachable;
     if (self._match(prefix)) {
         _ = it.next() catch unreachable;
-        var s: []const u8 = undefined;
+        var s: String = undefined;
         if (@typeInfo(self.T) == .array) {
             for (&@field(r, self.name), 0..) |*item, i| {
                 const t = it.nextMust() catch |err| {
-                    self._log("requires {s}[{d}] after {s} but {any}", .{ self.common.argName.?, i, prefix, err });
+                    self.log("requires {s}[{d}] after {s} but {any}", .{ self.common.argName.?, i, prefix, err });
                     return Error.Missing;
                 };
                 if (t != .arg) {
-                    self._log("requires {s}[{d}] after {s} but {}", .{ self.common.argName.?, i, prefix, t });
+                    self.log("requires {s}[{d}] after {s} but {}", .{ self.common.argName.?, i, prefix, t });
                     return Error.Missing;
                 }
                 s = t.arg;
                 item.* = self._parseAny(s) orelse {
-                    self._log("unable to parse {s} to {s}[{d}]", .{ s, self.common.argName.?, i });
+                    self.log("unable to parse {s} to {s}[{d}]", .{ s, self.common.argName.?, i });
                     return Error.Invalid;
                 };
             }
         } else {
             const t = it.nextMust() catch |err| {
-                self._log("requires {s} after {s} but {any}", .{ self.common.argName.?, prefix, err });
+                self.log("requires {s} after {s} but {any}", .{ self.common.argName.?, prefix, err });
                 return Error.Missing;
             };
             s = switch (t) {
                 .optArg, .arg => |a| a,
                 else => {
-                    self._log("requires {s} after {s} but {}", .{ self.common.argName.?, prefix, t });
+                    self.log("requires {s} after {s} but {}", .{ self.common.argName.?, prefix, t });
                     return Error.Missing;
                 },
             };
             var value = self._parseAny(s) orelse {
-                self._log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
+                self.log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
                 return Error.Invalid;
             };
-            if (self.T == []const u8) {
+            if (self.T == String) {
                 if (allocator) |a| {
                     const allocS = a.alloc(u8, value.len) catch return Error.Allocator;
                     @memcpy(allocS, value);
@@ -267,7 +267,7 @@ fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.A
             }
             @field(r, self.name) = if (comptime h.isSlice(self.T)) blk: {
                 if (allocator == null) {
-                    self._log("requires allocator", .{});
+                    self.log("requires allocator", .{});
                     return Error.Allocator;
                 }
                 var list = std.ArrayList(parser.Base(self.T)).initCapacity(allocator.?, @field(r, self.name).len + 1) catch return Error.Allocator;
@@ -282,30 +282,30 @@ fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.A
     return false;
 }
 fn _consumePosArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.Allocator) Error!bool {
-    var s: []const u8 = undefined;
+    var s: String = undefined;
     if (@typeInfo(self.T) == .array) {
         for (&@field(r, self.name), 0..) |*item, i| {
             const t = it.nextMust() catch |err| {
-                self._log("requires {s}[{d}] but {any}", .{ self.common.argName.?, i, err });
+                self.log("requires {s}[{d}] but {any}", .{ self.common.argName.?, i, err });
                 return Error.Missing;
             };
             s = t.as_posArg().posArg;
             item.* = self._parseAny(s) orelse {
-                self._log("unable to parse {s} to {s}[{d}]", .{ s, self.common.argName.?, i });
+                self.log("unable to parse {s} to {s}[{d}]", .{ s, self.common.argName.?, i });
                 return Error.Invalid;
             };
         }
     } else {
         const t = it.nextMust() catch |err| {
-            self._log("requires {s} but {any}", .{ self.common.argName.?, err });
+            self.log("requires {s} but {any}", .{ self.common.argName.?, err });
             return Error.Missing;
         };
         s = t.as_posArg().posArg;
         var value = self._parseAny(s) orelse {
-            self._log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
+            self.log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
             return Error.Invalid;
         };
-        if (self.T == []const u8) {
+        if (self.T == String) {
             if (allocator) |a| {
                 const allocS = a.alloc(u8, value.len) catch return Error.Allocator;
                 @memcpy(allocS, value);

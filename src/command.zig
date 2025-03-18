@@ -12,7 +12,7 @@ pub const Meta = @import("Meta.zig");
 pub const Command = struct {
     const Self = @This();
 
-    fn _log(self: Self, comptime fmt: []const u8, args: anytype) void {
+    fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
         std.debug.print(h.print("command({s}) {s}\n", .{ self.name, fmt }), args);
     }
 
@@ -20,7 +20,7 @@ pub const Command = struct {
     common: Common = .{},
 
     _args: []const Meta = &.{},
-    _subs: []const Self = &.{},
+    _cmds: []const Self = &.{},
     _stat: struct {
         opt: u32 = 0,
         optArg: u32 = 0,
@@ -49,29 +49,29 @@ pub const Command = struct {
         return .{ .name = name };
     }
     pub fn version(self: Self, s: []const u8) Self {
-        var c = self;
-        c.common.version = s;
-        return c;
+        var cmd = self;
+        cmd.common.version = s;
+        return cmd;
     }
     pub fn about(self: Self, s: []const u8) Self {
-        var c = self;
-        c.common.about = s;
-        return c;
+        var cmd = self;
+        cmd.common.about = s;
+        return cmd;
     }
     pub fn homepage(self: Self, s: []const u8) Self {
-        var c = self;
-        c.common.homepage = s;
-        return c;
+        var cmd = self;
+        cmd.common.homepage = s;
+        return cmd;
     }
     pub fn author(self: Self, s: []const u8) Self {
-        var c = self;
-        c.common.author = s;
-        return c;
+        var cmd = self;
+        cmd.common.author = s;
+        return cmd;
     }
     pub fn requireSub(self: Self, s: [:0]const u8) Self {
-        var c = self;
-        c.common.subName = s;
-        return c;
+        var cmd = self;
+        cmd.common.subName = s;
+        return cmd;
     }
 
     // test "name, Compile, exist as opt" {
@@ -155,77 +155,77 @@ pub const Command = struct {
     //     _ = cmd.opt("opt1", u32, .{ .long = "long" });
     // }
 
-    fn _checkInName(self: *const Self, m: Meta) void {
+    fn _checkInName(self: *const Self, meta: Meta) void {
         if (self.common.subName) |s| {
-            if (m.class == .posArg) {
-                @compileError(h.print("{} not accept because subCmd<{s}>", .{ m, s }));
+            if (meta.class == .posArg) {
+                @compileError(h.print("{} not accept because subCmd<{s}>", .{ meta, s }));
             }
-            if (std.mem.eql(u8, s, m.name)) {
-                @compileError(h.print("{s} already exist as subCmd", .{m.name}));
+            if (std.mem.eql(u8, s, meta.name)) {
+                @compileError(h.print("{s} already exist as subCmd", .{meta.name}));
             }
         }
-        for (self._args) |a| {
-            if (std.mem.eql(u8, m.name, a.name)) {
-                @compileError(h.print("{} already exist as {}", .{ m, a }));
+        for (self._args) |m| {
+            if (std.mem.eql(u8, meta.name, m.name)) {
+                @compileError(h.print("{} already exist as {}", .{ meta, m }));
             }
         }
     }
-    fn _checkInShort(self: *const Self, short: u8) void {
+    fn _checkInShort(self: *const Self, c: u8) void {
         if (self._builtin_help) |m| {
-            if (m.common.short == short) {
-                @compileError(h.print("{c} already used by Builtin {}", .{ short, m }));
+            if (m.common.short == c) {
+                @compileError(h.print("{c} already used by Builtin {}", .{ c, m }));
             }
         }
-        for (self._args) |a| {
-            if (a.class == .opt or a.class == .optArg) {
-                if (a.common.short == short) {
-                    @compileError(h.print("short {c} already used by {}", .{ short, a }));
+        for (self._args) |m| {
+            if (m.class == .opt or m.class == .optArg) {
+                if (m.common.short == c) {
+                    @compileError(h.print("short {c} already used by {}", .{ c, m }));
                 }
             }
         }
     }
-    fn _checkInLong(self: *const Self, long: []const u8) void {
+    fn _checkInLong(self: *const Self, s: []const u8) void {
         if (self._builtin_help) |m| {
             if (m.common.long) |l| {
-                if (std.mem.eql(u8, l, long)) {
-                    @compileError(h.print("{s} already used by Builtin {}", .{ long, m }));
+                if (std.mem.eql(u8, l, s)) {
+                    @compileError(h.print("{s} already used by Builtin {}", .{ s, m }));
                 }
             }
         }
-        for (self._args) |a| {
-            if (a.class == .opt or a.class == .optArg) {
-                if (a.common.long) |l| {
-                    if (std.mem.eql(u8, l, long)) {
-                        @compileError(h.print("long {s} already used by {}", .{ long, a }));
+        for (self._args) |m| {
+            if (m.class == .opt or m.class == .optArg) {
+                if (m.common.long) |l| {
+                    if (std.mem.eql(u8, l, s)) {
+                        @compileError(h.print("long {s} already used by {}", .{ s, m }));
                     }
                 }
             }
         }
     }
-    fn _checkIn(self: *Self, m: Meta) void {
-        self._checkInName(m);
-        if (m.class == .opt or m.class == .optArg) {
-            if (self._builtin_help) |n| {
-                if (std.mem.eql(u8, m.name, n.name)) {
+    fn _checkIn(self: *Self, meta: Meta) void {
+        self._checkInName(meta);
+        if (meta.class == .opt or meta.class == .optArg) {
+            if (self._builtin_help) |m| {
+                if (std.mem.eql(u8, meta.name, m.name)) {
                     self._builtin_help = null;
                 }
             }
-            if (m.common.short) |short| self._checkInShort(short);
-            if (m.common.long) |long| self._checkInLong(long);
+            if (meta.common.short) |c| self._checkInShort(c);
+            if (meta.common.long) |s| self._checkInLong(s);
         }
     }
 
-    pub fn arg(self: Self, m: Meta) Self {
-        var c = self;
-        const a = m._checkOut();
-        c._checkIn(a);
-        c._args = c._args ++ [_]Meta{a};
-        switch (m.class) {
-            .opt => c._stat.opt += 1,
-            .optArg => c._stat.optArg += 1,
-            .posArg => c._stat.posArg += 1,
+    pub fn arg(self: Self, meta: Meta) Self {
+        var cmd = self;
+        const m = meta._checkOut();
+        cmd._checkIn(m);
+        cmd._args = cmd._args ++ [_]Meta{m};
+        switch (meta.class) {
+            .opt => cmd._stat.opt += 1,
+            .optArg => cmd._stat.optArg += 1,
+            .posArg => cmd._stat.posArg += 1,
         }
-        return c;
+        return cmd;
     }
 
     // test "opt, Compile, short and long" {
@@ -294,7 +294,7 @@ pub const Command = struct {
     // }
 
     fn _checkInCmdName(self: *const Self, name: [:0]const u8) void {
-        for (self._subs) |c| {
+        for (self._cmds) |c| {
             if (std.mem.eql(u8, c.name, name)) {
                 @compileError(self.common.subName.? ++ "." ++ name ++ " alreay exist");
             }
@@ -316,7 +316,7 @@ pub const Command = struct {
         }
         var c = self;
         c._checkInCmdName(cmd.name);
-        c._subs = c._subs ++ [_]Self{cmd};
+        c._cmds = c._cmds ++ [_]Self{cmd};
         c._stat.subCmd += 1;
         return c;
     }
@@ -330,7 +330,7 @@ pub const Command = struct {
     //     _ = cmd.subCmd(.{ .name = "sub" });
     // }
 
-    fn usagePre(self: Self) []const u8 {
+    fn _usage(self: Self) []const u8 {
         var s: []const u8 = self.name;
         if (self._builtin_help) |m| {
             s = h.print("{s} {s}", .{ s, m._usage() });
@@ -359,7 +359,7 @@ pub const Command = struct {
         if (self._stat.subCmd != 0) {
             s = s ++ " {";
         }
-        for (self._subs, 0..) |c, i| {
+        for (self._cmds, 0..) |c, i| {
             s = s ++ (if (i == 0) "" else "|") ++ c.name;
         }
         if (self._stat.subCmd != 0) {
@@ -368,8 +368,8 @@ pub const Command = struct {
         return s;
     }
 
-    pub fn usage(self: Self) *const [self.usagePre().len:0]u8 {
-        return h.print("{s}", .{comptime self.usagePre()});
+    pub fn usage(self: Self) *const [self._usage().len:0]u8 {
+        return h.print("{s}", .{comptime self._usage()});
     }
 
     // test "usage without subCmds" {
@@ -406,7 +406,7 @@ pub const Command = struct {
     //     );
     // }
 
-    fn helpPre(self: Self) []const u8 {
+    fn _help(self: Self) []const u8 {
         var msg: []const u8 = "Usage: " ++ self.usage();
         const common = self.common;
         if (common.about) |s| {
@@ -453,7 +453,7 @@ pub const Command = struct {
         if (self._stat.subCmd != 0) {
             msg = msg ++ "\n\nSub Commands:";
         }
-        for (self._subs) |c| {
+        for (self._cmds) |c| {
             if (c.common.about) |s| {
                 msg = msg ++ "\n" ++ h.print("{s:<30} {s}", .{ c.name, s });
             } else {
@@ -463,8 +463,8 @@ pub const Command = struct {
         return msg;
     }
 
-    pub fn help(self: Self) *const [self.helpPre().len:0]u8 {
-        return h.print("{s}", .{comptime self.helpPre()});
+    pub fn help(self: Self) *const [self._help().len:0]u8 {
+        return h.print("{s}", .{comptime self._help()});
     }
 
     // test "help" {
@@ -495,9 +495,9 @@ pub const Command = struct {
     fn SubCmdUnion(self: Self) type {
         var e: []const EnumField = &.{};
         var u: []const UnionField = &.{};
-        for (self._subs, 0..) |m, i| {
-            e = e ++ [_]EnumField{.{ .name = m.name, .value = i }};
-            u = u ++ [_]UnionField{.{ .name = m.name, .type = m.Result(), .alignment = @alignOf(m.Result()) }};
+        for (self._cmds, 0..) |c, i| {
+            e = e ++ [_]EnumField{.{ .name = c.name, .value = i }};
+            u = u ++ [_]UnionField{.{ .name = c.name, .type = c.Result(), .alignment = @alignOf(c.Result()) }};
         }
         const E = @Type(.{ .@"enum" = .{
             .tag_type = std.math.IntFittingRange(0, e.len - 1),
@@ -559,7 +559,7 @@ pub const Command = struct {
             }
         }
         if (self.common.subName) |s| {
-            inline for (self._subs) |c| {
+            inline for (self._cmds) |c| {
                 if (std.enums.nameCast(std.meta.Tag(self.SubCmdUnion()), c.name) == @field(r, s)) {
                     const a = &@field(@field(r, s), c.name);
                     c.destroy(a, allocator);
@@ -582,15 +582,15 @@ pub const Command = struct {
         TokenIter,
     };
 
-    fn errCastIter(self: Self, cap: TokenIter.Error) Error {
-        self._log("Error <{any}> from TokenIter", .{cap});
+    fn _errCastIter(self: Self, cap: TokenIter.Error) Error {
+        self.log("Error <{any}> from TokenIter", .{cap});
         return Error.TokenIter;
     }
 
-    fn errCastMeta(self: Self, cap: Meta.Error, is_pos: bool) Error {
+    fn _errCastMeta(self: Self, cap: Meta.Error, is_pos: bool) Error {
         return switch (cap) {
             Meta.Error.Allocator => blk: {
-                self._log("Error <{any}> from Allocator", .{cap});
+                self.log("Error <{any}> from Allocator", .{cap});
                 break :blk Error.Allocator;
             },
             Meta.Error.Invalid => if (is_pos) Error.InvalidPosArg else Error.InvalidOptArg,
@@ -616,30 +616,30 @@ pub const Command = struct {
             break :blk i;
         } else .{});
 
-        while (it.view() catch |e| return self.errCastIter(e)) |top| {
-            switch (top) {
-                .opt => |o| {
+        while (it.view() catch |e| return self._errCastIter(e)) |t| {
+            switch (t) {
+                .opt => {
                     var hit = false;
                     if (self._builtin_help) |m| {
-                        if (m._match(top)) {
+                        if (m._match(t)) {
                             std.debug.print("{s}\n", .{self.help()});
                             std.process.exit(1);
                         }
                     }
                     inline for (self._args) |m| {
                         if (m.class == .posArg) continue;
-                        hit = m._consume(&r, it, allocator) catch |e| return self.errCastMeta(e, false);
+                        hit = m._consume(&r, it, allocator) catch |e| return self._errCastMeta(e, false);
                         if (hit) {
                             if (!matched.add(m.name)) {
                                 if ((m.class == .opt and m.T != bool) or (m.class == .optArg and h.isSlice(m.T))) break;
-                                self._log("match {} again with {}", .{ m, o });
+                                self.log("match {} again with {}", .{ m, t.opt });
                                 return Error.RepeatOpt;
                             }
                             break;
                         }
                     }
                     if (hit) continue;
-                    self._log("unknown option {}", .{o});
+                    self.log("unknown option {}", .{t.opt});
                     return Error.UnknownOpt;
                 },
                 .posArg, .arg => {
@@ -654,7 +654,7 @@ pub const Command = struct {
             if (m.common.default == null) {
                 if (!h.isSlice(m.T) and !matched.contain(m.name)) {
                     const u = comptime m._usage();
-                    self._log("requires {} but not found: {s}", .{ m, u });
+                    self.log("requires {} but not found: {s}", .{ m, u });
                     return Error.MissingOptArg;
                 }
             }
@@ -662,24 +662,24 @@ pub const Command = struct {
         inline for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default == null) {
-                _ = m._consume(&r, it, allocator) catch |e| return self.errCastMeta(e, true);
+                _ = m._consume(&r, it, allocator) catch |e| return self._errCastMeta(e, true);
             }
         }
         inline for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default != null) {
-                if ((it.view() catch |e| return self.errCastIter(e)) == null) break;
-                _ = m._consume(&r, it, allocator) catch |e| return self.errCastMeta(e, true);
+                if ((it.view() catch |e| return self._errCastIter(e)) == null) break;
+                _ = m._consume(&r, it, allocator) catch |e| return self._errCastMeta(e, true);
             }
         }
         if (self.common.subName) |s| {
-            if ((it.view() catch |e| return self.errCastIter(e)) == null) {
-                self._log("requires subCmd<{s}> but not found", .{s});
+            if ((it.view() catch |e| return self._errCastIter(e)) == null) {
+                self.log("requires subCmd<{s}> but not found", .{s});
                 return Error.MissingSubCmd;
             }
             const t = (it.viewMust() catch unreachable).as_posArg().posArg;
             var hit = false;
-            inline for (self._subs) |c| {
+            inline for (self._cmds) |c| {
                 if (std.mem.eql(u8, c.name, t)) {
                     _ = it.next() catch unreachable;
                     it.reinit();
@@ -689,7 +689,7 @@ pub const Command = struct {
                 }
             }
             if (!hit) {
-                self._log("unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
+                self.log("unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
                 return Error.UnknownSubCmd;
             }
         }
