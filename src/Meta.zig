@@ -33,7 +33,7 @@ pub fn opt(name: [:0]const u8, T: type) Self {
     const meta: Self = .{ .name = name, .T = T, .class = .opt };
     // Check T
     if (T != bool and @typeInfo(T) != .int) {
-        @compileError(h.print("{} illegal type", .{meta}));
+        @compileError(h.print("{} illegal type, expect bool or .int", .{meta}));
     }
     // Initialize Meta
     return meta;
@@ -43,8 +43,11 @@ pub fn optArg(name: [:0]const u8, T: type) Self {
     // Check T
     const info = @typeInfo(T);
     if (info == .pointer) {
-        if (info.pointer.size != .slice or !info.pointer.is_const) {
-            @compileError(h.print("{} illegal type", .{meta}));
+        if (info.pointer.size != .slice) {
+            @compileError(h.print("{} illegal type, expect slice", .{meta}));
+        }
+        if (!info.pointer.is_const) {
+            @compileError(h.print("{} illegal type, expect const", .{meta}));
         }
     }
     // Initialize Meta
@@ -375,7 +378,7 @@ test "Match prefix" {
     }
 }
 
-test "Usage format" {
+test "Format usage" {
     {
         try testing.expectEqualStrings("[-o]", comptime Self.opt("out", bool).short('o')._usage());
         try testing.expectEqualStrings("[-o]...", comptime Self.opt("out", u32).short('o')._usage());
@@ -404,7 +407,7 @@ test "Usage format" {
     }
 }
 
-test "Help format" {
+test "Format help" {
     const meta = Self.opt("out", bool).short('o')._checkOut();
     try testing.expectEqualStrings("[-o]", comptime meta._usage());
     try testing.expectEqualStrings(
