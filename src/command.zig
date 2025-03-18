@@ -25,15 +25,13 @@ pub const Command = struct {
         opt: u32 = 0,
         optArg: u32 = 0,
         posArg: u32 = 0,
-        subCmd: u32 = 0,
+        cmd: u32 = 0,
     } = .{},
     /// Use the built-in `help` option (short option `-h`, long option `--help`; if matched, output the help message and terminate the program).
     ///
     /// It is enabled by default, but if a `opt` or `arg` named "help" is added, it will automatically be disabled.
     _builtin_help: ?Meta = Meta.opt("help", bool)
-        .help("Show this help then exit")
-        .short('h')
-        .long("help"),
+        .help("Show this help then exit").short('h').long("help"),
 
     const Common = struct {
         version: ?[]const u8 = null,
@@ -73,113 +71,114 @@ pub const Command = struct {
         cmd.common.subName = s;
         return cmd;
     }
-
-    // test "name, Compile, exist as opt" {
-    //     // error: name alreay exist as opt
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.opt("name", u32, .{ .short = 'n' });
-    //     _ = cmd.opt("name", u32, .{ .short = 'n' });
-    // }
-
-    // test "name, Compile, exist as optArg" {
-    //     // error: name alreay exist as optArg
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.optArg("name", u32, .{ .short = 'n' });
-    //     _ = cmd.opt("name", u32, .{ .short = 'n' });
-    // }
-
-    // test "name, Compile, exist as posArg" {
-    //     // error: name alreay exist as posArg
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.posArg("name", u32, .{});
-    //     _ = cmd.opt("name", u32, .{ .short = 'n' });
-    // }
-
-    // test "name, Compile, exist as subCmd" {
-    //     // error: name alreay exist as subCmd
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     const sub: Self = .{ .name = "sub" };
-    //     comptime var cmd: Self = .{ .name = "test", .subName = "name" };
-    //     _ = cmd.subCmd(sub);
-    //     _ = cmd.opt("name", u32, .{ .short = 'c' });
-    // }
-
-    // test "short, Compile, used by opt" {
-    //     // error: o alreay used by opt<opt0>
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.opt("opt0", u32, .{ .short = 'o' });
-    //     _ = cmd.opt("opt1", u32, .{ .short = 'o' });
-    // }
-
-    // test "short, Compile, used by optArg" {
-    //     // error: o alreay used by optArg<opt0>
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.optArg("opt0", u32, .{ .short = 'o' });
-    //     _ = cmd.opt("opt1", u32, .{ .short = 'o' });
-    // }
-
-    // test "long, Compile, used by opt" {
-    //     // error: long alreay used by opt<opt0>
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.opt("opt0", u32, .{ .long = "long" });
-    //     _ = cmd.opt("opt1", u32, .{ .long = "long" });
-    // }
-
-    // test "long, Compile, used by optArg" {
-    //     // error: long alreay used by optArg<opt0>
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.optArg("opt0", u32, .{ .long = "long" });
-    //     _ = cmd.opt("opt1", u32, .{ .long = "long" });
-    // }
+    pub fn arg(self: Self, meta: Meta) Self {
+        var cmd = self;
+        const m = meta._checkOut();
+        cmd._checkIn(m);
+        cmd._args = cmd._args ++ [_]Meta{m};
+        switch (meta.class) {
+            .opt => cmd._stat.opt += 1,
+            .optArg => cmd._stat.optArg += 1,
+            .posArg => cmd._stat.posArg += 1,
+        }
+        return cmd;
+    }
+    pub fn sub(self: Self, cmd: Self) Self {
+        if (self.common.subName == null) {
+            @compileError(h.print("please call .requireSub(s) before .sub({s})", .{cmd.name}));
+        }
+        var c = self;
+        c._checkInCmdName(cmd.name);
+        c._cmds = c._cmds ++ [_]Self{cmd};
+        c._stat.cmd += 1;
+        return c;
+    }
+    pub fn opt(
+        self: Self,
+        name: [:0]const u8,
+        T: type,
+        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, default: ?T = null, callBackFn: ?fn (*T) void = null },
+    ) Self {
+        var meta = Meta.opt(name, T);
+        meta.common.help = common.help;
+        meta.common.short = common.short;
+        meta.common.long = common.long;
+        if (common.default) |v| {
+            meta.common.default = @ptrCast(&v);
+        }
+        if (common.callBackFn) |f| {
+            meta.common.callBackFn = @ptrCast(&f);
+        }
+        return self.arg(meta);
+    }
+    pub fn optArg(
+        self: Self,
+        name: [:0]const u8,
+        T: type,
+        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(parser.Base(T)) = null, callBackFn: ?fn (*T) void = null },
+    ) Self {
+        var meta = Meta.optArg(name, T);
+        meta.common.help = common.help;
+        meta.common.short = common.short;
+        meta.common.long = common.long;
+        meta.common.argName = common.argName;
+        if (common.default) |v| {
+            meta.common.default = @ptrCast(&v);
+        }
+        if (common.parseFn) |f| {
+            meta.common.parseFn = @ptrCast(&f);
+        }
+        if (common.callBackFn) |f| {
+            meta.common.callBackFn = @ptrCast(&f);
+        }
+        return self.arg(meta);
+    }
+    pub fn posArg(
+        self: Self,
+        name: [:0]const u8,
+        T: type,
+        common: struct { help: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(parser.Base(T)) = null, callBackFn: ?fn (*T) void = null },
+    ) Self {
+        var meta = Meta.posArg(name, T);
+        meta.common.help = common.help;
+        meta.common.argName = common.argName;
+        if (common.default) |v| {
+            meta.common.default = @ptrCast(&v);
+        }
+        if (common.parseFn) |f| {
+            meta.common.parseFn = @ptrCast(&f);
+        }
+        if (common.callBackFn) |f| {
+            meta.common.callBackFn = @ptrCast(&f);
+        }
+        return self.arg(meta);
+    }
 
     fn _checkInName(self: *const Self, meta: Meta) void {
         if (self.common.subName) |s| {
             if (meta.class == .posArg) {
-                @compileError(h.print("{} not accept because subCmd<{s}>", .{ meta, s }));
+                @compileError(h.print("{} conflicts with subName", .{meta}));
             }
             if (std.mem.eql(u8, s, meta.name)) {
-                @compileError(h.print("{s} already exist as subCmd", .{meta.name}));
+                @compileError(h.print("name of {} conflicts with subName({s})", .{ meta, s }));
             }
         }
         for (self._args) |m| {
             if (std.mem.eql(u8, meta.name, m.name)) {
-                @compileError(h.print("{} already exist as {}", .{ meta, m }));
+                @compileError(h.print("name of {} conflicts with {}", .{ meta, m }));
             }
         }
     }
     fn _checkInShort(self: *const Self, c: u8) void {
         if (self._builtin_help) |m| {
             if (m.common.short == c) {
-                @compileError(h.print("{c} already used by Builtin {}", .{ c, m }));
+                @compileError(h.print("short_prefix({c}) conflicts with builtin {}", .{ c, m }));
             }
         }
         for (self._args) |m| {
             if (m.class == .opt or m.class == .optArg) {
                 if (m.common.short == c) {
-                    @compileError(h.print("short {c} already used by {}", .{ c, m }));
+                    @compileError(h.print("short_prefix({c}) conflicts with  {}", .{ c, m }));
                 }
             }
         }
@@ -188,7 +187,7 @@ pub const Command = struct {
         if (self._builtin_help) |m| {
             if (m.common.long) |l| {
                 if (std.mem.eql(u8, l, s)) {
-                    @compileError(h.print("{s} already used by Builtin {}", .{ s, m }));
+                    @compileError(h.print("long_prefix({s}) conflicts with builtin {}", .{ s, m }));
                 }
             }
         }
@@ -196,7 +195,7 @@ pub const Command = struct {
             if (m.class == .opt or m.class == .optArg) {
                 if (m.common.long) |l| {
                     if (std.mem.eql(u8, l, s)) {
-                        @compileError(h.print("long {s} already used by {}", .{ s, m }));
+                        @compileError(h.print("long_prefix({s}) conflicts with  {}", .{ s, m }));
                     }
                 }
             }
@@ -214,121 +213,13 @@ pub const Command = struct {
             if (meta.common.long) |s| self._checkInLong(s);
         }
     }
-
-    pub fn arg(self: Self, meta: Meta) Self {
-        var cmd = self;
-        const m = meta._checkOut();
-        cmd._checkIn(m);
-        cmd._args = cmd._args ++ [_]Meta{m};
-        switch (meta.class) {
-            .opt => cmd._stat.opt += 1,
-            .optArg => cmd._stat.optArg += 1,
-            .posArg => cmd._stat.posArg += 1,
-        }
-        return cmd;
-    }
-
-    // test "opt, Compile, short and long" {
-    //     // error: opt(Arg)<name> at least one of short or long is required
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.opt("name", u32, .{});
-    // }
-
-    // test "opt, Compile, unsupport type" {
-    //     // error: opt<name> not accept f32
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.opt("name", f32, .{ .short = 'n' });
-    // }
-
-    // test "optArg, Compile, short and long" {
-    //     // error: opt(Arg)<name> at least one of short or long is required
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.optArg("name", u32, .{});
-    // }
-
-    // test "optArg, Compile, pointer but not slice" {
-    //     // error: optArg<name> not accept *[]const u8
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.optArg("name", *[]const u8, .{ .short = 'n' });
-    // }
-
-    // test "optArg, Compile, slice but not const" {
-    //     // error: optArg<name> not accept []u32
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.optArg("name", []u32, .{ .short = 'n' });
-    // }
-
-    // test "optArg, Compile, default for Slice" {
-    //     // error: optArg<num> not support default for Slice
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.optArg("num", []const u32, .{ .short = 'n', .default = &[_]u32{ 1, 2 } });
-    // }
-
-    // test "posArg, Compile, conflict with subCmd" {
-    //     // error: posArg<pos> not accept because subCmd<name> exist
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     const sub: Self = .{ .name = "sub" };
-    //     comptime var cmd: Self = .{ .name = "test", .subName = "name" };
-    //     _ = cmd.subCmd(sub);
-    //     _ = cmd.posArg("pos", u32, .{});
-    // }
-
     fn _checkInCmdName(self: *const Self, name: [:0]const u8) void {
         for (self._cmds) |c| {
             if (std.mem.eql(u8, c.name, name)) {
-                @compileError(self.common.subName.? ++ "." ++ name ++ " alreay exist");
+                @compileError(h.print("name({s}) conflicts with subcommand({s})", .{ name, c.name }));
             }
         }
     }
-
-    // test "subCmd, Compile, alreay exist" {
-    //     // error: sub.sub0 alreay exist
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test", .subName = "sub" };
-    //     _ = cmd.subCmd(.{ .name = "sub0" }).subCmd(.{ .name = "sub0" });
-    // }
-
-    pub fn sub(self: Self, cmd: Self) Self {
-        if (self.common.subName == null) {
-            @compileError(h.print(".requireSub(subName) first then add command({s})", .{cmd.name}));
-        }
-        var c = self;
-        c._checkInCmdName(cmd.name);
-        c._cmds = c._cmds ++ [_]Self{cmd};
-        c._stat.subCmd += 1;
-        return c;
-    }
-
-    // test "subCmd, Compile, not accept" {
-    //     // error: ?.sub not accept because subName is null
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test" };
-    //     _ = cmd.subCmd(.{ .name = "sub" });
-    // }
 
     fn _usage(self: Self) []const u8 {
         var s: []const u8 = self.name;
@@ -343,7 +234,7 @@ pub const Command = struct {
             if (m.class != .optArg) continue;
             s = h.print("{s} {s}", .{ s, m._usage() });
         }
-        if (self._stat.posArg != 0 or self._stat.subCmd != 0) {
+        if (self._stat.posArg != 0 or self._stat.cmd != 0) {
             s = s ++ " [--]";
         }
         for (self._args) |m| {
@@ -356,13 +247,13 @@ pub const Command = struct {
             if (m.common.default != null)
                 s = h.print("{s} {s}", .{ s, m._usage() });
         }
-        if (self._stat.subCmd != 0) {
+        if (self._stat.cmd != 0) {
             s = s ++ " {";
         }
         for (self._cmds, 0..) |c, i| {
             s = s ++ (if (i == 0) "" else "|") ++ c.name;
         }
-        if (self._stat.subCmd != 0) {
+        if (self._stat.cmd != 0) {
             s = s ++ "}";
         }
         return s;
@@ -450,7 +341,7 @@ pub const Command = struct {
             if (m.class != .posArg) continue;
             msg = msg ++ "\n" ++ m._help();
         }
-        if (self._stat.subCmd != 0) {
+        if (self._stat.cmd != 0) {
             msg = msg ++ "\n\nSub Commands:";
         }
         for (self._cmds) |c| {
@@ -531,22 +422,13 @@ pub const Command = struct {
             r.fields = r.fields ++ [_]StructField{m._toField()};
         }
         if (self.common.subName) |s| {
-            if (self._stat.subCmd == 0) {
-                @compileError("subCmd<" ++ s ++ "> subName is given, but no cmds has been added");
+            if (self._stat.cmd == 0) {
+                @compileError(h.print("please call .sub(cmd) to add subcommands because subName({s}) is given", .{s}));
             }
             r.fields = r.fields ++ [_]StructField{self.subCmdField()};
         }
         return @Type(.{ .@"struct" = r });
     }
-
-    // test "subCmd, Compile, no cmds has been added" {
-    //     // error: subCmd<sub> subName is given, but no cmds has been added
-    //     const skip = true;
-    //     if (skip)
-    //         return error.SkipZigTest;
-    //     comptime var cmd: Self = .{ .name = "test", .subName = "sub" };
-    //     _ = cmd.Result();
-    // }
 
     pub fn callBack(self: *Self, f: fn (*self.Result()) void) void {
         self.common.callBackFn = @ptrCast(&f);
@@ -653,8 +535,7 @@ pub const Command = struct {
             if (m.class != .optArg) continue;
             if (m.common.default == null) {
                 if (!h.isSlice(m.T) and !matched.contain(m.name)) {
-                    const u = comptime m._usage();
-                    self.log("requires {} but not found: {s}", .{ m, u });
+                    self.log("requires {} but not found", .{m});
                     return Error.MissingOptArg;
                 }
             }
@@ -674,7 +555,7 @@ pub const Command = struct {
         }
         if (self.common.subName) |s| {
             if ((it.view() catch |e| return self._errCastIter(e)) == null) {
-                self.log("requires subCmd<{s}> but not found", .{s});
+                self.log("requires subcommand but not found", .{});
                 return Error.MissingSubCmd;
             }
             const t = (it.viewMust() catch unreachable).as_posArg().posArg;
@@ -689,7 +570,7 @@ pub const Command = struct {
                 }
             }
             if (!hit) {
-                self.log("unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
+                self.log("unknown subcommand {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
                 return Error.UnknownSubCmd;
             }
         }
@@ -739,6 +620,11 @@ pub const Command = struct {
     //     defer it.deinit();
     //     try testing.expectError(Error.UnknownSubCmd, cmd.parse(&it));
     // }
+
+    test "Compile Errors" {
+        // TODO https://github.com/ziglang/zig/issues/513
+        return error.SkipZigTest;
+    }
 };
 
 test {

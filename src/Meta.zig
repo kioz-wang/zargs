@@ -66,23 +66,11 @@ pub fn help(self: Self, s: []const u8) Self {
 }
 pub fn default(self: Self, v: self.T) Self {
     var meta = self;
-    // Check
-    if (meta.class == .optArg) {
-        if (@typeInfo(meta.T) == .pointer and meta.T != String) {
-            @compileError(h.print("{} not support default", .{self}));
-        }
-    }
-    // Set
     meta.common.default = @ptrCast(&v);
     return meta;
 }
 pub fn parseFn(self: Self, f: parser.Fn(parser.Base(self.T))) Self {
     var meta = self;
-    // Check
-    if (meta.class == .opt) {
-        @compileError(h.print("{} not support parseFn", .{self}));
-    }
-    // Set
     meta.common.parseFn = @ptrCast(&f);
     return meta;
 }
@@ -93,26 +81,17 @@ pub fn callBackFn(self: Self, f: fn (*self.T) void) Self {
 }
 pub fn short(self: Self, c: u8) Self {
     var meta = self;
-    switch (meta.class) {
-        .opt, .optArg => meta.common.short = c,
-        .posArg => @compileError(h.print("{} not support short", self)),
-    }
+    meta.common.short = c;
     return meta;
 }
 pub fn long(self: Self, s: []const u8) Self {
     var meta = self;
-    switch (meta.class) {
-        .opt, .optArg => meta.common.long = s,
-        .posArg => @compileError(h.print("{} not support long", self)),
-    }
+    meta.common.long = s;
     return meta;
 }
 pub fn argName(self: Self, s: []const u8) Self {
     var meta = self;
-    switch (meta.class) {
-        .opt => @compileError(h.print("{} not support argName", self)),
-        .optArg, .posArg => meta.common.argName = s,
-    }
+    meta.common.argName = s;
     return meta;
 }
 
@@ -128,6 +107,20 @@ pub fn _checkOut(self: Self) Self {
                 meta.common.default = @ptrCast(&zero);
             }
         }
+        // Check parseFn
+        if (self.common.parseFn != null) {
+            @compileError(h.print("{} not support parseFn", .{self}));
+        }
+        // Check argName
+        if (self.common.argName != null) {
+            @compileError(h.print("{} not support argName", self));
+        }
+    }
+    if (self.class == .optArg) {
+        // Check default for Slice
+        if (self.common.default != null and h.isSlice(self.T)) {
+            @compileError(h.print("{} not support default", .{self}));
+        }
     }
     if (self.class == .opt or self.class == .optArg) {
         // Check short and long
@@ -139,6 +132,15 @@ pub fn _checkOut(self: Self) Self {
         // Set argName if
         if (self.common.argName == null) {
             meta.common.argName = &h.upper(self.name);
+        }
+    }
+    if (self.class == .posArg) {
+        // Check short and long
+        if (self.common.short != null) {
+            @compileError(h.print("{} not support short", self));
+        }
+        if (self.common.long != null) {
+            @compileError(h.print("{} not support long", self));
         }
     }
     return meta;
