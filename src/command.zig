@@ -217,8 +217,7 @@ pub const Command = struct {
 
     pub fn arg(self: Self, m: Meta) Self {
         var c = self;
-        var a = m;
-        a._checkOut();
+        const a = m._checkOut();
         c._checkIn(a);
         c._args = c._args ++ [_]Meta{a};
         switch (m.class) {
@@ -632,7 +631,7 @@ pub const Command = struct {
                         hit = m._consume(&r, it, allocator) catch |e| return self.errCastMeta(e, false);
                         if (hit) {
                             if (!matched.add(m.name)) {
-                                if ((m.class == .opt and m.T != bool) or (m.class == .optArg and m._isSlice())) break;
+                                if ((m.class == .opt and m.T != bool) or (m.class == .optArg and h.isSlice(m.T))) break;
                                 self._log("match {} again with {}", .{ m, o });
                                 return Error.RepeatOpt;
                             }
@@ -653,7 +652,7 @@ pub const Command = struct {
         inline for (self._args) |m| {
             if (m.class != .optArg) continue;
             if (m.common.default == null) {
-                if (!m._isSlice() and !matched.contain(m.name)) {
+                if (!h.isSlice(m.T) and !matched.contain(m.name)) {
                     const u = comptime m._usage();
                     self._log("requires {} but not found: {s}", .{ m, u });
                     return Error.MissingOptArg;
@@ -725,95 +724,6 @@ pub const Command = struct {
     //     try testing.expectError(Error.UnknownOpt, cmd.parse(&it));
     // }
 
-    // test "parse, Error MissingOptArg" {
-    //     const cmd: Self = .{ .name = "exp" };
-    //     {
-    //         comptime var c = cmd;
-    //         _ = c.optArg("file", []const u8, .{ .short = 'f' });
-    //         var it = try TokenIter.initLine("-f -a", null, .{});
-    //         defer it.deinit();
-    //         try testing.expectError(Error.MissingOptArg, c.parse(&it));
-    //     }
-    //     {
-    //         comptime var c = cmd;
-    //         _ = c.optArg("u32s", [2]u32, .{ .short = 'u' });
-    //         var it = try TokenIter.initLine("-u 0xa", null, .{});
-    //         defer it.deinit();
-    //         try testing.expectError(Error.MissingOptArg, c.parse(&it));
-    //     }
-    //     {
-    //         comptime var c = cmd;
-    //         _ = c.optArg("u32s", [2]u32, .{ .short = 'u' });
-    //         var it = try TokenIter.initLine("-u=0xa 1", null, .{});
-    //         defer it.deinit();
-    //         try testing.expectError(Error.MissingOptArg, c.parse(&it));
-    //     }
-    //     {
-    //         comptime var c = cmd;
-    //         _ = c.optArg("file", []const u8, .{ .short = 'f' });
-    //         var it = try TokenIter.initLine("", null, .{});
-    //         defer it.deinit();
-    //         try testing.expectError(Error.MissingOptArg, c.parse(&it));
-    //     }
-    // }
-
-    // test "parse, Error InvalidOptArg" {
-    //     const cmd: Self = .{ .name = "exp" };
-    //     {
-    //         comptime var c = cmd;
-    //         _ = c.optArg("number", u32, .{ .long = "num" });
-    //         var it = try TokenIter.initLine("--num=a", null, .{});
-    //         defer it.deinit();
-    //         try testing.expectError(Error.InvalidOptArg, c.parse(&it));
-    //     }
-    //     {
-    //         const lastCharacter = struct {
-    //             fn p(s: []const u8) ?u8 {
-    //                 return if (s.len == 0) null else s[s.len - 1];
-    //             }
-    //         }.p;
-    //         comptime var c = cmd;
-    //         _ = c.optArg("lastc", u8, .{ .short = 'l', .parseFn = lastCharacter });
-    //         var it = try TokenIter.initList(&[_][]const u8{ "-l", "" }, .{});
-    //         defer it.deinit();
-    //         try testing.expectError(Error.InvalidOptArg, c.parse(&it));
-    //     }
-    //     {
-    //         const Color = enum { Red, Green, Blue };
-    //         comptime var c = cmd;
-    //         _ = c.optArg("color", Color, .{ .long = "color" });
-    //         var it = try TokenIter.initLine("--color red", null, .{});
-    //         defer it.deinit();
-    //         try testing.expectError(Error.InvalidOptArg, c.parse(&it));
-    //     }
-    // }
-
-    // test "parse, Error MissingPosArg" {
-    //     const cmd: Self = .{ .name = "exp" };
-    //     {
-    //         comptime var c = cmd;
-    //         _ = c.posArg("number", u32, .{});
-    //         var it = try TokenIter.initLine("", null, .{});
-    //         defer it.deinit();
-    //         try testing.expectError(Error.MissingPosArg, c.parse(&it));
-    //     }
-    //     {
-    //         comptime var c = cmd;
-    //         _ = c.posArg("numbers", [2]u32, .{ .default = .{ 1, 2 } });
-    //         var it = try TokenIter.initLine("9", null, .{});
-    //         defer it.deinit();
-    //         try testing.expectError(Error.MissingPosArg, c.parse(&it));
-    //     }
-    // }
-
-    // test "parse, Error InvalidPosArg" {
-    //     comptime var cmd: Self = .{ .name = "exp" };
-    //     _ = cmd.posArg("number", u32, .{});
-    //     var it = try TokenIter.initLine("a", null, .{});
-    //     defer it.deinit();
-    //     try testing.expectError(Error.InvalidPosArg, cmd.parse(&it));
-    // }
-
     // test "parse, Error MissingSubCmd" {
     //     comptime var cmd: Self = .{ .name = "exp", .subName = "sub" };
     //     _ = cmd.subCmd(.{ .name = "sub0" }).subCmd(.{ .name = "sub1" });
@@ -828,30 +738,6 @@ pub const Command = struct {
     //     var it = try TokenIter.initLine("abc", null, .{});
     //     defer it.deinit();
     //     try testing.expectError(Error.UnknownSubCmd, cmd.parse(&it));
-    // }
-
-    // test "parse, Error Allocator" {
-    //     comptime var cmd: Self = .{ .name = "exp" };
-    //     _ = cmd.optArg("slice", []const u32, .{ .short = 'n' });
-    //     var it = try TokenIter.initLine("-n 1", null, .{});
-    //     defer it.deinit();
-    //     try testing.expectError(Error.Allocator, cmd.parse(&it));
-    // }
-
-    // test "parse, Error TokenIter" {
-    //     const cmd: Self = .{ .name = "exp" };
-    //     {
-    //         comptime var c = cmd;
-    //         var it = try TokenIter.initLine("--", null, .{ .terminator = "==" });
-    //         defer it.deinit();
-    //         try testing.expectError(Error.TokenIter, c.parse(&it));
-    //     }
-    //     {
-    //         comptime var c = cmd;
-    //         var it = try TokenIter.initLine("-", null, .{});
-    //         defer it.deinit();
-    //         try testing.expectError(Error.TokenIter, c.parse(&it));
-    //     }
     // }
 };
 
