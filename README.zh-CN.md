@@ -66,20 +66,26 @@ pub fn main() !void {
 
 ### 获取
 
-> `v0.13.x` 仅支持 [zig 0.13.0](https://github.com/ziglang/zig/releases/tag/0.13.0)，对 [zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0) 的支持将从 `v0.14.0` 开始（见 [release v0.14.0](https://github.com/kioz-wang/zargs/milestone/1)）。
-
 获取主线上的最新版本：
 
 ```bash
 zig fetch --save git+https://github.com/kioz-wang/zargs
 ```
 
-获取特定的版本（比如 `v0.13.0`）：
+获取特定的版本（比如 `v0.14.3`）：
 
 ```bash
-# See: https://github.com/kioz-wang/zargs/releases
-zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.13.0.tar.gz
+zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.14.3.tar.gz
 ```
+
+#### 版本说明
+
+> 见 https://github.com/kioz-wang/zargs/releases
+
+版本号格式为 `vx.y.z`：
+- x：目前固定为 0，当项目稳定时，将升为 1；之后，当出现不兼容改动时，将增加 1
+- y：代表支持的 zig 版本，如`vx.14.z`支持 [zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0)
+- z：迭代版本，其中偶数为包含新特性或其他重要改动的版本（见 [milestones](https://github.com/kioz-wang/zargs/milestones)），奇数为包含修复或其他小改动的版本
 
 ### 导入
 

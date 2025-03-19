@@ -64,8 +64,6 @@ As a system level programming language, there should be an elegant solution for 
 
 ## Installation
 
-> `v0.13.x` only supports [zig 0.13.0](https://github.com/ziglang/zig/releases/tag/0.13.0), support for [zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0) will be started with `v0.14.0` (see [release v0.14.0](https://github.com/kioz-wang/zargs/milestone/1))
-
 ### fetch
 
 Get the latest version:
@@ -74,12 +72,20 @@ Get the latest version:
 zig fetch --save git+https://github.com/kioz-wang/zargs
 ```
 
-Get a tagged version (e.g. `v0.13.0`):
+To fetch a specific version (e.g., `v0.14.3`):
 
 ```bash
-# See: https://github.com/kioz-wang/zargs/releases
-zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.13.0.tar.gz
+zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.14.3.tar.gz
 ```
+
+#### Version Notes
+
+> See https://github.com/kioz-wang/zargs/releases
+
+The version number follows the format `vx.y.z`:
+- **x**: Currently fixed at 0. It will increment to 1 when the project stabilizes. Afterward, it will increment by 1 for any breaking changes.
+- **y**: Represents the supported Zig version. For example, `vx.14.z` supports [Zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0).
+- **z**: Iteration version, where even numbers indicate releases with new features or significant changes (see [milestones](https://github.com/kioz-wang/zargs/milestones)), and odd numbers indicate releases with fixes or minor changes.
 
 ### import
 
