@@ -47,7 +47,7 @@ pub fn build(b: *std.Build) void {
             if (b.args) |args| {
                 ex_run_cmd.addArgs(args);
             }
-            const ex_run_step = b.step(e.name[0..(e.name.len - ex_suffix.len)], b.fmt("Run example {s}", .{exe_name}));
+            const ex_run_step = b.step(e.name[0..std.mem.indexOfAny(u8, e.name, ".").?], b.fmt("Run example {s}", .{exe_name}));
             ex_run_step.dependOn(&ex_run_cmd.step);
         }
     }

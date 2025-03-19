@@ -2,8 +2,9 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
+const Meta = zargs.Meta;
 
-fn limitPlusOne(s: []const u8) ?u32 {
+fn limitPlusOne(s: []const u8, _: ?std.mem.Allocator) ?u32 {
     const limit = std.fmt.parseInt(u32, s, 0) catch return null;
     return limit + 1;
 }
@@ -12,12 +13,12 @@ const ColorWithParser = enum {
     White,
     Black,
     Gray,
-    pub fn parser(s: []const u8) ?@This() {
+    pub fn parse(s: []const u8, _: ?std.mem.Allocator) ?@This() {
         return if (std.ascii.eqlIgnoreCase(s, "White")) .White else if (std.ascii.eqlIgnoreCase(s, "Black")) .Black else if (std.ascii.eqlIgnoreCase(s, "Gray")) .Gray else null;
     }
 };
 const lastCharacter = struct {
-    fn p(s: []const u8) ?u8 {
+    fn p(s: []const u8, _: ?std.mem.Allocator) ?u8 {
         return if (s.len == 0) null else s[s.len - 1];
     }
 }.p;
@@ -27,38 +28,65 @@ fn showUint32(v: *u32) void {
 }
 
 pub fn main() !void {
-    comptime var sub0: Command = .{ .name = "sub0" };
+    const sub0 = Command.new("sub0")
+        .arg(Meta.opt("verbose", u8).short('v'))
+        .arg(Meta.optArg("optional_int", u32)
+            .long("oint")
+            .default(1))
+        .arg(Meta.optArg("int", u32)
+            .long("int")
+            .help("give me a u32")
+            .argName("PositiveNumber")
+            .callBackFn(showUint32))
+        .arg(Meta.optArg("bool", bool)
+            .long("bool")
+            .help("give me a bool")
+            .callBackFn(struct {
+            fn f(v: *bool) void {
+                std.debug.print("Found Bool {}\n", .{v.*});
+                v.* = !v.*;
+            }
+        }.f))
+        .arg(Meta.optArg("color", Color)
+            .long("color")
+            .help("give me a color")
+            .default(.Blue))
+        .arg(Meta.optArg("colorp", ColorWithParser)
+            .long("colorp")
+            .help("give me another color")
+            .default(.White))
+        .arg(Meta.optArg("lastc", u8)
+            .long("lastc")
+            .help("give me a word")
+            .argName("word")
+            .parseFn(lastCharacter))
+        .arg(Meta.optArg("word", []const u8)
+            .long("word"))
+        .arg(Meta.optArg("3word", [3][]const u8)
+            .long("3word")
+            .help("give me three words"))
+        .arg(Meta.optArg("nums", []const u32)
+            .long("num")
+            .argName("N"))
+        .arg(Meta.posArg("optional_pos_int", u32)
+            .argName("Num")
+            .help("give me a u32")
+            .default(9))
+        .arg(Meta.posArg("pos_int", u32)
+            .help("give me a u32")
+            .parseFn(limitPlusOne))
+        .arg(Meta.posArg("optional_2pos_int", [2]u32)
+        .argName("Num")
+        .help("give me two u32")
+        .default(.{ 1, 2 }));
 
-    _ = sub0.opt("verbose", u8, .{ .short = 'v' });
-
-    _ = sub0.optArg("optional_int", u32, .{ .long = "oint", .default = 1 });
-    _ = sub0.optArg("int", u32, .{ .long = "int", .help = "give me a u32", .arg_name = "PositiveNumber", .callBackFn = showUint32 });
-    _ = sub0.optArg("bool", bool, .{ .long = "bool", .help = "give me a bool", .callBackFn = struct {
-        fn f(v: *bool) void {
-            std.debug.print("Found Bool {}\n", .{v.*});
-            v.* = !v.*;
-        }
-    }.f });
-    _ = sub0.optArg("color", Color, .{ .long = "color", .help = "give me a color", .default = Color.Blue });
-    _ = sub0.optArg("colorp", ColorWithParser, .{ .long = "colorp", .help = "give me another color", .default = ColorWithParser.White });
-    _ = sub0.optArg("lastc", u8, .{ .long = "lastc", .help = "give me a word", .arg_name = "word", .parseFn = lastCharacter });
-    _ = sub0.optArg("word", []const u8, .{ .long = "word" });
-    _ = sub0.optArg("3word", [3][]const u8, .{ .long = "3word", .help = "give me three words" });
-    _ = sub0.optArg("nums", []const u32, .{ .long = "num", .arg_name = "N" });
-
-    _ = sub0.posArg("optional_pos_int", u32, .{ .help = "give me a u32", .arg_name = "Num", .default = 9 });
-    _ = sub0.posArg("pos_int", u32, .{ .help = "give me a u32", .parseFn = limitPlusOne });
-    _ = sub0.posArg("optional_2pos_int", [2]u32, .{ .help = "give me two u32", .arg_name = "Num", .default = .{ 1, 2 } });
-
-    comptime var cmd: Command = .{
-        .name = "demo",
-        .description = "This is a demo",
-        .version = "1.0",
-        .author = "kioz.wang@gmail.com",
-        .use_subCmd = "sub",
-    };
-    _ = cmd.opt("verbose", u8, .{ .short = 'v' });
-    _ = cmd.subCmd(sub0).subCmd(.{ .name = "sub1", .description = "This is an empty subCmd" });
+    const cmd = Command.new("demo").requireSub("sub")
+        .about("This is a demo")
+        .version("1.0")
+        .author("kioz.wang@gmail.com")
+        .arg(Meta.opt("verbose", u8).short('v'))
+        .sub(sub0)
+        .sub(Command.new("sub1").about("This is an empty subCmd"));
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();

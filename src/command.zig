@@ -1,620 +1,327 @@
 const std = @import("std");
 const testing = std.testing;
+const h = @import("helper.zig");
+const String = h.String;
+const Allocator = std.mem.Allocator;
 
 pub const TokenIter = @import("token.zig").Iter;
 const parser = @import("parser.zig");
 /// Universal parsing function
-pub const parseAny = parser.any;
-
-fn StringSet(capacity: comptime_int) type {
-    const S = []const u8;
-    const A = std.ArrayListUnmanaged(S);
-    return struct {
-        base: A = undefined,
-        buffer: [capacity]S = undefined,
-        fn init(self: *@This()) void {
-            self.base = A.initBuffer(self.buffer[0..]);
-        }
-        fn contain(self: *const @This(), s: S) bool {
-            return for (self.base.items) |item| {
-                if (std.mem.eql(u8, item, s)) break true;
-            } else false;
-        }
-        fn add(self: *@This(), s: S) bool {
-            if (self.contain(s)) return false;
-            self.base.appendAssumeCapacity(s);
-            return true;
-        }
-    };
-}
-
-test StringSet {
-    var set: StringSet(2) = .{};
-    set.init();
-    try testing.expect(!set.contain("a"));
-    try testing.expect(set.add("a"));
-    try testing.expect(set.contain("a"));
-    try testing.expect(!set.add("a"));
-}
-
-fn upper(comptime str: []const u8) [str.len]u8 {
-    var s = std.mem.zeroes([str.len]u8);
-    _ = std.ascii.upperString(s[0..], str);
-    return s;
-}
-
-test upper {
-    try testing.expectEqualStrings("UPPER", &upper("upPer"));
-}
+pub const parseAny = parser.parseAny;
+pub const Meta = @import("Meta.zig");
 
 /// Command builder
 pub const Command = struct {
-    const meta = @import("meta.zig");
-
-    pub const Builtin = struct {
-        pub fn logFn(comptime fmt: []const u8, args: anytype) void {
-            std.debug.print(fmt ++ "\n", args);
-        }
-        const help: meta.Opt = .{
-            .meta = .{
-                .name = "help",
-                .T = bool,
-                .help = "Show this help then exit",
-            },
-            .short = 'h',
-            .long = "help",
-        };
-    };
-
     const Self = @This();
 
-    log: ?*const @TypeOf(std.debug.print) = Builtin.logFn,
+    fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
+        std.debug.print(h.print("command({s}) {s}\n", .{ self.name, fmt }), args);
+    }
 
     name: [:0]const u8,
-    version: ?[]const u8 = null,
-    description: ?[]const u8 = null,
-    author: ?[]const u8 = null,
-    homepage: ?[]const u8 = null,
+    common: Common = .{},
 
-    _opts: []const meta.Opt = &.{},
-    _optArgs: []const meta.OptArg = &.{},
-    _posArgs: []const meta.PosArg = &.{},
-    _subCmds: []const Self = &.{},
-
-    _callBackFn: ?*const anyopaque = null,
-
-    /// Use subcommands, specifying the name of the subcommand's enum union field.
-    use_subCmd: ?[:0]const u8 = null,
+    _args: []const Meta = &.{},
+    _cmds: []const Self = &.{},
+    _stat: struct {
+        opt: u32 = 0,
+        optArg: u32 = 0,
+        posArg: u32 = 0,
+        cmd: u32 = 0,
+    } = .{},
     /// Use the built-in `help` option (short option `-h`, long option `--help`; if matched, output the help message and terminate the program).
     ///
     /// It is enabled by default, but if a `opt` or `arg` named "help" is added, it will automatically be disabled.
-    use_builtin_help: bool = true,
+    _builtin_help: ?Meta = Meta.opt("help", bool)
+        .help("Show this help then exit").short('h').long("help"),
 
-    fn checkName(self: *const Self, name: [:0]const u8) void {
-        for (self._opts) |m| {
-            if (std.mem.eql(u8, m.meta.name, name)) {
-                @compileError(name ++ " alreay exist as opt");
-            }
-        }
-        for (self._optArgs) |m| {
-            if (std.mem.eql(u8, m.meta.name, name)) {
-                @compileError(name ++ " alreay exist as optArg");
-            }
-        }
-        for (self._posArgs) |m| {
-            if (std.mem.eql(u8, m.meta.name, name)) {
-                @compileError(name ++ " alreay exist as posArg");
-            }
-        }
-        if (self.use_subCmd) |s| {
-            if (std.mem.eql(u8, s, name)) {
-                @compileError(name ++ " alreay exist as subCmd");
-            }
-        }
+    const Common = struct {
+        version: ?[]const u8 = null,
+        about: ?[]const u8 = null,
+        author: ?[]const u8 = null,
+        homepage: ?[]const u8 = null,
+        callBackFn: ?*const anyopaque = null,
+        /// Use subcommands, specifying the name of the subcommand's enum union field.
+        subName: ?[:0]const u8 = null,
+    };
+
+    pub fn new(name: [:0]const u8) Self {
+        return .{ .name = name };
     }
-
-    test "name, Compile, exist as opt" {
-        // error: name alreay exist as opt
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.opt("name", u32, .{ .short = 'n' });
-        _ = cmd.opt("name", u32, .{ .short = 'n' });
+    pub fn version(self: Self, s: []const u8) Self {
+        var cmd = self;
+        cmd.common.version = s;
+        return cmd;
     }
-
-    test "name, Compile, exist as optArg" {
-        // error: name alreay exist as optArg
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.optArg("name", u32, .{ .short = 'n' });
-        _ = cmd.opt("name", u32, .{ .short = 'n' });
+    pub fn about(self: Self, s: []const u8) Self {
+        var cmd = self;
+        cmd.common.about = s;
+        return cmd;
     }
-
-    test "name, Compile, exist as posArg" {
-        // error: name alreay exist as posArg
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.posArg("name", u32, .{});
-        _ = cmd.opt("name", u32, .{ .short = 'n' });
+    pub fn homepage(self: Self, s: []const u8) Self {
+        var cmd = self;
+        cmd.common.homepage = s;
+        return cmd;
     }
-
-    test "name, Compile, exist as subCmd" {
-        // error: name alreay exist as subCmd
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        const sub: Self = .{ .name = "sub" };
-        comptime var cmd: Self = .{ .name = "test", .use_subCmd = "name" };
-        _ = cmd.subCmd(sub);
-        _ = cmd.opt("name", u32, .{ .short = 'c' });
+    pub fn author(self: Self, s: []const u8) Self {
+        var cmd = self;
+        cmd.common.author = s;
+        return cmd;
     }
-
-    fn checkShort(self: *const Self, short: u8) void {
-        if (self.use_builtin_help) {
-            const m = Builtin.help;
-            if (m.short == short) {
-                @compileError([_]u8{short} ++ " alreay used by Builtin opt<" ++ m.meta.name ++ ">");
-            }
+    pub fn requireSub(self: Self, s: [:0]const u8) Self {
+        var cmd = self;
+        cmd.common.subName = s;
+        return cmd;
+    }
+    pub fn arg(self: Self, meta: Meta) Self {
+        var cmd = self;
+        const m = meta._checkOut();
+        cmd._checkIn(m);
+        cmd._args = cmd._args ++ [_]Meta{m};
+        switch (meta.class) {
+            .opt => cmd._stat.opt += 1,
+            .optArg => cmd._stat.optArg += 1,
+            .posArg => cmd._stat.posArg += 1,
         }
-        for (self._opts) |m| {
-            if (m.short == short) {
-                @compileError([_]u8{short} ++ " alreay used by opt<" ++ m.meta.name ++ ">");
-            }
-        }
-        for (self._optArgs) |m| {
-            if (m.short == short) {
-                @compileError([_]u8{short} ++ " alreay used by optArg<" ++ m.meta.name ++ ">");
-            }
-        }
+        return cmd;
     }
-
-    test "short, Compile, used by opt" {
-        // error: o alreay used by opt<opt0>
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.opt("opt0", u32, .{ .short = 'o' });
-        _ = cmd.opt("opt1", u32, .{ .short = 'o' });
-    }
-
-    test "short, Compile, used by optArg" {
-        // error: o alreay used by optArg<opt0>
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.optArg("opt0", u32, .{ .short = 'o' });
-        _ = cmd.opt("opt1", u32, .{ .short = 'o' });
-    }
-
-    fn checkLong(self: *const Self, long: []const u8) void {
-        if (self.use_builtin_help) {
-            const m = Builtin.help;
-            if (m.long) |l| {
-                if (std.mem.eql(u8, l, long)) {
-                    @compileError(long ++ " alreay used by Builtin optArg<" ++ m.meta.name ++ ">");
-                }
-            }
+    pub fn sub(self: Self, cmd: Self) Self {
+        if (self.common.subName == null) {
+            @compileError(h.print("please call .requireSub(s) before .sub({s})", .{cmd.name}));
         }
-        for (self._opts) |m| {
-            if (m.long) |l| {
-                if (std.mem.eql(u8, l, long)) {
-                    @compileError(long ++ " alreay used by opt<" ++ m.meta.name ++ ">");
-                }
-            }
-        }
-        for (self._optArgs) |m| {
-            if (m.long) |l| {
-                if (std.mem.eql(u8, l, long)) {
-                    @compileError(long ++ " alreay used by optArg<" ++ m.meta.name ++ ">");
-                }
-            }
-        }
+        var c = self;
+        c._checkInCmdName(cmd.name);
+        c._cmds = c._cmds ++ [_]Self{cmd};
+        c._stat.cmd += 1;
+        return c;
     }
-
-    test "long, Compile, used by opt" {
-        // error: long alreay used by opt<opt0>
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.opt("opt0", u32, .{ .long = "long" });
-        _ = cmd.opt("opt1", u32, .{ .long = "long" });
-    }
-
-    test "long, Compile, used by optArg" {
-        // error: long alreay used by optArg<opt0>
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.optArg("opt0", u32, .{ .long = "long" });
-        _ = cmd.opt("opt1", u32, .{ .long = "long" });
-    }
-
-    fn checkOpt(self: *Self, name: [:0]const u8, short: ?u8, long: ?[]const u8) void {
-        self.checkName(name);
-        if (std.mem.eql(u8, Builtin.help.meta.name, name)) {
-            self.use_builtin_help = false;
-        }
-        if (short == null and long == null) {
-            @compileError("opt(Arg):" ++ name ++ " at least one of short or long is required");
-        }
-        if (short) |s| self.checkShort(s);
-        if (long) |l| self.checkLong(l);
-    }
-
-    /// Add a `singleOpt`.
     pub fn opt(
-        self: *Self,
+        self: Self,
         name: [:0]const u8,
         T: type,
-        config: struct {
-            default: ?T = null,
-            help: ?[]const u8 = null,
-            short: ?u8 = null,
-            long: ?[]const u8 = null,
-            callBackFn: ?fn (*T) void = null,
-        },
-    ) *Self {
-        self.checkOpt(name, config.short, config.long);
-        if (T != bool and @typeInfo(T) != .int) {
-            @compileError("opt:" ++ name ++ " not accept " ++ @typeName(T));
+        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, default: ?T = null, callBackFn: ?fn (*T) void = null },
+    ) Self {
+        var meta = Meta.opt(name, T);
+        meta.common.help = common.help;
+        meta.common.short = common.short;
+        meta.common.long = common.long;
+        if (common.default) |v| {
+            meta.common.default = @ptrCast(&v);
         }
-        var m: meta.Meta = .{ .name = name, .T = T, .help = config.help, .log = self.log };
-        if (config.default) |d| {
-            m.default = @ptrCast(&d);
-        } else {
-            if (T == bool) {
-                m.default = @ptrCast(&false);
-            } else {
-                const zero: T = 0;
-                m.default = @ptrCast(&zero);
-            }
+        if (common.callBackFn) |f| {
+            meta.common.callBackFn = @ptrCast(&f);
         }
-        if (config.callBackFn) |f| {
-            m.callBackFn = @ptrCast(&f);
-        }
-        self._opts = self._opts ++ [_]meta.Opt{.{
-            .meta = m,
-            .short = config.short,
-            .long = config.long,
-        }};
-        return self;
+        return self.arg(meta);
     }
-
-    test "opt, Compile, short and long" {
-        // error: opt(Arg)<name> at least one of short or long is required
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.opt("name", u32, .{});
-    }
-
-    test "opt, Compile, unsupport type" {
-        // error: opt<name> not accept f32
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.opt("name", f32, .{ .short = 'n' });
-    }
-    /// Add an `optArg`.
     pub fn optArg(
-        self: *Self,
+        self: Self,
         name: [:0]const u8,
         T: type,
-        config: struct {
-            default: ?T = null,
-            help: ?[]const u8 = null,
-            short: ?u8 = null,
-            long: ?[]const u8 = null,
-            arg_name: ?[]const u8 = null,
-            parseFn: ?parser.Fn(parser.Base(T)) = null,
-            callBackFn: ?fn (*T) void = null,
-        },
-    ) *Self {
-        self.checkOpt(name, config.short, config.long);
-        const info = @typeInfo(T);
-        if (info == .pointer) {
-            if (info.pointer.size != .slice or !info.pointer.is_const) {
-                @compileError("optArg:" ++ name ++ " not accept " ++ @typeName(T));
+        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(parser.Base(T)) = null, callBackFn: ?fn (*T) void = null },
+    ) Self {
+        var meta = Meta.optArg(name, T);
+        meta.common.help = common.help;
+        meta.common.short = common.short;
+        meta.common.long = common.long;
+        meta.common.argName = common.argName;
+        if (common.default) |v| {
+            meta.common.default = @ptrCast(&v);
+        }
+        if (common.parseFn) |f| {
+            meta.common.parseFn = @ptrCast(&f);
+        }
+        if (common.callBackFn) |f| {
+            meta.common.callBackFn = @ptrCast(&f);
+        }
+        return self.arg(meta);
+    }
+    pub fn posArg(
+        self: Self,
+        name: [:0]const u8,
+        T: type,
+        common: struct { help: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(parser.Base(T)) = null, callBackFn: ?fn (*T) void = null },
+    ) Self {
+        var meta = Meta.posArg(name, T);
+        meta.common.help = common.help;
+        meta.common.argName = common.argName;
+        if (common.default) |v| {
+            meta.common.default = @ptrCast(&v);
+        }
+        if (common.parseFn) |f| {
+            meta.common.parseFn = @ptrCast(&f);
+        }
+        if (common.callBackFn) |f| {
+            meta.common.callBackFn = @ptrCast(&f);
+        }
+        return self.arg(meta);
+    }
+
+    fn _checkInName(self: *const Self, meta: Meta) void {
+        if (self.common.subName) |s| {
+            if (meta.class == .posArg) {
+                @compileError(h.print("{} conflicts with subName", .{meta}));
             }
-            if (T != []const u8) {
-                if (config.default != null) {
-                    @compileError("optArg:" ++ name ++ " not support default for Slice");
+            if (std.mem.eql(u8, s, meta.name)) {
+                @compileError(h.print("name of {} conflicts with subName({s})", .{ meta, s }));
+            }
+        }
+        for (self._args) |m| {
+            if (std.mem.eql(u8, meta.name, m.name)) {
+                @compileError(h.print("name of {} conflicts with {}", .{ meta, m }));
+            }
+        }
+    }
+    fn _checkInShort(self: *const Self, c: u8) void {
+        if (self._builtin_help) |m| {
+            if (m.common.short == c) {
+                @compileError(h.print("short_prefix({c}) conflicts with builtin {}", .{ c, m }));
+            }
+        }
+        for (self._args) |m| {
+            if (m.class == .opt or m.class == .optArg) {
+                if (m.common.short == c) {
+                    @compileError(h.print("short_prefix({c}) conflicts with  {}", .{ c, m }));
                 }
             }
         }
-        var m: meta.Meta = .{ .name = name, .T = T, .help = config.help, .log = self.log };
-        if (config.default) |v| {
-            m.default = @ptrCast(&v);
-        }
-        if (config.parseFn) |f| {
-            m.parseFn = @ptrCast(&f);
-        }
-        if (config.callBackFn) |f| {
-            m.callBackFn = @ptrCast(&f);
-        }
-        self._optArgs = self._optArgs ++ [_]meta.OptArg{.{
-            .meta = m,
-            .short = config.short,
-            .long = config.long,
-            .arg_name = config.arg_name orelse &upper(name),
-        }};
-        return self;
     }
-
-    test "optArg, Compile, short and long" {
-        // error: opt(Arg)<name> at least one of short or long is required
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.optArg("name", u32, .{});
-    }
-
-    test "optArg, Compile, pointer but not slice" {
-        // error: optArg<name> not accept *[]const u8
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.optArg("name", *[]const u8, .{ .short = 'n' });
-    }
-
-    test "optArg, Compile, slice but not const" {
-        // error: optArg<name> not accept []u32
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.optArg("name", []u32, .{ .short = 'n' });
-    }
-
-    test "optArg, Compile, default for Slice" {
-        // error: optArg<num> not support default for Slice
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.optArg("num", []const u32, .{ .short = 'n', .default = &[_]u32{ 1, 2 } });
-    }
-    /// Add a `posArg`.
-    pub fn posArg(
-        self: *Self,
-        name: [:0]const u8,
-        T: type,
-        config: struct {
-            default: ?T = null,
-            help: ?[]const u8 = null,
-            arg_name: ?[]const u8 = null,
-            parseFn: ?parser.Fn(parser.Base(T)) = null,
-            callBackFn: ?fn (*T) void = null,
-        },
-    ) *Self {
-        if (self.use_subCmd) |s| {
-            @compileError("posArg:" ++ name ++ " not accept because subCmd<" ++ s ++ "> exist");
+    fn _checkInLong(self: *const Self, s: []const u8) void {
+        if (self._builtin_help) |m| {
+            if (m.common.long) |l| {
+                if (std.mem.eql(u8, l, s)) {
+                    @compileError(h.print("long_prefix({s}) conflicts with builtin {}", .{ s, m }));
+                }
+            }
         }
-        self.checkName(name);
-        var m: meta.Meta = .{ .name = name, .T = T, .help = config.help, .log = self.log };
-        if (config.default) |v| {
-            m.default = @ptrCast(&v);
+        for (self._args) |m| {
+            if (m.class == .opt or m.class == .optArg) {
+                if (m.common.long) |l| {
+                    if (std.mem.eql(u8, l, s)) {
+                        @compileError(h.print("long_prefix({s}) conflicts with  {}", .{ s, m }));
+                    }
+                }
+            }
         }
-        if (config.parseFn) |f| {
-            m.parseFn = @ptrCast(&f);
-        }
-        if (config.callBackFn) |f| {
-            m.callBackFn = @ptrCast(&f);
-        }
-        self._posArgs = self._posArgs ++ [_]meta.PosArg{.{
-            .meta = m,
-            .arg_name = config.arg_name orelse &upper(name),
-        }};
-        return self;
     }
-
-    test "posArg, Compile, conflict with subCmd" {
-        // error: posArg<pos> not accept because subCmd<name> exist
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        const sub: Self = .{ .name = "sub" };
-        comptime var cmd: Self = .{ .name = "test", .use_subCmd = "name" };
-        _ = cmd.subCmd(sub);
-        _ = cmd.posArg("pos", u32, .{});
+    fn _checkIn(self: *Self, meta: Meta) void {
+        self._checkInName(meta);
+        if (meta.class == .opt or meta.class == .optArg) {
+            if (self._builtin_help) |m| {
+                if (std.mem.eql(u8, meta.name, m.name)) {
+                    self._builtin_help = null;
+                }
+            }
+            if (meta.common.short) |c| self._checkInShort(c);
+            if (meta.common.long) |s| self._checkInLong(s);
+        }
     }
-
-    fn checkSubCmd(self: *const Self, name: [:0]const u8) void {
-        for (self._subCmds) |c| {
+    fn _checkInCmdName(self: *const Self, name: [:0]const u8) void {
+        for (self._cmds) |c| {
             if (std.mem.eql(u8, c.name, name)) {
-                @compileError(self.use_subCmd.? ++ "." ++ name ++ " alreay exist");
+                @compileError(h.print("name({s}) conflicts with subcommand({s})", .{ name, c.name }));
             }
         }
     }
 
-    test "subCmd, Compile, alreay exist" {
-        // error: sub.sub0 alreay exist
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test", .use_subCmd = "sub" };
-        _ = cmd.subCmd(.{ .name = "sub0" }).subCmd(.{ .name = "sub0" });
-    }
-
-    pub fn subCmd(self: *Self, c: Self) *Self {
-        if (self.use_subCmd == null) {
-            @compileError("?." ++ c.name ++ " not accept because use_subCmd is null");
-        }
-        self.checkSubCmd(c.name);
-        self._subCmds = self._subCmds ++ [_]Self{c};
-        return self;
-    }
-
-    test "subCmd, Compile, not accept" {
-        // error: ?.sub not accept because use_subCmd is null
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test" };
-        _ = cmd.subCmd(.{ .name = "sub" });
-    }
-
-    fn usagePre(self: Self) []const u8 {
+    fn _usage(self: Self) []const u8 {
         var s: []const u8 = self.name;
-        if (self.use_builtin_help) {
-            s = s ++ " " ++ Builtin.help.usage();
+        if (self._builtin_help) |m| {
+            s = h.print("{s} {s}", .{ s, m._usage() });
         }
-        for (self._opts) |m| {
-            s = s ++ " " ++ m.usage();
+        for (self._args) |m| {
+            if (m.class != .opt) continue;
+            s = h.print("{s} {s}", .{ s, m._usage() });
         }
-        for (self._optArgs) |m| {
-            s = s ++ " " ++ m.usage();
+        for (self._args) |m| {
+            if (m.class != .optArg) continue;
+            s = h.print("{s} {s}", .{ s, m._usage() });
         }
-        if (self._posArgs.len != 0 or self._subCmds.len != 0) {
+        if (self._stat.posArg != 0 or self._stat.cmd != 0) {
             s = s ++ " [--]";
         }
-        for (self._posArgs) |m| {
-            if (m.meta.default == null)
-                s = s ++ " " ++ m.usage();
+        for (self._args) |m| {
+            if (m.class != .posArg) continue;
+            if (m.common.default == null)
+                s = h.print("{s} {s}", .{ s, m._usage() });
         }
-        for (self._posArgs) |m| {
-            if (m.meta.default != null)
-                s = s ++ " " ++ m.usage();
+        for (self._args) |m| {
+            if (m.class != .posArg) continue;
+            if (m.common.default != null)
+                s = h.print("{s} {s}", .{ s, m._usage() });
         }
-        if (self._subCmds.len != 0) {
+        if (self._stat.cmd != 0) {
             s = s ++ " {";
         }
-        for (self._subCmds, 0..) |c, i| {
+        for (self._cmds, 0..) |c, i| {
             s = s ++ (if (i == 0) "" else "|") ++ c.name;
         }
-        if (self._subCmds.len != 0) {
+        if (self._stat.cmd != 0) {
             s = s ++ "}";
         }
         return s;
     }
-
-    pub fn usage(self: Self) *const [self.usagePre().len:0]u8 {
-        return std.fmt.comptimePrint("{s}", .{comptime self.usagePre()});
+    pub fn usage(self: Self) *const [self._usage().len:0]u8 {
+        return h.print("{s}", .{comptime self._usage()});
     }
 
-    test "usage without subCmds" {
-        const Color = enum { Red, Green, Blue };
-
-        comptime var cmd: Self = .{ .name = "exp", .log = null };
-
-        _ = cmd.opt("verbose", u8, .{ .short = 'v' }).opt("help", bool, .{ .long = "help", .short = 'h' });
-
-        _ = cmd.optArg("optional_int", u32, .{ .long = "oint", .default = 1, .arg_name = "OptionalInt" });
-        _ = cmd.optArg("int", u32, .{ .long = "int" });
-        _ = cmd.optArg("color", Color, .{ .long = "color", .default = Color.Blue });
-        _ = cmd.optArg("3word", [3][]const u8, .{ .long = "3word", .arg_name = "WORD" });
-
-        _ = cmd.posArg("optional_pos_int", u32, .{ .help = "give me a u32", .arg_name = "Num", .default = 9 });
-        _ = cmd.posArg("pos_int", u32, .{ .help = "give me a u32" });
-        _ = cmd.posArg("optional_2pos_int", [2]u32, .{ .help = "give me two u32", .arg_name = "Num", .default = .{ 1, 2 } });
-
-        try testing.expectEqualStrings(
-            "exp [-v]... [-h|--help] [--oint {OptionalInt}] --int {INT} [--color {COLOR}] --3word {[3]WORD} [--] {POS_INT} [{Num}] [{[2]Num}]",
-            comptime cmd.usage(),
-        );
-    }
-
-    test "usage with subCmds" {
-        comptime var cmd: Self = .{ .name = "exp", .log = null, .use_subCmd = "sub" };
-        _ = cmd.opt("verbose", u8, .{ .short = 'v' }).opt("help", bool, .{ .long = "help", .short = 'h' });
-        _ = cmd.optArg("int", u32, .{ .long = "int" });
-        _ = cmd.subCmd(.{ .name = "install" }).subCmd(.{ .name = "remove" }).subCmd(.{ .name = "version" });
-
-        try testing.expectEqualStrings(
-            "exp [-v]... [-h|--help] --int {INT} [--] {install|remove|version}",
-            comptime cmd.usage(),
-        );
-    }
-
-    fn helpPre(self: Self) []const u8 {
+    fn _help(self: Self) []const u8 {
         var msg: []const u8 = "Usage: " ++ self.usage();
-        if (self.description) |s| {
+        const common = self.common;
+        if (common.about) |s| {
             msg = msg ++ "\n\n" ++ s;
         }
-        if (self.version != null or self.author != null or self.homepage != null) {
+        if (common.version != null or common.author != null or common.homepage != null) {
             msg = msg ++ "\n\n";
         }
-        if (self.version) |s| {
+        if (common.version) |s| {
             msg = msg ++ "Version " ++ s ++
-                if (self.author != null or self.homepage != null) "\t" else "";
+                if (common.author != null or common.homepage != null) "\t" else "";
         }
-        if (self.author) |s| {
+        if (common.author) |s| {
             msg = msg ++ "Author <" ++ s ++ ">" ++
-                if (self.homepage != null) "\t" else "";
+                if (common.homepage != null) "\t" else "";
         }
-        if (self.homepage) |s| {
+        if (common.homepage) |s| {
             msg = msg ++ "Homepage " ++ s;
         }
-        if (self._opts.len != 0 or self.use_builtin_help) {
-            msg = msg ++ "\n";
+        if (self._stat.opt != 0 or self._builtin_help != null) {
+            msg = msg ++ "\n\nOptions:";
         }
-        if (self.use_builtin_help) {
-            msg = msg ++ "\n" ++ Builtin.help.help();
+        if (self._builtin_help) |m| {
+            msg = msg ++ "\n" ++ m._help();
         }
-        for (self._opts) |m| {
-            msg = msg ++ "\n" ++ m.help();
+        for (self._args) |m| {
+            if (m.class != .opt) continue;
+            msg = msg ++ "\n" ++ m._help();
         }
-        if (self._optArgs.len != 0) {
-            msg = msg ++ "\n";
+        if (self._stat.optArg != 0) {
+            msg = msg ++ "\n\nOptions with arguments:";
         }
-        for (self._optArgs) |m| {
-            msg = msg ++ "\n" ++ m.help();
+        for (self._args) |m| {
+            if (m.class != .optArg) continue;
+            msg = msg ++ "\n" ++ m._help();
         }
-        if (self._posArgs.len != 0) {
-            msg = msg ++ "\n";
+        if (self._stat.posArg != 0) {
+            msg = msg ++ "\n\nPositional arguments:";
         }
-        for (self._posArgs) |m| {
-            msg = msg ++ "\n" ++ m.help();
+        for (self._args) |m| {
+            if (m.class != .posArg) continue;
+            msg = msg ++ "\n" ++ m._help();
         }
-        if (self._subCmds.len != 0) {
-            msg = msg ++ "\n";
+        if (self._stat.cmd != 0) {
+            msg = msg ++ "\n\nSub Commands:";
         }
-        for (self._subCmds) |m| {
-            if (m.description) |s| {
-                msg = msg ++ "\n" ++ std.fmt.comptimePrint("{s:<30} {s}", .{ m.name, s });
+        for (self._cmds) |c| {
+            if (c.common.about) |s| {
+                msg = msg ++ "\n" ++ h.print("{s:<30} {s}", .{ c.name, s });
             } else {
-                msg = msg ++ "\n" ++ m.name;
+                msg = msg ++ "\n" ++ c.name;
             }
         }
         return msg;
     }
-
-    pub fn help(self: Self) *const [self.helpPre().len:0]u8 {
-        return std.fmt.comptimePrint("{s}", .{comptime self.helpPre()});
-    }
-
-    test "help" {
-        comptime var cmd: Self = .{ .name = "exp", .log = null, .use_subCmd = "sub" };
-        _ = cmd.opt("verbose", u8, .{ .short = 'v' }).optArg("int", i32, .{ .long = "int", .help = "Give me an integer" });
-        _ = cmd.subCmd(.{ .name = "install" }).subCmd(.{ .name = "remove", .description = "Remove something" }).subCmd(.{ .name = "version" });
-
-        try testing.expectEqualStrings(
-            \\Usage: exp [-h|--help] [-v]... --int {INT} [--] {install|remove|version}
-            \\
-            \\[-h|--help]                    Show this help then exit
-            \\[-v]...
-            \\
-            \\--int {INT}                    Give me an integer
-            \\
-            \\install
-            \\remove                         Remove something
-            \\version
-        ,
-            comptime cmd.help(),
-        );
+    pub fn help(self: Self) *const [self._help().len:0]u8 {
+        return h.print("{s}", .{comptime self._help()});
     }
 
     const StructField = std.builtin.Type.StructField;
@@ -624,9 +331,9 @@ pub const Command = struct {
     fn SubCmdUnion(self: Self) type {
         var e: []const EnumField = &.{};
         var u: []const UnionField = &.{};
-        for (self._subCmds, 0..) |m, i| {
-            e = e ++ [_]EnumField{.{ .name = m.name, .value = i }};
-            u = u ++ [_]UnionField{.{ .name = m.name, .type = m.Result(), .alignment = @alignOf(m.Result()) }};
+        for (self._cmds, 0..) |c, i| {
+            e = e ++ [_]EnumField{.{ .name = c.name, .value = i }};
+            u = u ++ [_]UnionField{.{ .name = c.name, .type = c.Result(), .alignment = @alignOf(c.Result()) }};
         }
         const E = @Type(.{ .@"enum" = .{
             .tag_type = std.math.IntFittingRange(0, e.len - 1),
@@ -649,60 +356,38 @@ pub const Command = struct {
             .alignment = @alignOf(U),
             .default_value_ptr = null,
             .is_comptime = false,
-            .name = self.use_subCmd.?,
+            .name = self.common.subName.?,
             .type = U,
         };
     }
 
     pub fn Result(self: Self) type {
         var r = @typeInfo(struct {}).@"struct";
-        for (self._opts) |m| {
-            r.fields = r.fields ++ [_]StructField{m.meta.toField()};
+        for (self._args) |m| {
+            r.fields = r.fields ++ [_]StructField{m._toField()};
         }
-        for (self._optArgs) |m| {
-            r.fields = r.fields ++ [_]StructField{m.meta.toField()};
-        }
-        for (self._posArgs) |m| {
-            r.fields = r.fields ++ [_]StructField{m.meta.toField()};
-        }
-        if (self.use_subCmd) |s| {
-            if (self._subCmds.len == 0) {
-                @compileError("subCmd<" ++ s ++ "> use_subCmd is given, but no cmds has been added");
+        if (self.common.subName) |s| {
+            if (self._stat.cmd == 0) {
+                @compileError(h.print("please call .sub(cmd) to add subcommands because subName({s}) is given", .{s}));
             }
             r.fields = r.fields ++ [_]StructField{self.subCmdField()};
         }
         return @Type(.{ .@"struct" = r });
     }
 
-    test "subCmd, Compile, no cmds has been added" {
-        // error: subCmd<sub> use_subCmd is given, but no cmds has been added
-        const skip = true;
-        if (skip)
-            return error.SkipZigTest;
-        comptime var cmd: Self = .{ .name = "test", .use_subCmd = "sub" };
-        _ = cmd.Result();
-    }
-
     pub fn callBack(self: *Self, f: fn (*self.Result()) void) void {
-        self._callBackFn = @ptrCast(&f);
+        self.common.callBackFn = @ptrCast(&f);
     }
 
-    pub fn destroy(self: Self, r: *const self.Result(), allocator: std.mem.Allocator) void {
-        inline for (self._optArgs) |m| {
-            if (@typeInfo(m.meta.T) == .pointer) {
-                allocator.free(@field(r, m.meta.name));
-            }
+    pub fn destroy(self: Self, r: *const self.Result(), allocator: Allocator) void {
+        inline for (self._args) |m| {
+            m._destroy(r, allocator);
         }
-        inline for (self._posArgs) |m| {
-            if (@typeInfo(m.meta.T) == .pointer) {
-                allocator.free(@field(r, m.meta.name));
-            }
-        }
-        if (self.use_subCmd) |s| {
-            inline for (self._subCmds) |c| {
+        if (self.common.subName) |s| {
+            inline for (self._cmds) |c| {
                 if (std.enums.nameCast(std.meta.Tag(self.SubCmdUnion()), c.name) == @field(r, s)) {
-                    const sub = &@field(@field(r, s), c.name);
-                    c.destroy(sub, allocator);
+                    const a = &@field(@field(r, s), c.name);
+                    c.destroy(a, allocator);
                     break;
                 }
             }
@@ -722,23 +407,19 @@ pub const Command = struct {
         TokenIter,
     };
 
-    fn errCastIter(self: Self, cap: TokenIter.Error) Error {
-        if (self.log) |log| {
-            log("TokenIter Error <{any}>", .{cap});
-        }
+    fn _errCastIter(self: Self, cap: TokenIter.Error) Error {
+        self.log("Error <{any}> from TokenIter", .{cap});
         return Error.TokenIter;
     }
 
-    fn errCastMeta(self: Self, cap: meta.Error, is_pos: bool) Error {
+    fn _errCastMeta(self: Self, cap: Meta.Error, is_pos: bool) Error {
         return switch (cap) {
-            meta.Error.Allocator => blk: {
-                if (self.log) |log| {
-                    log("Allocator Error <{any}>", .{cap});
-                }
+            Meta.Error.Allocator => blk: {
+                self.log("Error <{any}> from Allocator", .{cap});
                 break :blk Error.Allocator;
             },
-            meta.Error.Invalid => if (is_pos) Error.InvalidPosArg else Error.InvalidOptArg,
-            meta.Error.Missing => if (is_pos) Error.MissingPosArg else Error.MissingOptArg,
+            Meta.Error.Invalid => if (is_pos) Error.InvalidPosArg else Error.InvalidOptArg,
+            Meta.Error.Missing => if (is_pos) Error.MissingPosArg else Error.MissingOptArg,
             else => unreachable,
         };
     }
@@ -747,11 +428,11 @@ pub const Command = struct {
         return self.parseAlloc(it, null);
     }
 
-    pub fn parseAlloc(self: Self, it: *TokenIter, allocator: ?std.mem.Allocator) Error!self.Result() {
-        var hitOpts: StringSet(self._opts.len + self._optArgs.len) = .{};
-        hitOpts.init();
+    pub fn parseAlloc(self: Self, it: *TokenIter, a: ?Allocator) Error!self.Result() {
+        var matched: h.StringSet(self._stat.opt + self._stat.optArg) = .{};
+        matched.init();
 
-        var r = std.mem.zeroInit(self.Result(), if (self.use_subCmd) |s| blk: {
+        var r = std.mem.zeroInit(self.Result(), if (self.common.subName) |s| blk: {
             comptime var info = @typeInfo(struct {}).@"struct";
             info.fields = info.fields ++ [_]StructField{self.subCmdField()};
             const I = @Type(.{ .@"struct" = info });
@@ -760,55 +441,30 @@ pub const Command = struct {
             break :blk i;
         } else .{});
 
-        while (it.view() catch |e| return self.errCastIter(e)) |top| {
-            switch (top) {
-                .opt => |o| {
+        while (it.view() catch |e| return self._errCastIter(e)) |t| {
+            switch (t) {
+                .opt => {
                     var hit = false;
-                    if (self.use_builtin_help) {
-                        if (meta.hitOpt(Builtin.help, top)) {
-                            if (self.log) |log| {
-                                log("{s}", .{self.help()});
-                            }
+                    if (self._builtin_help) |m| {
+                        if (m._match(t)) {
+                            std.debug.print("{s}\n", .{self.help()});
                             std.process.exit(1);
                         }
                     }
-                    inline for (self._opts) |m| {
-                        hit = m.consume(&r, it);
+                    inline for (self._args) |m| {
+                        if (m.class == .posArg) continue;
+                        hit = m._consume(&r, it, a) catch |e| return self._errCastMeta(e, false);
                         if (hit) {
-                            if (!hitOpts.add(m.meta.name)) {
-                                if (m.meta.T != bool) break;
-                                if (self.log) |log| {
-                                    log("opt:{s} repeat with {}", .{ m.meta.name, o });
-                                }
+                            if (!matched.add(m.name)) {
+                                if ((m.class == .opt and m.T != bool) or (m.class == .optArg and h.isSlice(m.T))) break;
+                                self.log("match {} again with {}", .{ m, t.opt });
                                 return Error.RepeatOpt;
                             }
                             break;
                         }
                     }
                     if (hit) continue;
-                    inline for (self._optArgs) |m| {
-                        if (m.meta.isSlice() and allocator == null) {
-                            if (self.log) |log| {
-                                log("optArg:{s} allocator is required", .{m.meta.name});
-                            }
-                            return Error.Allocator;
-                        }
-                        hit = m.consume(&r, it, allocator) catch |e| return self.errCastMeta(e, false);
-                        if (hit) {
-                            if (!hitOpts.add(m.meta.name)) {
-                                if (m.meta.isSlice()) break;
-                                if (self.log) |log| {
-                                    log("optArg:{s} repeat with {}", .{ m.meta.name, o });
-                                }
-                                return Error.RepeatOpt;
-                            }
-                            break;
-                        }
-                    }
-                    if (hit) continue;
-                    if (self.log) |log| {
-                        log("Unknown option {}", .{o});
-                    }
+                    self.log("unknown option {}", .{t.opt});
                     return Error.UnknownOpt;
                 },
                 .posArg, .arg => {
@@ -818,211 +474,260 @@ pub const Command = struct {
                 else => unreachable,
             }
         }
-        inline for (self._optArgs) |m| {
-            if (m.meta.default == null) {
-                if (!m.meta.isSlice() and !hitOpts.contain(m.meta.name)) {
-                    if (self.log) |log| {
-                        const u = comptime m.usage();
-                        log("optArg:{s} is required, but not found {s}", .{ m.meta.name, u });
-                    }
+        inline for (self._args) |m| {
+            if (m.class != .optArg) continue;
+            if (m.common.default == null) {
+                if (!h.isSlice(m.T) and !matched.contain(m.name)) {
+                    self.log("requires {} but not found", .{m});
                     return Error.MissingOptArg;
                 }
             }
         }
-        inline for (self._posArgs) |m| {
-            if (m.meta.default == null) {
-                m.consume(&r, it, allocator) catch |e| return self.errCastMeta(e, true);
+        inline for (self._args) |m| {
+            if (m.class != .posArg) continue;
+            if (m.common.default == null) {
+                _ = m._consume(&r, it, a) catch |e| return self._errCastMeta(e, true);
             }
         }
-        inline for (self._posArgs) |m| {
-            if (m.meta.default != null) {
-                if ((it.view() catch |e| return self.errCastIter(e)) == null) break;
-                m.consume(&r, it, allocator) catch |e| return self.errCastMeta(e, true);
+        inline for (self._args) |m| {
+            if (m.class != .posArg) continue;
+            if (m.common.default != null) {
+                if ((it.view() catch |e| return self._errCastIter(e)) == null) break;
+                _ = m._consume(&r, it, a) catch |e| return self._errCastMeta(e, true);
             }
         }
-        if (self.use_subCmd) |s| {
-            if ((it.view() catch |e| return self.errCastIter(e)) == null) {
-                if (self.log) |log| {
-                    log("subCmd<" ++ s ++ "> is required, but not found", .{});
-                }
+        if (self.common.subName) |s| {
+            if ((it.view() catch |e| return self._errCastIter(e)) == null) {
+                self.log("requires subcommand but not found", .{});
                 return Error.MissingSubCmd;
             }
             const t = (it.viewMust() catch unreachable).as_posArg().posArg;
             var hit = false;
-            inline for (self._subCmds) |c| {
+            inline for (self._cmds) |c| {
                 if (std.mem.eql(u8, c.name, t)) {
                     _ = it.next() catch unreachable;
                     it.reinit();
-                    @field(r, s) = @unionInit(self.SubCmdUnion(), c.name, try c.parseAlloc(it, allocator));
+                    @field(r, s) = @unionInit(self.SubCmdUnion(), c.name, try c.parseAlloc(it, a));
                     hit = true;
                     break;
                 }
             }
             if (!hit) {
-                if (self.log) |log| {
-                    log("Unknown subCmd {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
-                }
+                self.log("unknown subcommand {s}", .{(it.viewMust() catch unreachable).as_posArg().posArg});
                 return Error.UnknownSubCmd;
             }
         }
-        if (self._callBackFn) |f| {
+        if (self.common.callBackFn) |f| {
             const p: *const fn (*self.Result()) void = @ptrCast(@alignCast(f));
             p(&r);
         }
         return r;
     }
 
-    test "parse, Error RepeatOpt" {
-        comptime var cmd: Self = .{ .name = "exp" };
-        _ = cmd.opt("verbose", u8, .{ .short = 'v' }).opt("help", bool, .{ .long = "help", .short = 'h' });
+    test "Compile Errors" {
+        // TODO https://github.com/ziglang/zig/issues/513
+        return error.SkipZigTest;
+    }
+
+    test "Format usage" {
+        const subcmd0 = Self.new("subcmd0")
+            .arg(Meta.optArg("optional_int", i32).long("oint").default(1).argName("OINT"))
+            .arg(Meta.optArg("int", i32).long("int"))
+            .arg(Meta.optArg("files", []const String).short('f').long("file"))
+            .arg(Meta.posArg("optional_pos", u32).default(6))
+            .arg(Meta.posArg("io", [2]String))
+            .arg(Meta.posArg("message", String).default("hello"));
+        const cmd = Self.new("cmd").requireSub("sub")
+            .arg(Meta.opt("verbose", u8).short('v'))
+            .sub(subcmd0)
+            .sub(Self.new("subcmd1"));
+        try testing.expectEqualStrings(
+            "cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}",
+            cmd.usage(),
+        );
+        try testing.expectEqualStrings(
+            "subcmd0 [-h|--help] [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}] [{MESSAGE}]",
+            subcmd0.usage(),
+        );
+    }
+
+    test "Format help" {
         {
-            var it = try TokenIter.initLine("-vvh --help", null, .{});
-            defer it.deinit();
+            const cmd = Self.new("cmd")
+                .arg(Meta.opt("verbose", u8).short('v').help("Set log level"))
+                .arg(Meta.optArg("optional_int", i32).long("oint").default(1).argName("OINT").help("Optional integer"))
+                .arg(Meta.optArg("int", i32).long("int").help("Required integer"))
+                .arg(Meta.optArg("files", []String).short('f').long("file").help("Multiple files"))
+                .arg(Meta.posArg("optional_pos", u32).default(6).help("Optional position argument"))
+                .arg(Meta.posArg("io", [2]String).help("Array position arguments"));
+            try testing.expectEqualStrings(
+                \\Usage: cmd [-h|--help] [-v]... [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}]
+                \\
+                \\Options:
+                \\[-h|--help]                    Show this help then exit
+                \\[-v]...                        Set log level
+                \\
+                \\Options with arguments:
+                \\[--oint {OINT}]                Optional integer
+                \\--int {INT}                    Required integer
+                \\-f|--file {[]FILES}...         Multiple files
+                \\
+                \\Positional arguments:
+                \\[{OPTIONAL_POS}]               Optional position argument
+                \\{[2]IO}                        Array position arguments
+            ,
+                cmd.help(),
+            );
+        }
+        {
+            const cmd = Self.new("cmd").requireSub("sub")
+                .arg(Meta.opt("verbose", u8).short('v'))
+                .sub(Self.new("subcmd0"))
+                .sub(Self.new("subcmd1"));
+            try testing.expectEqualStrings(
+                \\Usage: cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}
+                \\
+                \\Options:
+                \\[-h|--help]                    Show this help then exit
+                \\[-v]...
+                \\
+                \\Sub Commands:
+                \\subcmd0
+                \\subcmd1
+            ,
+                cmd.help(),
+            );
+        }
+    }
+
+    test "Parse without subcommand" {
+        const cmd = Self.new("cmd")
+            .arg(Meta.optArg("int", i32).long("int").help("Required integer"))
+            .arg(Meta.optArg("files", []const String).short('f').long("file").help("Multiple files"))
+            .arg(Meta.posArg("pos", u32).help("Required position argument"));
+        {
+            var it = try TokenIter.initList(&[_]String{"-"}, .{});
+            try testing.expectError(Error.TokenIter, cmd.parse(&it));
+        }
+        {
+            var it = try TokenIter.initList(&[_]String{"--int="}, .{});
+            try testing.expectError(Error.MissingOptArg, cmd.parse(&it));
+        }
+        {
+            var it = try TokenIter.initList(&[_]String{"--int=a"}, .{});
+            try testing.expectError(Error.InvalidOptArg, cmd.parse(&it));
+        }
+        {
+            var it = try TokenIter.initList(&[_]String{ "--int=1", "--int", "2" }, .{});
             try testing.expectError(Error.RepeatOpt, cmd.parse(&it));
         }
         {
-            comptime var c = cmd;
-            _ = c.optArg("number", u32, .{ .long = "num" });
-            var it = try TokenIter.initLine("--num 1 --num 2", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.RepeatOpt, c.parse(&it));
+            var it = try TokenIter.initList(&[_]String{"-t"}, .{});
+            try testing.expectError(Error.UnknownOpt, cmd.parse(&it));
+        }
+        {
+            var it = try TokenIter.initList(&[_]String{"--"}, .{});
+            try testing.expectError(Error.MissingOptArg, cmd.parse(&it));
+        }
+        {
+            var it = try TokenIter.initList(&[_]String{ "--int=1", "--" }, .{});
+            try testing.expectError(Error.MissingPosArg, cmd.parse(&it));
+        }
+        {
+            var it = try TokenIter.initList(&[_]String{ "--int=1", "--", "a" }, .{});
+            try testing.expectError(Error.InvalidPosArg, cmd.parse(&it));
         }
     }
 
-    test "parse, Error UnknownOpt" {
-        comptime var cmd: Self = .{ .name = "exp" };
-        var it = try TokenIter.initLine("-a", null, .{});
-        defer it.deinit();
-        try testing.expectError(Error.UnknownOpt, cmd.parse(&it));
-    }
-
-    test "parse, Error MissingOptArg" {
-        const cmd: Self = .{ .name = "exp" };
+    test "Parse with subcommand" {
+        const cmd = Self.new("cmd").requireSub("sub")
+            .arg(Meta.opt("verbose", u8).short('v'))
+            .sub(Self.new("subcmd0"))
+            .sub(Self.new("subcmd1"));
         {
-            comptime var c = cmd;
-            _ = c.optArg("file", []const u8, .{ .short = 'f' });
-            var it = try TokenIter.initLine("-f -a", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.MissingOptArg, c.parse(&it));
+            var it = try TokenIter.initList(&[_]String{"-v"}, .{});
+            try testing.expectError(Error.MissingSubCmd, cmd.parse(&it));
         }
         {
-            comptime var c = cmd;
-            _ = c.optArg("u32s", [2]u32, .{ .short = 'u' });
-            var it = try TokenIter.initLine("-u 0xa", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.MissingOptArg, c.parse(&it));
-        }
-        {
-            comptime var c = cmd;
-            _ = c.optArg("u32s", [2]u32, .{ .short = 'u' });
-            var it = try TokenIter.initLine("-u=0xa 1", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.MissingOptArg, c.parse(&it));
-        }
-        {
-            comptime var c = cmd;
-            _ = c.optArg("file", []const u8, .{ .short = 'f' });
-            var it = try TokenIter.initLine("", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.MissingOptArg, c.parse(&it));
+            var it = try TokenIter.initList(&[_]String{"subcmd2"}, .{});
+            try testing.expectError(Error.UnknownSubCmd, cmd.parse(&it));
         }
     }
 
-    test "parse, Error InvalidOptArg" {
-        const cmd: Self = .{ .name = "exp" };
-        {
-            comptime var c = cmd;
-            _ = c.optArg("number", u32, .{ .long = "num" });
-            var it = try TokenIter.initLine("--num=a", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.InvalidOptArg, c.parse(&it));
-        }
-        {
-            const lastCharacter = struct {
-                fn p(s: []const u8) ?u8 {
-                    return if (s.len == 0) null else s[s.len - 1];
+    test "Parse with callBack" {
+        comptime var cmd = Self.new("cmd")
+            .arg(Meta.opt("verbose", u8).short('v'))
+            .arg(Meta.optArg("count", u32).short('c').default(3).callBackFn(struct {
+                fn f(v: *u32) void {
+                    v.* *= 10;
                 }
-            }.p;
-            comptime var c = cmd;
-            _ = c.optArg("lastc", u8, .{ .short = 'l', .parseFn = lastCharacter });
-            var it = try TokenIter.initList(&[_][]const u8{ "-l", "" }, .{});
-            defer it.deinit();
-            try testing.expectError(Error.InvalidOptArg, c.parse(&it));
+            }.f))
+            .arg(Meta.posArg("pos", String));
+        const R = cmd.Result();
+        comptime cmd.callBack(struct {
+            fn f(r: *R) void {
+                std.debug.print("verbose is {d}\n", .{r.verbose});
+                r.*.verbose += 10;
+            }
+        }.f);
+        {
+            var it = try TokenIter.initLine("-c 2 -vv hello", null, .{});
+            const args = try cmd.parse(&it);
+            try testing.expectEqualDeep(
+                R{ .verbose = 12, .count = 20, .pos = "hello" },
+                args,
+            );
         }
         {
-            const Color = enum { Red, Green, Blue };
-            comptime var c = cmd;
-            _ = c.optArg("color", Color, .{ .long = "color" });
-            var it = try TokenIter.initLine("--color red", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.InvalidOptArg, c.parse(&it));
+            var it = try TokenIter.initLine("-v hello", null, .{});
+            const args = try cmd.parse(&it);
+            try testing.expectEqualDeep(
+                R{ .verbose = 11, .count = 3, .pos = "hello" },
+                args,
+            );
         }
     }
 
-    test "parse, Error MissingPosArg" {
-        const cmd: Self = .{ .name = "exp" };
+    test "Parse struct with parser and allocator" {
+        const Mem = struct {
+            buf: []u8,
+            pub fn parse(s: String, a: ?Allocator) ?@This() {
+                const allocator = a orelse return null;
+                const len = parseAny(usize, s, null) orelse return null;
+                const buf = allocator.alloc(u8, len) catch return null;
+                return .{ .buf = buf };
+            }
+            pub fn destroy(self: @This(), a: Allocator) void {
+                a.free(self.buf);
+            }
+        };
+        const cmd = Self.new("cmd")
+            .posArg("mem", [2]Mem, .{ .callBackFn = struct {
+                fn f(v: *[2]Mem) void {
+                    for (v.*) |m| {
+                        const msg = "Hello World!";
+                        const len = @min(m.buf.len, msg.len);
+                        @memcpy(m.buf, msg[0..len]);
+                    }
+                }
+            }.f })
+            .optArg("number", []i32, .{ .short = 'i' })
+            .optArg("message", []String, .{ .short = 'm' });
+        const R = cmd.Result();
+        var args: R = undefined;
         {
-            comptime var c = cmd;
-            _ = c.posArg("number", u32, .{});
-            var it = try TokenIter.initLine("", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.MissingPosArg, c.parse(&it));
+            var it = try TokenIter.initLine("-m hello -i 0xf -i 6 -m world 2 7", null, .{});
+            args = try cmd.parseAlloc(&it, testing.allocator);
         }
-        {
-            comptime var c = cmd;
-            _ = c.posArg("numbers", [2]u32, .{ .default = .{ 1, 2 } });
-            var it = try TokenIter.initLine("9", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.MissingPosArg, c.parse(&it));
-        }
-    }
-
-    test "parse, Error InvalidPosArg" {
-        comptime var cmd: Self = .{ .name = "exp" };
-        _ = cmd.posArg("number", u32, .{});
-        var it = try TokenIter.initLine("a", null, .{});
-        defer it.deinit();
-        try testing.expectError(Error.InvalidPosArg, cmd.parse(&it));
-    }
-
-    test "parse, Error MissingSubCmd" {
-        comptime var cmd: Self = .{ .name = "exp", .use_subCmd = "sub" };
-        _ = cmd.subCmd(.{ .name = "sub0" }).subCmd(.{ .name = "sub1" });
-        var it = try TokenIter.initLine("", null, .{});
-        defer it.deinit();
-        try testing.expectError(Error.MissingSubCmd, cmd.parse(&it));
-    }
-
-    test "parse, Error UnknownSubCmd" {
-        comptime var cmd: Self = .{ .name = "exp", .use_subCmd = "sub" };
-        _ = cmd.subCmd(.{ .name = "sub0" }).subCmd(.{ .name = "sub1" });
-        var it = try TokenIter.initLine("abc", null, .{});
-        defer it.deinit();
-        try testing.expectError(Error.UnknownSubCmd, cmd.parse(&it));
-    }
-
-    test "parse, Error Allocator" {
-        comptime var cmd: Self = .{ .name = "exp" };
-        _ = cmd.optArg("slice", []const u32, .{ .short = 'n' });
-        var it = try TokenIter.initLine("-n 1", null, .{});
-        defer it.deinit();
-        try testing.expectError(Error.Allocator, cmd.parse(&it));
-    }
-
-    test "parse, Error TokenIter" {
-        const cmd: Self = .{ .name = "exp" };
-        {
-            comptime var c = cmd;
-            var it = try TokenIter.initLine("--", null, .{ .terminator = "==" });
-            defer it.deinit();
-            try testing.expectError(Error.TokenIter, c.parse(&it));
-        }
-        {
-            comptime var c = cmd;
-            var it = try TokenIter.initLine("-", null, .{});
-            defer it.deinit();
-            try testing.expectError(Error.TokenIter, c.parse(&it));
-        }
+        try testing.expectEqual(0xf, args.number[0]);
+        try testing.expectEqual(6, args.number[1]);
+        args.number[1] *= 10;
+        try testing.expectEqual(60, args.number[1]);
+        try testing.expectEqualStrings("hello", args.message[0]);
+        try testing.expectEqualStrings("world", args.message[1]);
+        try testing.expectEqualStrings("He", args.mem[0].buf);
+        try testing.expectEqualStrings("Hello W", args.mem[1].buf);
+        defer cmd.destroy(&args, testing.allocator);
     }
 };
 

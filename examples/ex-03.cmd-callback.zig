@@ -2,10 +2,12 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
+const Meta = zargs.Meta;
 
 pub fn main() !void {
-    comptime var install: Command = .{ .name = "install" };
-    _ = install.posArg("name", []const u8, .{}).optArg("count", u32, .{ .short = 'c', .default = 1 });
+    comptime var install = Command.new("install")
+        .arg(Meta.posArg("name", []const u8))
+        .arg(Meta.optArg("count", u32).short('c').default(1));
     comptime install.callBack(struct {
         const C = install;
         fn f(r: *C.Result()) void {
@@ -14,8 +16,9 @@ pub fn main() !void {
         }
     }.f);
 
-    comptime var remove: Command = .{ .name = "remove" };
-    _ = remove.posArg("name", []const u8, .{}).optArg("count", u32, .{ .short = 'c', .default = 1 });
+    comptime var remove = Command.new("remove")
+        .arg(Meta.posArg("name", []const u8))
+        .arg(Meta.optArg("count", u32).short('c').default(2));
     comptime remove.callBack(struct {
         const C = remove;
         fn f(r: *C.Result()) void {
@@ -24,9 +27,11 @@ pub fn main() !void {
         }
     }.f);
 
-    comptime var cmd: Command = .{ .name = "demo", .use_subCmd = "action", .description = "This is a simple demo" };
-    _ = cmd.opt("verbose", u32, .{ .short = 'v' });
-    _ = cmd.subCmd(install).subCmd(remove);
+    comptime var cmd = Command.new("demo").requireSub("action")
+        .about("This is a simple demo")
+        .arg(Meta.opt("verbose", u32).short('v'))
+        .sub(install)
+        .sub(remove);
     comptime cmd.callBack(struct {
         const C = cmd;
         fn f(r: *C.Result()) void {

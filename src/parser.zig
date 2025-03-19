@@ -1,86 +1,61 @@
 const std = @import("std");
 const testing = std.testing;
+const h = @import("helper.zig");
+const String = h.String;
+const Allocator = std.mem.Allocator;
 
-pub fn any(T: type, s: []const u8) ?T {
-    if (T == []const u8) {
-        return s;
+/// parse String to any base T
+///
+/// for enum and struct, if find `pub fn parse(s: String, a: ?Allocator) ?T`, use it
+///
+/// for String, allocate if Allocator is given
+pub fn parseAny(T: type, s: String, a: ?Allocator) ?T {
+    if (T == String) {
+        return if (a) |allocator| blk: {
+            const allocS = allocator.alloc(u8, s.len) catch return null;
+            @memcpy(allocS, s);
+            break :blk allocS;
+        } else s;
     }
     return switch (@typeInfo(T)) {
         .int => std.fmt.parseInt(T, s, 0) catch null,
         .float => std.fmt.parseFloat(T, s) catch null,
-        .bool => Builtin.parseBoolean(s),
-        .@"enum" => if (@hasDecl(T, "parser")) T.parser(s) else std.meta.stringToEnum(T, s),
-        .@"struct" => if (@hasDecl(T, "parser")) T.parser(s) else @compileError("require a public parser for " ++ @typeName(T)),
+        .bool => h.Parser.boolean(s),
+        .@"enum" => if (@hasDecl(T, "parse")) T.parse(s, a) else std.meta.stringToEnum(T, s),
+        .@"struct" => if (@hasDecl(T, "parse")) T.parse(s, a) else @compileError(h.print("require parser for {s}", .{@typeName(T)})),
         else => {
-            @compileError("unable parse to " ++ @typeName(T));
+            @compileError(h.print("unable parse to {s}", .{@typeName(T)}));
         },
     };
 }
 
-test "any, Compile, notfound parser" {
-    // error: require a public parser for
-    const skip = true;
-    if (skip)
-        return error.SkipZigTest;
-    const T = struct {};
-    _ = any(T, "");
+/// destroy slice and any base T value
+///
+/// for struct, if find `pub fn destroy(self: T, a: Allocator) void`, use it
+pub fn destroyAny(T: type, v: T, a: Allocator) void {
+    switch (@typeInfo(T)) {
+        .pointer => a.free(v), // h.isSlice(T) and T == String
+        .@"struct" => if (@hasDecl(T, "destroy")) v.destroy(a),
+        else => {},
+    }
 }
 
-test "any, Compile, unable" {
-    // error: unable parse to void
-    const skip = true;
-    if (skip)
-        return error.SkipZigTest;
-    _ = any(@TypeOf({}), "");
-}
-
+/// parser of base T
 pub fn Fn(T: type) type {
-    return fn ([]const u8) ?T;
+    return fn (String, ?Allocator) ?T;
 }
 
+/// get base of T
 pub fn Base(T: type) type {
-    if (T == []const u8) return T;
+    if (T == String) return T;
     const info = @typeInfo(T);
     return switch (info) {
         .array => |i| i.child,
         .pointer => |i| i.child,
-        .optional => |i| i.child,
         else => T,
     };
 }
 
-test {
-    _ = Builtin;
+test "Compile Errors" {
+    return error.SkipZigTest;
 }
-
-pub const Builtin = struct {
-    fn parseBoolean(s: []const u8) ?bool {
-        return switch (s.len) {
-            1 => switch (s[0]) {
-                'n', 'N', 'f', 'F' => false,
-                'y', 'Y', 't', 'T' => true,
-                else => null,
-            },
-            2 => if (std.ascii.eqlIgnoreCase(s, "no")) false else null,
-            3 => if (std.ascii.eqlIgnoreCase(s, "yes")) true else null,
-            4 => if (std.ascii.eqlIgnoreCase(s, "true")) true else null,
-            5 => if (std.ascii.eqlIgnoreCase(s, "false")) false else null,
-            else => null,
-        };
-    }
-    test parseBoolean {
-        try testing.expectEqual(true, parseBoolean("y"));
-        try testing.expectEqual(true, parseBoolean("Y"));
-        try testing.expectEqual(true, parseBoolean("t"));
-        try testing.expectEqual(true, parseBoolean("T"));
-        try testing.expectEqual(false, parseBoolean("n"));
-        try testing.expectEqual(false, parseBoolean("N"));
-        try testing.expectEqual(false, parseBoolean("f"));
-        try testing.expectEqual(false, parseBoolean("F"));
-        try testing.expectEqual(true, parseBoolean("yEs"));
-        try testing.expectEqual(true, parseBoolean("TRue"));
-        try testing.expectEqual(false, parseBoolean("nO"));
-        try testing.expectEqual(false, parseBoolean("False"));
-        try testing.expectEqual(null, parseBoolean("xxx"));
-    }
-};
