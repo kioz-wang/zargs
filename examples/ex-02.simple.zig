@@ -1,8 +1,7 @@
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
-const TokenIter = zargs.TokenIter;
-const Meta = zargs.Meta;
+const Arg = zargs.Arg;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
@@ -13,16 +12,16 @@ pub fn main() !void {
 
     // Like Rust clap, https://docs.rs/clap/latest/clap/
     const cmd = Command.new("demo").requireSub("action")
-        .about("This is a demo")
+        .about("This is a demo intended to be showcased in the README.")
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
-        .arg(Meta.opt("verbose", u32)
+        .arg(Arg.opt("verbose", u32)
             .short('v')
             .help("help of verbose"))
         .sub(Command.new("install")
-            .arg(Meta.posArg("name", []const u8))
+            .arg(Arg.posArg("name", []const u8))
             .arg(
-            Meta.optArg("output", []const u8)
+            Arg.optArg("output", []const u8)
                 .short('o')
                 .long("out"),
         ))
@@ -30,15 +29,13 @@ pub fn main() !void {
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
-    var it = try TokenIter.init(allocator, .{});
-    defer it.deinit();
-    _ = try it.next();
 
-    const args = cmd.parse(&it) catch |err| {
+    const args = cmd.parse(allocator) catch |err| {
         std.debug.print("Fail to parse because of {any}\n", .{err});
         std.debug.print("\n{s}\n", .{cmd.usage()});
         std.process.exit(1);
     };
+    defer cmd.destroy(&args, allocator);
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});

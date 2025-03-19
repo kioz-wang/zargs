@@ -2,7 +2,7 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
-const Meta = zargs.Meta;
+const Arg = zargs.Arg;
 
 fn limitPlusOne(s: []const u8, _: ?std.mem.Allocator) ?u32 {
     const limit = std.fmt.parseInt(u32, s, 0) catch return null;
@@ -29,16 +29,16 @@ fn showUint32(v: *u32) void {
 
 pub fn main() !void {
     const sub0 = Command.new("sub0")
-        .arg(Meta.opt("verbose", u8).short('v'))
-        .arg(Meta.optArg("optional_int", u32)
+        .arg(Arg.opt("verbose", u8).short('v'))
+        .arg(Arg.optArg("optional_int", u32)
             .long("oint")
             .default(1))
-        .arg(Meta.optArg("int", u32)
+        .arg(Arg.optArg("int", u32)
             .long("int")
             .help("give me a u32")
             .argName("PositiveNumber")
             .callBackFn(showUint32))
-        .arg(Meta.optArg("bool", bool)
+        .arg(Arg.optArg("bool", bool)
             .long("bool")
             .help("give me a bool")
             .callBackFn(struct {
@@ -47,35 +47,35 @@ pub fn main() !void {
                 v.* = !v.*;
             }
         }.f))
-        .arg(Meta.optArg("color", Color)
+        .arg(Arg.optArg("color", Color)
             .long("color")
             .help("give me a color")
             .default(.Blue))
-        .arg(Meta.optArg("colorp", ColorWithParser)
+        .arg(Arg.optArg("colorp", ColorWithParser)
             .long("colorp")
             .help("give me another color")
             .default(.White))
-        .arg(Meta.optArg("lastc", u8)
+        .arg(Arg.optArg("lastc", u8)
             .long("lastc")
             .help("give me a word")
             .argName("word")
             .parseFn(lastCharacter))
-        .arg(Meta.optArg("word", []const u8)
+        .arg(Arg.optArg("word", []const u8)
             .long("word"))
-        .arg(Meta.optArg("3word", [3][]const u8)
+        .arg(Arg.optArg("3word", [3][]const u8)
             .long("3word")
             .help("give me three words"))
-        .arg(Meta.optArg("nums", []const u32)
+        .arg(Arg.optArg("nums", []const u32)
             .long("num")
             .argName("N"))
-        .arg(Meta.posArg("optional_pos_int", u32)
+        .arg(Arg.posArg("optional_pos_int", u32)
             .argName("Num")
             .help("give me a u32")
             .default(9))
-        .arg(Meta.posArg("pos_int", u32)
+        .arg(Arg.posArg("pos_int", u32)
             .help("give me a u32")
             .parseFn(limitPlusOne))
-        .arg(Meta.posArg("optional_2pos_int", [2]u32)
+        .arg(Arg.posArg("optional_2pos_int", [2]u32)
         .argName("Num")
         .help("give me two u32")
         .default(.{ 1, 2 }));
@@ -84,7 +84,7 @@ pub fn main() !void {
         .about("This is a demo")
         .version("1.0")
         .author("kioz.wang@gmail.com")
-        .arg(Meta.opt("verbose", u8).short('v'))
+        .arg(Arg.opt("verbose", u8).short('v'))
         .sub(sub0)
         .sub(Command.new("sub1").about("This is an empty subCmd"));
 
@@ -98,7 +98,7 @@ pub fn main() !void {
     defer it.deinit();
     // it.debug(true);
 
-    const args = cmd.parseAlloc(&it, allocator) catch |e| {
+    const args = cmd.parseFrom(&it, allocator) catch |e| {
         std.debug.print("\nError => {}\n", .{e});
         std.debug.print("{s}\n", .{cmd.usage()});
         std.process.exit(1);

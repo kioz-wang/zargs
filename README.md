@@ -8,8 +8,7 @@ Another Comptime-argparse for Zig! Let's start to build your command line!
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
-const TokenIter = zargs.TokenIter;
-const Meta = zargs.Meta;
+const Arg = zargs.Arg;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
@@ -20,16 +19,16 @@ pub fn main() !void {
 
     // Like Rust clap, https://docs.rs/clap/latest/clap/
     const cmd = Command.new("demo").requireSub("action")
-        .about("This is a demo")
+        .about("This is a demo intended to be showcased in the README.")
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
-        .arg(Meta.opt("verbose", u32)
+        .arg(Arg.opt("verbose", u32)
             .short('v')
             .help("help of verbose"))
         .sub(Command.new("install")
-            .arg(Meta.posArg("name", []const u8))
+            .arg(Arg.posArg("name", []const u8))
             .arg(
-            Meta.optArg("output", []const u8)
+            Arg.optArg("output", []const u8)
                 .short('o')
                 .long("out"),
         ))
@@ -37,15 +36,13 @@ pub fn main() !void {
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
-    var it = try TokenIter.init(allocator, .{});
-    defer it.deinit();
-    _ = try it.next();
 
-    const args = cmd.parse(&it) catch |err| {
+    const args = cmd.parse(allocator) catch |err| {
         std.debug.print("Fail to parse because of {any}\n", .{err});
         std.debug.print("\n{s}\n", .{cmd.usage()});
         std.process.exit(1);
     };
+    defer cmd.destroy(&args, allocator);
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});
@@ -67,8 +64,6 @@ As a system level programming language, there should be an elegant solution for 
 
 ## Installation
 
-> `v0.13.x` only supports [zig 0.13.0](https://github.com/ziglang/zig/releases/tag/0.13.0), support for [zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0) will be started with `v0.14.0` (see [release v0.14.0](https://github.com/kioz-wang/zargs/milestone/1))
-
 ### fetch
 
 Get the latest version:
@@ -77,12 +72,20 @@ Get the latest version:
 zig fetch --save git+https://github.com/kioz-wang/zargs
 ```
 
-Get a tagged version (e.g. `v0.13.0`):
+To fetch a specific version (e.g., `v0.14.3`):
 
 ```bash
-# See: https://github.com/kioz-wang/zargs/releases
-zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.13.0.tar.gz
+zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.14.3.tar.gz
 ```
+
+#### Version Notes
+
+> See https://github.com/kioz-wang/zargs/releases
+
+The version number follows the format `vx.y.z`:
+- **x**: Currently fixed at 0. It will increment to 1 when the project stabilizes. Afterward, it will increment by 1 for any breaking changes.
+- **y**: Represents the supported Zig version. For example, `vx.14.z` supports [Zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0).
+- **z**: Iteration version, where even numbers indicate releases with new features or significant changes (see [milestones](https://github.com/kioz-wang/zargs/milestones)), and odd numbers indicate releases with fixes or minor changes.
 
 ### import
 
@@ -117,17 +120,6 @@ const zargs = @import("zargs");
 > For more information and usage details about these three powerful tools, please refer to the [documentation](#APIs).
 
 ## Features
-
-### Versatile iterators
-
-Flexible for real and test scenarios
-
-- System iterator (`init`): get real command line arguments.
-- General iterator (`initGeneral`): splits command line arguments from a one-line string.
-- Line iterator (`initLine`): same as regular iterator, but you can specify delimiters.
-- List iterator (`initList`): iterates over a list of strings.
-
-Short option prefixes (`-`), long option prefixes (`--`), connectors (`=`), option terminators (`--`) can be customized for iterators (see [presentation](#presentation) for usage scenarios).
 
 ### Options, Arguments, Subcommands
 
@@ -244,20 +236,30 @@ comptime cmd.callBack(struct {
 ### Compile-Time Parser Generation
 
 ```zig
-const args = try cmd.parse(&it);
+const args = try cmd.parse(allocator);
+defer cmd.destroy(&args, allocator);
 ```
 
-Simply call `.parse` to generate the parser and argument structure. There is also `parseAlloc` which supports passing a memory allocator:
+Simply call `parse` to generate the parser and argument structure. This method internally creates a system iterator, which is destroyed after use.
 
-- Provides support for options with a variable number of arguments.
-- Reallocates memory for each string to avoid dangling pointers.
-- Use `cmd.destroy(&args, allocator)` to free memory.
+Additionally, `parseFrom` supports passing a custom iterator and optionally avoids using a memory allocator. If no allocator is used, there is no need to defer destroy.
 
 #### Retrieving Remaining Command-Line Arguments
 
 When the parser has completed its task, if you still need to handle the remaining arguments manually, you can call the iterator's `nextAllBase` method.
 
 If further parsing of the arguments is required, you can use the `parseAny` function.
+
+#### Versatile iterators
+
+Flexible for real and test scenarios
+
+- System iterator (`init`): get real command line arguments.
+- General iterator (`initGeneral`): splits command line arguments from a one-line string.
+- Line iterator (`initLine`): same as regular iterator, but you can specify delimiters.
+- List iterator (`initList`): iterates over a list of strings.
+
+Short option prefixes (`-`), long option prefixes (`--`), connectors (`=`), option terminators (`--`) can be customized for iterators (see [presentation](#presentation) for usage scenarios).
 
 ### Compile-Time Usage and Help Generation
 
@@ -268,7 +270,7 @@ _ = cmd.help();
 
 ## APIs
 
-See https://kioz-wang.github.io/zargs/
+See https://kioz-wang.github.io/zargs/#doc.command.Command
 
 ## Examples
 

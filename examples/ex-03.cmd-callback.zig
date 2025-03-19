@@ -1,13 +1,12 @@
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
-const TokenIter = zargs.TokenIter;
-const Meta = zargs.Meta;
+const Arg = zargs.Arg;
 
 pub fn main() !void {
     comptime var install = Command.new("install")
-        .arg(Meta.posArg("name", []const u8))
-        .arg(Meta.optArg("count", u32).short('c').default(1));
+        .arg(Arg.posArg("name", []const u8))
+        .arg(Arg.optArg("count", u32).short('c').default(1));
     comptime install.callBack(struct {
         const C = install;
         fn f(r: *C.Result()) void {
@@ -17,8 +16,8 @@ pub fn main() !void {
     }.f);
 
     comptime var remove = Command.new("remove")
-        .arg(Meta.posArg("name", []const u8))
-        .arg(Meta.optArg("count", u32).short('c').default(2));
+        .arg(Arg.posArg("name", []const u8))
+        .arg(Arg.optArg("count", u32).short('c').default(2));
     comptime remove.callBack(struct {
         const C = remove;
         fn f(r: *C.Result()) void {
@@ -28,8 +27,8 @@ pub fn main() !void {
     }.f);
 
     comptime var cmd = Command.new("demo").requireSub("action")
-        .about("This is a simple demo")
-        .arg(Meta.opt("verbose", u32).short('v'))
+        .about("This is a demo showcasing command callbacks.")
+        .arg(Arg.opt("verbose", u32).short('v'))
         .sub(install)
         .sub(remove);
     comptime cmd.callBack(struct {
@@ -41,11 +40,8 @@ pub fn main() !void {
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
-    var it = try TokenIter.init(allocator, .{});
-    defer it.deinit();
-    _ = try it.next();
 
-    _ = cmd.parse(&it) catch |err| {
+    _ = cmd.parse(allocator) catch |err| {
         std.debug.print("Fail to parse because of {any}\n", .{err});
         std.debug.print("\n{s}\n", .{cmd.usage()});
         std.process.exit(1);

@@ -8,8 +8,7 @@
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
-const TokenIter = zargs.TokenIter;
-const Meta = zargs.Meta;
+const Arg = zargs.Arg;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
@@ -20,16 +19,16 @@ pub fn main() !void {
 
     // Like Rust clap, https://docs.rs/clap/latest/clap/
     const cmd = Command.new("demo").requireSub("action")
-        .about("This is a demo")
+        .about("This is a demo intended to be showcased in the README.")
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
-        .arg(Meta.opt("verbose", u32)
+        .arg(Arg.opt("verbose", u32)
             .short('v')
             .help("help of verbose"))
         .sub(Command.new("install")
-            .arg(Meta.posArg("name", []const u8))
+            .arg(Arg.posArg("name", []const u8))
             .arg(
-            Meta.optArg("output", []const u8)
+            Arg.optArg("output", []const u8)
                 .short('o')
                 .long("out"),
         ))
@@ -37,15 +36,13 @@ pub fn main() !void {
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
-    var it = try TokenIter.init(allocator, .{});
-    defer it.deinit();
-    _ = try it.next();
 
-    const args = cmd.parse(&it) catch |err| {
+    const args = cmd.parse(allocator) catch |err| {
         std.debug.print("Fail to parse because of {any}\n", .{err});
         std.debug.print("\n{s}\n", .{cmd.usage()});
         std.process.exit(1);
     };
+    defer cmd.destroy(&args, allocator);
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});
@@ -69,20 +66,26 @@ pub fn main() !void {
 
 ### 获取
 
-> `v0.13.x` 仅支持 [zig 0.13.0](https://github.com/ziglang/zig/releases/tag/0.13.0)，对 [zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0) 的支持将从 `v0.14.0` 开始（见 [release v0.14.0](https://github.com/kioz-wang/zargs/milestone/1)）。
-
 获取主线上的最新版本：
 
 ```bash
 zig fetch --save git+https://github.com/kioz-wang/zargs
 ```
 
-获取特定的版本（比如 `v0.13.0`）：
+获取特定的版本（比如 `v0.14.3`）：
 
 ```bash
-# See: https://github.com/kioz-wang/zargs/releases
-zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.13.0.tar.gz
+zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.14.3.tar.gz
 ```
+
+#### 版本说明
+
+> 见 https://github.com/kioz-wang/zargs/releases
+
+版本号格式为 `vx.y.z`：
+- x：目前固定为 0，当项目稳定时，将升为 1；之后，当出现不兼容改动时，将增加 1
+- y：代表支持的 zig 版本，如`vx.14.z`支持 [zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0)
+- z：迭代版本，其中偶数为包含新特性或其他重要改动的版本（见 [milestones](https://github.com/kioz-wang/zargs/milestones)），奇数为包含修复或其他小改动的版本
 
 ### 导入
 
@@ -117,17 +120,6 @@ const zargs = @import("zargs");
 > 有关以上三大利器的更多信息和用法，请翻阅[文档](#APIs)。
 
 ## 特性
-
-### 多样的迭代器
-
-可灵活用于真实和测试场景
-
-- 系统迭代器（`init`）：获取真实的命令行参数
-- 常规迭代器（`initGeneral`）：从单行字符串中分割命令行参数
-- 行迭代器（`initLine`）：和常规迭代器一样，但可以指定分隔符
-- 列表迭代器（`initList`）：从给定的字符串列表中迭代
-
-可为迭代器自定义短选项前缀（`-`）、长选项前缀（`--`）、连接符（`=`）、选项终止符（`--`）（使用场景见[表现形式](#表现形式)）。
 
 ### 选项、参数、子命令
 
@@ -244,20 +236,30 @@ comptime cmd.callBack(struct {
 ### 编译时生成解析器
 
 ```zig
-const args = try cmd.parse(&it);
+const args = try cmd.parse(allocator);
+defer cmd.destroy(&args, allocator);
 ```
 
-仅调用 `.parse` 即可生成解析器和参数结构体。另有 `parseAlloc` 支持传入内存分配器：
+仅调用 `parse` 即可生成解析器和参数结构体，该方法会在内部创建一个系统迭代器，用完后销毁。
 
-- 提供对带不定数量参数的选项的支持
-- 为每个字符串重新分配内存，避免野指针
-- 使用 `cmd.destroy(&args, allocator)` 释放内存
+另有 `parseFrom` 支持传入自定义迭代器，且可选择不使用内存分配器。如不使用内存分配器，则不必 defer `destroy`。
 
 #### 获取剩余的命令行参数
 
 当解析器完成任务后，如果仍需要自行处理余下的参数，可以调用迭代器的 `nextAllBase` 方法。
 
 如果仍需要对参数进行解析，可以使用 `parseAny` 函数。
+
+#### 多样的迭代器
+
+可灵活用于真实和测试场景
+
+- 系统迭代器（`init`）：获取真实的命令行参数
+- 常规迭代器（`initGeneral`）：从单行字符串中分割命令行参数
+- 行迭代器（`initLine`）：和常规迭代器一样，但可以指定分隔符
+- 列表迭代器（`initList`）：从给定的字符串列表中迭代
+
+可为迭代器自定义短选项前缀（`-`）、长选项前缀（`--`）、连接符（`=`）、选项终止符（`--`）（使用场景见[表现形式](#表现形式)）。
 
 ### 编译时生成 usage 和 help
 
@@ -268,7 +270,7 @@ _ = cmd.help();
 
 ## APIs
 
-见 https://kioz-wang.github.io/zargs/
+见 https://kioz-wang.github.io/zargs/#doc.command.Command
 
 ## 例程
 
