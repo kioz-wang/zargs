@@ -11,11 +11,28 @@ const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
 
 pub fn main() !void {
-    comptime var cmd: Command = .{ .name = "demo", .use_subCmd = "action", .description = "This is a simple demo" };
-    _ = cmd.opt("verbose", u32, .{ .short = 'v' }).optArg("output", []const u8, .{ .short = 'o', .long = "out" });
-    comptime var install: Command = .{ .name = "install" };
-    comptime var remove: Command = .{ .name = "remove" };
-    _ = cmd.subCmd(install.posArg("name", []const u8, .{}).*).subCmd(remove.posArg("name", []const u8, .{}).*);
+    // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
+    const remove = Command.new("remove")
+        .opt("verbose", u32, .{ .short = 'v' })
+        .optArg("count", u32, .{ .short = 'c', .argName = "CNT", .default = 9 })
+        .posArg("name", []const u8, .{});
+
+    // Like Rust clap, https://docs.rs/clap/latest/clap/
+    const cmd = Command.new("demo").requireSub("action")
+        .about("This is a demo")
+        .author("KiozWang")
+        .homepage("https://github.com/kioz-wang/zargs")
+        .arg(Meta.opt("verbose", u32)
+            .short('v')
+            .help("help of verbose"))
+        .sub(Command.new("install")
+            .arg(Meta.posArg("name", []const u8))
+            .arg(
+            Meta.optArg("output", []const u8)
+                .short('o')
+                .long("out"),
+        ))
+        .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
@@ -34,6 +51,7 @@ pub fn main() !void {
         },
         .remove => |a| {
             std.debug.print("Removing {s}\n", .{a.name});
+            std.debug.print("{any}\n", .{a});
         },
     }
     std.debug.print("Success to do {s}\n", .{@tagName(args.action)});
@@ -44,11 +62,7 @@ pub fn main() !void {
 
 作为一门系统级编程语言，应当有一个优雅的命令行参数解析方案。
 
-我基本上看完了网络上各种开源实现，有运行时解析，也有编译时解析。使用一个拥有强大编译时能力的语言开发，应当尽量避免运行时开销。对于编译时，我认为有两种路线：
-- 给定参数结构体，以及额外的参数描述（帮助信息等），然后反射出解析器
-- 直接描述出参数的所有信息，然后反射出参数结构体和解析器
-
-我认为后者在使用上是更为简洁的，而已有的基本上是前者，于是便有了 `zargs`。
+`zargs` 参考了[Py3 argparse](https://docs.python.org/3.13/library/argparse.html)和[Rust clap](https://docs.rs/clap/latest/clap/)的API风格，在编辑时给出参数的所有信息，在编译时反射出参数结构体和解析器，以及其他一切需要的东西，且支持在运行时为参数动态分配内存。
 
 ## 安装
 
@@ -124,13 +138,13 @@ const zargs = @import("zargs");
         - 累加选项（`repeatOpt`），`@typeInfo(T) == .int`
     - 带参数选项（`argOpt`）
         - 带单参数选项（`singleArgOpt`），T
-        - 带固定数量参数的选项（`arrayArgOpt`），`[n]const T`
-        - 带不定数量参数的选项（`multiArgOpt`），`[]const T`
+        - 带固定数量参数的选项（`arrayArgOpt`），`[n]T`
+        - 带不定数量参数的选项（`multiArgOpt`），`[]T`
 - 参数（`arg`）
     - 带选项参数（`optArg`）（等同于带参数选项）
     - 位置参数（`posArg`）
         - 单位置参数（`singlePosArg`），T
-        - 固定数量的位置参数（`arrayPosArg`），`[n]const T`
+        - 固定数量的位置参数（`arrayPosArg`），`[n]T`
 - 子命令（`subCmd`）
 
 #### 匹配和解析
@@ -142,8 +156,8 @@ const zargs = @import("zargs");
 - `.int`
 - `.float`
 - `.bool`
-- `.enum`：默认使用 `std.meta.stringToEnum`，但 parser 方法优先
-- `.struct`：带 parser 方法的结构体
+- `.enum`：默认使用 `std.meta.stringToEnum`，但 parse 方法优先
+- `.struct`：带 parse 方法的结构体
 
 如果 T 不可解析，可以为参数自定义解析器（`.parseFn`）。显然，无法为单选项配置解析器，因为这是无意义的。
 
@@ -213,11 +227,7 @@ const zargs = @import("zargs");
 
 ### 编译时命令构建
 
-```zig
-comptime var cmd: Command = .{ .name = "demo" };
-```
-
-单行语句即可定义一个命令，可额外配置版本、描述、作者、主页等信息。使用链式调用添加选项（`opt`）、带参数选项（`optArg`）、位置参数（`posArg`）或子命令（`subCmd`）。
+如文章开始处的示例，通过链式调用可在一行语句中完成命令构建。
 
 #### 为命令添加回调
 

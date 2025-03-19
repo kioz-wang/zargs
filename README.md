@@ -11,11 +11,28 @@ const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
 
 pub fn main() !void {
-    comptime var cmd: Command = .{ .name = "demo", .use_subCmd = "action", .description = "This is a simple demo" };
-    _ = cmd.opt("verbose", u32, .{ .short = 'v' }).optArg("output", []const u8, .{ .short = 'o', .long = "out" });
-    comptime var install: Command = .{ .name = "install" };
-    comptime var remove: Command = .{ .name = "remove" };
-    _ = cmd.subCmd(install.posArg("name", []const u8, .{}).*).subCmd(remove.posArg("name", []const u8, .{}).*);
+    // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
+    const remove = Command.new("remove")
+        .opt("verbose", u32, .{ .short = 'v' })
+        .optArg("count", u32, .{ .short = 'c', .argName = "CNT", .default = 9 })
+        .posArg("name", []const u8, .{});
+
+    // Like Rust clap, https://docs.rs/clap/latest/clap/
+    const cmd = Command.new("demo").requireSub("action")
+        .about("This is a demo")
+        .author("KiozWang")
+        .homepage("https://github.com/kioz-wang/zargs")
+        .arg(Meta.opt("verbose", u32)
+            .short('v')
+            .help("help of verbose"))
+        .sub(Command.new("install")
+            .arg(Meta.posArg("name", []const u8))
+            .arg(
+            Meta.optArg("output", []const u8)
+                .short('o')
+                .long("out"),
+        ))
+        .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
@@ -34,6 +51,7 @@ pub fn main() !void {
         },
         .remove => |a| {
             std.debug.print("Removing {s}\n", .{a.name});
+            std.debug.print("{any}\n", .{a});
         },
     }
     std.debug.print("Success to do {s}\n", .{@tagName(args.action)});
@@ -44,11 +62,7 @@ pub fn main() !void {
 
 As a system level programming language, there should be an elegant solution for parsing command line arguments.
 
-I've basically looked at various open source implementations on the web, both runtime parsing and compile-time parsing. Developing in a language with strong compile-time capabilities should minimize runtime overhead. For compile-time, I see two routes:
-- Given a parameter structure, and additional parameter descriptions (help messages, etc.), then reflect the parser
-- directly describe all the information about the parameter, then reflect the parameter structure and the parser
-
-I think the latter is much cleaner to use, and what's there is basically the former, hence `zargs`.
+`zargs` draws inspiration from the API styles of [Py3 argparse](https://docs.python.org/3.13/library/argparse.html) and [Rust clap](https://docs.rs/clap/latest/clap/). It provides all parameter information during editing, reflects the parameter structure and parser at compile time, along with everything else needed, and supports dynamic memory allocation for parameters at runtime.
 
 ## Installation
 
@@ -124,13 +138,13 @@ Short option prefixes (`-`), long option prefixes (`--`), connectors (`=`), opti
         - Accumulative Option (`repeatOpt`), `@typeInfo(T) == .int`
     - Option with Argument (`argOpt`)
         - Option with Single Argument (`singleArgOpt`), T
-        - Option with Fixed Number of Arguments (`arrayArgOpt`), `[n]const T`
-        - Option with Variable Number of Arguments (`multiArgOpt`), `[]const T`
+        - Option with Fixed Number of Arguments (`arrayArgOpt`), `[n]T`
+        - Option with Variable Number of Arguments (`multiArgOpt`), `[]T`
 - Argument (`arg`)
     - Option Argument (`optArg`) (equivalent to Option with Argument)
     - Positional Argument (`posArg`)
         - Single Positional Argument (`singlePosArg`), T
-        - Fixed Number of Positional Arguments (`arrayPosArg`), `[n]const T`
+        - Fixed Number of Positional Arguments (`arrayPosArg`), `[n]T`
 - Subcommand (`subCmd`)
 
 #### Matching and Parsing
@@ -142,8 +156,8 @@ For arguments, T must be the smallest parsable unit: `[]const u8` -> T
 - `.int`
 - `.float`
 - `.bool`
-- `.enum`: By default, `std.meta.stringToEnum` is used, but the parser method takes precedence.
-- `.struct`: A struct with a parser method.
+- `.enum`: By default, `std.meta.stringToEnum` is used, but the parse method takes precedence.
+- `.struct`: A struct with a parse method.
 
 If T is not parsable, a custom parser (`.parseFn`) can be defined for the argument. Obviously, a parser cannot be configured for a single option, as it would be meaningless.
 
@@ -213,11 +227,7 @@ Double quotes can be used to avoid iterator ambiguity, e.g., to pass a negative 
 
 ### Compile-Time Command Construction
 
-```zig
-comptime var cmd: Command = .{ .name = "demo" };
-```
-
-A command can be defined in a single line, with additional configurations like version, description, author, homepage, etc. Use chaining to add options (`opt`), options with arguments (`optArg`), positional arguments (`posArg`), or subcommands (`subCmd`).
+As shown in the example at the beginning of the article, command construction can be completed in a single line of code through chaining.
 
 #### CallBackFn for Command
 
