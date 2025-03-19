@@ -710,14 +710,20 @@ pub const Command = struct {
                     }
                 }
             }.f })
-            .optArg("message", String, .{ .short = 'm' });
+            .optArg("number", []i32, .{ .short = 'i' })
+            .optArg("message", []String, .{ .short = 'm' });
         const R = cmd.Result();
         var args: R = undefined;
         {
-            var it = try TokenIter.initLine("-m hello 2 7", null, .{});
+            var it = try TokenIter.initLine("-m hello -i 0xf -i 6 -m world 2 7", null, .{});
             args = try cmd.parseAlloc(&it, testing.allocator);
         }
-        try testing.expectEqualStrings("hello", args.message);
+        try testing.expectEqual(0xf, args.number[0]);
+        try testing.expectEqual(6, args.number[1]);
+        args.number[1] *= 10;
+        try testing.expectEqual(60, args.number[1]);
+        try testing.expectEqualStrings("hello", args.message[0]);
+        try testing.expectEqualStrings("world", args.message[1]);
         try testing.expectEqualStrings("He", args.mem[0].buf);
         try testing.expectEqualStrings("Hello W", args.mem[1].buf);
         defer cmd.destroy(&args, testing.allocator);

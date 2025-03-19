@@ -47,9 +47,6 @@ pub fn optArg(name: [:0]const u8, T: type) Self {
         if (info.pointer.size != .slice) {
             @compileError(h.print("{} illegal type, expect slice", .{meta}));
         }
-        if (!info.pointer.is_const) {
-            @compileError(h.print("{} illegal type, expect const", .{meta}));
-        }
     }
     // Initialize Meta
     return meta;
