@@ -4,6 +4,7 @@ const Command = zargs.Command;
 
 pub fn main() !void {
     const cmd = Command.new("demo").requireSub("action")
+        .about("This is a demo using APIs in a style similar to Python3's `argparse`.")
         .opt("verbose", u32, .{ .short = 'v', .help = "help of verbose" })
         .optArg("output", []const u8, .{ .short = 'o', .long = "out" })
         .sub(Command.new("install").posArg("name", []const u8, .{}))
@@ -17,6 +18,7 @@ pub fn main() !void {
         std.debug.print("\n{s}\n", .{cmd.usage()});
         std.process.exit(1);
     };
+    defer cmd.destroy(&args, allocator);
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});

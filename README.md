@@ -19,7 +19,7 @@ pub fn main() !void {
 
     // Like Rust clap, https://docs.rs/clap/latest/clap/
     const cmd = Command.new("demo").requireSub("action")
-        .about("This is a demo")
+        .about("This is a demo intended to be showcased in the README.")
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
         .arg(Arg.opt("verbose", u32)
@@ -42,6 +42,7 @@ pub fn main() !void {
         std.debug.print("\n{s}\n", .{cmd.usage()});
         std.process.exit(1);
     };
+    defer cmd.destroy(&args, allocator);
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});

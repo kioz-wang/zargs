@@ -27,7 +27,7 @@ pub fn main() !void {
     }.f);
 
     comptime var cmd = Command.new("demo").requireSub("action")
-        .about("This is a simple demo")
+        .about("This is a demo showcasing command callbacks.")
         .arg(Arg.opt("verbose", u32).short('v'))
         .sub(install)
         .sub(remove);

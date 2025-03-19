@@ -44,6 +44,7 @@ pub fn main() !void {
     );
 
     const cmd = Command.new("add").requireSub("use")
+        .about("This is a demo showcasing the use of `parseFn` and `callBackFn`.")
         .sub(add_remain).sub(add_optArgs)
         .sub(add_optArgs_auto_per)
         .sub(add_optArgs_auto_cb);
