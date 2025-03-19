@@ -3,6 +3,7 @@ const token = @import("token.zig");
 const parser = @import("parser.zig");
 const h = @import("helper.zig");
 const String = h.String;
+const Allocator = std.mem.Allocator;
 
 const Self = @This();
 
@@ -158,13 +159,20 @@ pub fn _toField(self: Self) std.builtin.Type.StructField {
         .type = self.T,
     };
 }
-// TODO conside parseAnyAlloc
-pub fn _parseAny(self: Self, s: String) ?parser.Base(self.T) {
+fn _parseAny(self: Self, s: String, a: ?Allocator) ?parser.Base(self.T) {
     if (self.common.parseFn) |f| {
         const p: *const parser.Fn(parser.Base(self.T)) = @ptrCast(@alignCast(f));
-        return p(s);
+        return p(s, a);
     }
-    return parser.any(parser.Base(self.T), s);
+    return parser.parseAny(parser.Base(self.T), s, a);
+}
+pub fn _destroy(self: Self, r: anytype, a: Allocator) void {
+    if (comptime h.isSlice(self.T) or @typeInfo(self.T) == .array) {
+        for (@field(r, self.name)) |v| {
+            parser.destroyAny(parser.Base(self.T), v, a);
+        }
+    }
+    parser.destroyAny(self.T, @field(r, self.name), a);
 }
 pub fn _match(self: Self, t: token.Type) bool {
     std.debug.assert(t == .opt);
@@ -226,7 +234,7 @@ fn _consumeOpt(self: Self, r: anytype, it: *token.Iter) bool {
     }
     return false;
 }
-fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.Allocator) Error!bool {
+fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!bool {
     const prefix = it.viewMust() catch unreachable;
     if (self._match(prefix)) {
         _ = it.next() catch unreachable;
@@ -242,7 +250,7 @@ fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.A
                     return Error.Missing;
                 }
                 s = t.arg;
-                item.* = self._parseAny(s) orelse {
+                item.* = self._parseAny(s, a) orelse {
                     self.log("unable to parse {s} to {s}[{d}]", .{ s, self.common.argName.?, i });
                     return Error.Invalid;
                 };
@@ -253,32 +261,25 @@ fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.A
                 return Error.Missing;
             };
             s = switch (t) {
-                .optArg, .arg => |a| a,
+                .optArg, .arg => |arg| arg,
                 else => {
                     self.log("requires {s} after {s} but {}", .{ self.common.argName.?, prefix, t });
                     return Error.Missing;
                 },
             };
-            var value = self._parseAny(s) orelse {
+            const value = self._parseAny(s, a) orelse {
                 self.log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
                 return Error.Invalid;
             };
-            if (self.T == String) {
-                if (allocator) |a| {
-                    const allocS = a.alloc(u8, value.len) catch return Error.Allocator;
-                    @memcpy(allocS, value);
-                    value = allocS;
-                }
-            }
             @field(r, self.name) = if (comptime h.isSlice(self.T)) blk: {
-                if (allocator == null) {
+                if (a == null) {
                     self.log("requires allocator", .{});
                     return Error.Allocator;
                 }
-                var list = std.ArrayList(parser.Base(self.T)).initCapacity(allocator.?, @field(r, self.name).len + 1) catch return Error.Allocator;
+                var list = std.ArrayList(parser.Base(self.T)).initCapacity(a.?, @field(r, self.name).len + 1) catch return Error.Allocator;
                 list.appendSliceAssumeCapacity(@field(r, self.name));
                 list.appendAssumeCapacity(value);
-                allocator.?.free(@field(r, self.name));
+                a.?.free(@field(r, self.name));
                 break :blk list.toOwnedSlice() catch return Error.Allocator;
             } else value;
         }
@@ -286,7 +287,7 @@ fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.A
     }
     return false;
 }
-fn _consumePosArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.Allocator) Error!bool {
+fn _consumePosArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!bool {
     var s: String = undefined;
     if (@typeInfo(self.T) == .array) {
         for (&@field(r, self.name), 0..) |*item, i| {
@@ -295,7 +296,7 @@ fn _consumePosArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.A
                 return Error.Missing;
             };
             s = t.as_posArg().posArg;
-            item.* = self._parseAny(s) orelse {
+            item.* = self._parseAny(s, a) orelse {
                 self.log("unable to parse {s} to {s}[{d}]", .{ s, self.common.argName.?, i });
                 return Error.Invalid;
             };
@@ -306,27 +307,20 @@ fn _consumePosArg(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.A
             return Error.Missing;
         };
         s = t.as_posArg().posArg;
-        var value = self._parseAny(s) orelse {
+        const value = self._parseAny(s, a) orelse {
             self.log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
             return Error.Invalid;
         };
-        if (self.T == String) {
-            if (allocator) |a| {
-                const allocS = a.alloc(u8, value.len) catch return Error.Allocator;
-                @memcpy(allocS, value);
-                value = allocS;
-            }
-        }
         @field(r, self.name) = value;
     }
     return true;
 }
-pub fn _consume(self: Self, r: anytype, it: *token.Iter, allocator: ?std.mem.Allocator) Error!bool {
+pub fn _consume(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!bool {
     const consumed =
         switch (self.class) {
             .opt => self._consumeOpt(r, it),
-            .optArg => try self._consumeOptArg(r, it, allocator),
-            .posArg => try self._consumePosArg(r, it, allocator),
+            .optArg => try self._consumeOptArg(r, it, a),
+            .posArg => try self._consumePosArg(r, it, a),
         };
     if (self.common.callBackFn) |f| {
         const p: *const fn (*self.T) void = @ptrCast(@alignCast(f));
@@ -481,13 +475,13 @@ test "Consume optArg" {
         try testing.expect(try meta_files._consumeOptArg(&res, &it, testing.allocator));
         try testing.expect(try meta_twins._consumeOptArg(&res, &it, null));
         try testing.expect(try meta_files._consumeOptArg(&res, &it, testing.allocator));
+        defer meta_files._destroy(&res, testing.allocator);
         try testing.expectEqualDeep(R{
             .out = false,
             .verbose = 1,
             .files = &[_]String{ "bin0", "bin1" },
             .twins = [2]u32{ 1, 2 },
         }, res);
-        testing.allocator.free(res.files);
     }
 }
 

@@ -2,11 +2,12 @@ const std = @import("std");
 const testing = std.testing;
 const h = @import("helper.zig");
 const String = h.String;
+const Allocator = std.mem.Allocator;
 
 pub const TokenIter = @import("token.zig").Iter;
 const parser = @import("parser.zig");
 /// Universal parsing function
-pub const parseAny = parser.any;
+pub const parseAny = parser.parseAny;
 pub const Meta = @import("Meta.zig");
 
 /// Command builder
@@ -378,11 +379,9 @@ pub const Command = struct {
         self.common.callBackFn = @ptrCast(&f);
     }
 
-    pub fn destroy(self: Self, r: *const self.Result(), allocator: std.mem.Allocator) void {
+    pub fn destroy(self: Self, r: *const self.Result(), allocator: Allocator) void {
         inline for (self._args) |m| {
-            if (@typeInfo(m.T) == .pointer) {
-                allocator.free(@field(r, m.name));
-            }
+            m._destroy(r, allocator);
         }
         if (self.common.subName) |s| {
             inline for (self._cmds) |c| {
@@ -429,7 +428,7 @@ pub const Command = struct {
         return self.parseAlloc(it, null);
     }
 
-    pub fn parseAlloc(self: Self, it: *TokenIter, allocator: ?std.mem.Allocator) Error!self.Result() {
+    pub fn parseAlloc(self: Self, it: *TokenIter, a: ?Allocator) Error!self.Result() {
         var matched: h.StringSet(self._stat.opt + self._stat.optArg) = .{};
         matched.init();
 
@@ -454,7 +453,7 @@ pub const Command = struct {
                     }
                     inline for (self._args) |m| {
                         if (m.class == .posArg) continue;
-                        hit = m._consume(&r, it, allocator) catch |e| return self._errCastMeta(e, false);
+                        hit = m._consume(&r, it, a) catch |e| return self._errCastMeta(e, false);
                         if (hit) {
                             if (!matched.add(m.name)) {
                                 if ((m.class == .opt and m.T != bool) or (m.class == .optArg and h.isSlice(m.T))) break;
@@ -487,14 +486,14 @@ pub const Command = struct {
         inline for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default == null) {
-                _ = m._consume(&r, it, allocator) catch |e| return self._errCastMeta(e, true);
+                _ = m._consume(&r, it, a) catch |e| return self._errCastMeta(e, true);
             }
         }
         inline for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default != null) {
                 if ((it.view() catch |e| return self._errCastIter(e)) == null) break;
-                _ = m._consume(&r, it, allocator) catch |e| return self._errCastMeta(e, true);
+                _ = m._consume(&r, it, a) catch |e| return self._errCastMeta(e, true);
             }
         }
         if (self.common.subName) |s| {
@@ -508,7 +507,7 @@ pub const Command = struct {
                 if (std.mem.eql(u8, c.name, t)) {
                     _ = it.next() catch unreachable;
                     it.reinit();
-                    @field(r, s) = @unionInit(self.SubCmdUnion(), c.name, try c.parseAlloc(it, allocator));
+                    @field(r, s) = @unionInit(self.SubCmdUnion(), c.name, try c.parseAlloc(it, a));
                     hit = true;
                     break;
                 }
@@ -652,6 +651,76 @@ pub const Command = struct {
             var it = try TokenIter.initList(&[_]String{"subcmd2"}, .{});
             try testing.expectError(Error.UnknownSubCmd, cmd.parse(&it));
         }
+    }
+
+    test "Parse with callBack" {
+        comptime var cmd = Self.new("cmd")
+            .arg(Meta.opt("verbose", u8).short('v'))
+            .arg(Meta.optArg("count", u32).short('c').default(3).callBackFn(struct {
+                fn f(v: *u32) void {
+                    v.* *= 10;
+                }
+            }.f))
+            .arg(Meta.posArg("pos", String));
+        const R = cmd.Result();
+        comptime cmd.callBack(struct {
+            fn f(r: *R) void {
+                std.debug.print("verbose is {d}\n", .{r.verbose});
+                r.*.verbose += 10;
+            }
+        }.f);
+        {
+            var it = try TokenIter.initLine("-c 2 -vv hello", null, .{});
+            const args = try cmd.parse(&it);
+            try testing.expectEqualDeep(
+                R{ .verbose = 12, .count = 20, .pos = "hello" },
+                args,
+            );
+        }
+        {
+            var it = try TokenIter.initLine("-v hello", null, .{});
+            const args = try cmd.parse(&it);
+            try testing.expectEqualDeep(
+                R{ .verbose = 11, .count = 3, .pos = "hello" },
+                args,
+            );
+        }
+    }
+
+    test "Parse struct with parser and allocator" {
+        const Mem = struct {
+            buf: []u8,
+            pub fn parse(s: String, a: ?Allocator) ?@This() {
+                const allocator = a orelse return null;
+                const len = parseAny(usize, s, null) orelse return null;
+                const buf = allocator.alloc(u8, len) catch return null;
+                return .{ .buf = buf };
+            }
+            pub fn destroy(self: @This(), a: Allocator) void {
+                a.free(self.buf);
+            }
+        };
+        const cmd = Self.new("cmd")
+            .posArg("mem", [2]Mem, .{ .callBackFn = struct {
+                fn f(v: *[2]Mem) void {
+                    for (v.*) |m| {
+                        const msg = "Hello World!";
+                        const len = @min(m.buf.len, msg.len);
+                        @memcpy(m.buf, msg[0..len]);
+                    }
+                }
+            }.f })
+            .optArg("message", String, .{ .short = 'm' });
+        const R = cmd.Result();
+        var args: R = undefined;
+        {
+            var it = try TokenIter.initLine("-m hello 2 7", null, .{});
+            args = try cmd.parseAlloc(&it, testing.allocator);
+        }
+        try testing.expectEqualStrings("hello", args.message);
+        try testing.expectEqualStrings("He", args.mem[0].buf);
+        try testing.expectEqualStrings("Hello W", args.mem[1].buf);
+        defer cmd.destroy(&args, testing.allocator);
     }
 };
 

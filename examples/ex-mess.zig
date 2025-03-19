@@ -4,7 +4,7 @@ const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
 const Meta = zargs.Meta;
 
-fn limitPlusOne(s: []const u8) ?u32 {
+fn limitPlusOne(s: []const u8, _: ?std.mem.Allocator) ?u32 {
     const limit = std.fmt.parseInt(u32, s, 0) catch return null;
     return limit + 1;
 }
@@ -13,12 +13,12 @@ const ColorWithParser = enum {
     White,
     Black,
     Gray,
-    pub fn parser(s: []const u8) ?@This() {
+    pub fn parse(s: []const u8, _: ?std.mem.Allocator) ?@This() {
         return if (std.ascii.eqlIgnoreCase(s, "White")) .White else if (std.ascii.eqlIgnoreCase(s, "Black")) .Black else if (std.ascii.eqlIgnoreCase(s, "Gray")) .Gray else null;
     }
 };
 const lastCharacter = struct {
-    fn p(s: []const u8) ?u8 {
+    fn p(s: []const u8, _: ?std.mem.Allocator) ?u8 {
         return if (s.len == 0) null else s[s.len - 1];
     }
 }.p;
