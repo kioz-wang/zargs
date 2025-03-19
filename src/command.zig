@@ -534,8 +534,9 @@ pub const Command = struct {
             .arg(Meta.optArg("optional_int", i32).long("oint").default(1).argName("OINT"))
             .arg(Meta.optArg("int", i32).long("int"))
             .arg(Meta.optArg("files", []const String).short('f').long("file"))
+            .arg(Meta.posArg("optional_pos", u32).default(6))
             .arg(Meta.posArg("io", [2]String))
-            .arg(Meta.posArg("optional_pos", u32).default(6));
+            .arg(Meta.posArg("message", String).default("hello"));
         const cmd = Self.new("cmd").requireSub("sub")
             .arg(Meta.opt("verbose", u8).short('v'))
             .sub(subcmd0)
@@ -545,7 +546,7 @@ pub const Command = struct {
             cmd.usage(),
         );
         try testing.expectEqualStrings(
-            "subcmd0 [-h|--help] [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}]",
+            "subcmd0 [-h|--help] [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}] [{MESSAGE}]",
             subcmd0.usage(),
         );
     }
@@ -556,7 +557,7 @@ pub const Command = struct {
                 .arg(Meta.opt("verbose", u8).short('v').help("Set log level"))
                 .arg(Meta.optArg("optional_int", i32).long("oint").default(1).argName("OINT").help("Optional integer"))
                 .arg(Meta.optArg("int", i32).long("int").help("Required integer"))
-                .arg(Meta.optArg("files", []const String).short('f').long("file").help("Multiple files"))
+                .arg(Meta.optArg("files", []String).short('f').long("file").help("Multiple files"))
                 .arg(Meta.posArg("optional_pos", u32).default(6).help("Optional position argument"))
                 .arg(Meta.posArg("io", [2]String).help("Array position arguments"));
             try testing.expectEqualStrings(

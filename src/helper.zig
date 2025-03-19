@@ -64,7 +64,7 @@ pub const Usage = struct {
     pub fn arg(name: []const u8, T: type) []const u8 {
         const pre = switch (@typeInfo(T)) {
             .array => |info| print("[{d}]", .{info.len}),
-            .pointer => "[]",
+            .pointer => if (T == String) "" else "[]",
             else => "",
         };
         return print("{{{s}{s}}}", .{ pre, name });
