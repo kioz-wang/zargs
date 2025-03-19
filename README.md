@@ -270,7 +270,7 @@ _ = cmd.help();
 
 ## APIs
 
-See https://kioz-wang.github.io/zargs/
+See https://kioz-wang.github.io/zargs/#doc.command.Command
 
 ## Examples
 
