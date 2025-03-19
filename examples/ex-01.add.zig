@@ -2,19 +2,19 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
-const Meta = zargs.Meta;
+const Arg = zargs.Arg;
 
 var sum: i32 = 0;
 pub fn main() !void {
     const add_remain = Command.new("remain").about("summary remain args");
     const add_optArgs = Command.new("opt").about("summary optArgs")
         .arg(
-        Meta.optArg("nums", []const i32)
+        Arg.optArg("nums", []const i32)
             .short('n').long("num")
             .help("Give me an integer"),
     );
     const add_optArgs_auto_per = Command.new("opt_auto_per").about("summary optArgs automatically")
-        .arg(Meta.optArg("nums", []const i32)
+        .arg(Arg.optArg("nums", []const i32)
         .short('n').long("num")
         .help("Give me an integer")
         .parseFn(
@@ -29,7 +29,7 @@ pub fn main() !void {
     ));
     const add_optArgs_auto_cb = Command.new("opt_auto_cb").about("summary optArgs automatically")
         .arg(
-        Meta.optArg("nums", []const i32)
+        Arg.optArg("nums", []const i32)
             .short('n').long("num")
             .help("Give me an integer to add")
             .callBackFn(struct {
@@ -57,7 +57,7 @@ pub fn main() !void {
 
     // it.debug(true);
 
-    const args = try cmd.parseAlloc(&it, allocator);
+    const args = try cmd.parseFrom(&it, allocator);
     defer cmd.destroy(&args, allocator);
 
     std.log.debug("parse done for {s}", .{@tagName(args.use)});

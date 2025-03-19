@@ -1,8 +1,6 @@
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
-const TokenIter = zargs.TokenIter;
-const Meta = zargs.Meta;
 
 pub fn main() !void {
     const cmd = Command.new("demo").requireSub("action")
@@ -13,11 +11,8 @@ pub fn main() !void {
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
-    var it = try TokenIter.init(allocator, .{});
-    defer it.deinit();
-    _ = try it.next();
 
-    const args = cmd.parse(&it) catch |err| {
+    const args = cmd.parse(allocator) catch |err| {
         std.debug.print("Fail to parse because of {any}\n", .{err});
         std.debug.print("\n{s}\n", .{cmd.usage()});
         std.process.exit(1);
