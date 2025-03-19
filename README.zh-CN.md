@@ -9,6 +9,7 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
+const Meta = zargs.Meta;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
