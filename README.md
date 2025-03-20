@@ -25,6 +25,9 @@ pub fn main() !void {
         .arg(Arg.opt("verbose", u32)
             .short('v')
             .help("help of verbose"))
+        .arg(Arg.optArg("logfile", ?[]const u8)
+            .long("log")
+            .help("Store log into a file"))
         .sub(Command.new("install")
             .arg(Arg.posArg("name", []const u8))
             .arg(
@@ -43,6 +46,9 @@ pub fn main() !void {
         std.process.exit(1);
     };
     defer cmd.destroy(&args, allocator);
+    if (args.logfile) |logfile| {
+        std.debug.print("Store log into {s}\n", .{logfile});
+    }
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});
@@ -130,13 +136,13 @@ const zargs = @import("zargs");
         - Boolean Option (`boolOpt`), `T == bool`
         - Accumulative Option (`repeatOpt`), `@typeInfo(T) == .int`
     - Option with Argument (`argOpt`)
-        - Option with Single Argument (`singleArgOpt`), T
+        - Option with Single Argument (`singleArgOpt`), T, `?T`
         - Option with Fixed Number of Arguments (`arrayArgOpt`), `[n]T`
         - Option with Variable Number of Arguments (`multiArgOpt`), `[]T`
 - Argument (`arg`)
     - Option Argument (`optArg`) (equivalent to Option with Argument)
     - Positional Argument (`posArg`)
-        - Single Positional Argument (`singlePosArg`), T
+        - Single Positional Argument (`singlePosArg`), T, `?T`
         - Fixed Number of Positional Arguments (`arrayPosArg`), `[n]T`
 - Subcommand (`subCmd`)
 
@@ -158,7 +164,10 @@ If T is not parsable, a custom parser (`.parseFn`) can be defined for the argume
 
 Options and arguments can be configured with default values (`.default`). Once configured, the option or argument becomes optional.
 
-Even if not explicitly configured, single options always have default values: boolean options default to `false`, and accumulative options default to `0`. Therefore, single options are always optional.
+- Even if not explicitly configured, single options always have default values: boolean options default to `false`, and accumulative options default to `0`.
+- Options or arguments with an optional type `?T` cannot be explicitly configured: they are forced to default to `null`.
+
+> Single options, options with a single argument of optional type, or single positional arguments of optional type are always optional.
 
 #### Callbacks
 

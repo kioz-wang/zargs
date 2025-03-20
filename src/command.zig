@@ -118,7 +118,7 @@ pub const Command = struct {
         self: Self,
         name: [:0]const u8,
         T: type,
-        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(parser.Base(T)) = null, callBackFn: ?fn (*T) void = null },
+        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*h.TryOptional(T)) void = null },
     ) Self {
         var meta = Meta.optArg(name, T);
         meta.common.help = common.help;
@@ -126,7 +126,7 @@ pub const Command = struct {
         meta.common.long = common.long;
         meta.common.argName = common.argName;
         if (common.default) |v| {
-            meta.common.default = @ptrCast(&v);
+            meta = meta.default(v);
         }
         if (common.parseFn) |f| {
             meta.common.parseFn = @ptrCast(&f);
@@ -140,13 +140,13 @@ pub const Command = struct {
         self: Self,
         name: [:0]const u8,
         T: type,
-        common: struct { help: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(parser.Base(T)) = null, callBackFn: ?fn (*T) void = null },
+        common: struct { help: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*h.TryOptional(T)) void = null },
     ) Self {
         var meta = Meta.posArg(name, T);
         meta.common.help = common.help;
         meta.common.argName = common.argName;
         if (common.default) |v| {
-            meta.common.default = @ptrCast(&v);
+            meta = meta.default(v);
         }
         if (common.parseFn) |f| {
             meta.common.parseFn = @ptrCast(&f);
@@ -563,9 +563,10 @@ pub const Command = struct {
                 .arg(Meta.optArg("int", i32).long("int").help("Required integer"))
                 .arg(Meta.optArg("files", []String).short('f').long("file").help("Multiple files"))
                 .arg(Meta.posArg("optional_pos", u32).default(6).help("Optional position argument"))
-                .arg(Meta.posArg("io", [2]String).help("Array position arguments"));
+                .arg(Meta.posArg("io", [2]String).help("Array position arguments"))
+                .arg(Meta.posArg("message", ?String).help("Optional message"));
             try testing.expectEqualStrings(
-                \\Usage: cmd [-h|--help] [-v]... [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}]
+                \\Usage: cmd [-h|--help] [-v]... [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}] [{MESSAGE}]
                 \\
                 \\Options:
                 \\[-h|--help]                    Show this help then exit
@@ -579,6 +580,7 @@ pub const Command = struct {
                 \\Positional arguments:
                 \\[{OPTIONAL_POS}]               Optional position argument
                 \\{[2]IO}                        Array position arguments
+                \\[{MESSAGE}]                    Optional message
             ,
                 cmd.help(),
             );
@@ -604,7 +606,7 @@ pub const Command = struct {
         }
     }
 
-    test "Parse without subcommand" {
+    test "Parse Error without subcommand" {
         const cmd = Self.new("cmd")
             .arg(Meta.optArg("int", i32).long("int").help("Required integer"))
             .arg(Meta.optArg("files", []const String).short('f').long("file").help("Multiple files"))
@@ -643,7 +645,7 @@ pub const Command = struct {
         }
     }
 
-    test "Parse with subcommand" {
+    test "Parse Error with subcommand" {
         const cmd = Self.new("cmd").requireSub("sub")
             .arg(Meta.opt("verbose", u8).short('v'))
             .sub(Self.new("subcmd0"))
@@ -732,6 +734,32 @@ pub const Command = struct {
         try testing.expectEqualStrings("He", args.mem[0].buf);
         try testing.expectEqualStrings("Hello W", args.mem[1].buf);
         defer cmd.destroy(&args, testing.allocator);
+    }
+
+    test "Parse with optional type" {
+        const cmd = Self.new("cmd")
+            .arg(Arg.optArg("integer", ?i32).long("int"))
+            .arg(Arg.optArg("output", ?String).long("out"))
+            .arg(Arg.posArg("message", ?String));
+        const R = cmd.Result();
+        {
+            var it = try TokenIter.initLine("--int 3 --out hello world", null, .{});
+            const args = try cmd.parseFrom(&it, testing.allocator);
+            defer cmd.destroy(&args, testing.allocator);
+            try testing.expectEqualDeep(
+                R{ .integer = 3, .output = "hello", .message = "world" },
+                args,
+            );
+        }
+        {
+            var it = try TokenIter.initLine("", null, .{});
+            const args = try cmd.parseFrom(&it, testing.allocator);
+            defer cmd.destroy(&args, testing.allocator);
+            try testing.expectEqualDeep(
+                R{ .integer = null, .output = null, .message = null },
+                args,
+            );
+        }
     }
 };
 

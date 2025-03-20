@@ -88,8 +88,59 @@ pub const Usage = struct {
     }
 };
 
+pub fn TryBase(T: type) type {
+    if (T == String) return T;
+    return switch (@typeInfo(T)) {
+        .int, .float, .bool, .@"enum", .@"struct" => T,
+        else => @compileError(print("illegal base type {s}, expect .int, .float, .bool, .@\"enum\", .@\"struct\" or []cosnt u8", .{@typeName(T)})),
+    };
+}
+pub fn isArray(T: type) bool {
+    return @typeInfo(T) == .array;
+}
+pub fn TryArray(T: type) type {
+    return if (isArray(T)) @typeInfo(T).array.child else T;
+}
 pub fn isSlice(T: type) bool {
     return @typeInfo(T) == .pointer and T != String;
+}
+pub fn TrySlice(T: type) type {
+    return if (isSlice(T)) @typeInfo(T).pointer.child else T;
+}
+pub fn isMultiple(T: type) bool {
+    return isArray(T) or isSlice(T);
+}
+pub fn TryMultiple(T: type) type {
+    return if (isMultiple(T))
+        if (isArray(T)) TryArray(T) else TrySlice(T)
+    else
+        T;
+}
+pub fn isOptional(T: type) bool {
+    return @typeInfo(T) == .optional;
+}
+pub fn TryOptional(T: type) type {
+    return if (isOptional(T)) @typeInfo(T).optional.child else T;
+}
+pub fn Base(T: type) type {
+    return TryBase(
+        if (isMultiple(T)) TryMultiple(T) else if (isOptional(T)) TryOptional(T) else T,
+    );
+}
+
+test Base {
+    try testing.expect(u32 == Base(?u32));
+    try testing.expect(u32 == Base([]u32));
+    try testing.expect(u32 == Base([4]u32));
+    try testing.expect(String == Base(?String));
+    {
+        const T = struct { a: i32 };
+        try testing.expect(T == Base(?T));
+    }
+    {
+        const T = enum { Red, Blue };
+        try testing.expect(T == Base([]T));
+    }
 }
 
 pub const Parser = struct {
