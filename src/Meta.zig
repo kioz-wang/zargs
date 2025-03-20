@@ -34,7 +34,7 @@ pub fn opt(name: [:0]const u8, T: type) Self {
     const meta: Self = .{ .name = name, .T = T, .class = .opt };
     // Check T
     if (T != bool and @typeInfo(T) != .int) {
-        @compileError(h.print("{} illegal type, expect bool or .int", .{meta}));
+        @compileError(h.print("{} illegal type, expect .bool or .int", .{meta}));
     }
     // Initialize Meta
     return meta;
@@ -42,20 +42,16 @@ pub fn opt(name: [:0]const u8, T: type) Self {
 pub fn optArg(name: [:0]const u8, T: type) Self {
     const meta: Self = .{ .name = name, .T = T, .class = .optArg };
     // Check T
-    const info = @typeInfo(T);
-    if (info == .pointer) {
-        if (info.pointer.size != .slice) {
-            @compileError(h.print("{} illegal type, expect slice", .{meta}));
-        }
-    }
+    _ = h.Base(T);
     // Initialize Meta
     return meta;
 }
 pub fn posArg(name: [:0]const u8, T: type) Self {
     const meta: Self = .{ .name = name, .T = T, .class = .posArg };
     // Check T
-    if (@typeInfo(T) == .pointer and T != String) {
-        @compileError(h.print("{} illegal type", .{meta}));
+    _ = h.Base(T);
+    if (h.isSlice(T)) {
+        @compileError(h.print("{} illegal type, consider to use .nextAllBase of TokenIter", .{meta}));
     }
     // Initialize Meta
     return meta;
@@ -66,31 +62,49 @@ pub fn help(self: Self, s: []const u8) Self {
     return meta;
 }
 pub fn default(self: Self, v: self.T) Self {
+    if (h.isOptional(self.T)) {
+        @compileError(h.print("{} not support .default, it's forced to be null", .{self}));
+    }
+    if (h.isSlice(self.T)) {
+        @compileError(h.print("{} not support .default, it's forced to be empty slice", .{self}));
+    }
     var meta = self;
     meta.common.default = @ptrCast(&v);
     return meta;
 }
-pub fn parseFn(self: Self, f: parser.Fn(parser.Base(self.T))) Self {
+pub fn parseFn(self: Self, f: parser.Fn(self.T)) Self {
+    if (self.class == .opt) {
+        @compileError(h.print("{} not support .parseFn", .{self}));
+    }
     var meta = self;
     meta.common.parseFn = @ptrCast(&f);
     return meta;
 }
-pub fn callBackFn(self: Self, f: fn (*self.T) void) Self {
+pub fn callBackFn(self: Self, f: fn (*h.TryOptional(self.T)) void) Self {
     var meta = self;
     meta.common.callBackFn = @ptrCast(&f);
     return meta;
 }
 pub fn short(self: Self, c: u8) Self {
+    if (self.class == .posArg) {
+        @compileError(h.print("{} not support .short", .{self}));
+    }
     var meta = self;
     meta.common.short = c;
     return meta;
 }
 pub fn long(self: Self, s: []const u8) Self {
+    if (self.class == .posArg) {
+        @compileError(h.print("{} not support .long", .{self}));
+    }
     var meta = self;
     meta.common.long = s;
     return meta;
 }
 pub fn argName(self: Self, s: []const u8) Self {
+    if (self.class == .opt) {
+        @compileError(h.print("{} not support .argName", self));
+    }
     var meta = self;
     meta.common.argName = s;
     return meta;
@@ -108,19 +122,14 @@ pub fn _checkOut(self: Self) Self {
                 meta.common.default = @ptrCast(&zero);
             }
         }
-        // Check parseFn
-        if (self.common.parseFn != null) {
-            @compileError(h.print("{} not support parseFn", .{self}));
-        }
-        // Check argName
-        if (self.common.argName != null) {
-            @compileError(h.print("{} not support argName", self));
-        }
     }
-    if (self.class == .optArg) {
-        // Check default for Slice
-        if (self.common.default != null and h.isSlice(self.T)) {
-            @compileError(h.print("{} not support default", .{self}));
+    if (self.class == .optArg or self.class == .posArg) {
+        // Set default `default`
+        if (self.common.default == null) {
+            if (h.isOptional(self.T)) {
+                const nul: meta.T = null;
+                meta.common.default = @ptrCast(&nul);
+            }
         }
     }
     if (self.class == .opt or self.class == .optArg) {
@@ -130,18 +139,9 @@ pub fn _checkOut(self: Self) Self {
         }
     }
     if (self.class == .optArg or self.class == .posArg) {
-        // Set argName if
+        // Set default `argName`
         if (self.common.argName == null) {
             meta.common.argName = &h.upper(self.name);
-        }
-    }
-    if (self.class == .posArg) {
-        // Check short and long
-        if (self.common.short != null) {
-            @compileError(h.print("{} not support short", self));
-        }
-        if (self.common.long != null) {
-            @compileError(h.print("{} not support long", self));
         }
     }
     return meta;
@@ -156,20 +156,28 @@ pub fn _toField(self: Self) std.builtin.Type.StructField {
         .type = self.T,
     };
 }
-fn _parseAny(self: Self, s: String, a: ?Allocator) ?parser.Base(self.T) {
+fn _parseAny(self: Self, s: String, a: ?Allocator) ?h.Base(self.T) {
     if (self.common.parseFn) |f| {
-        const p: *const parser.Fn(parser.Base(self.T)) = @ptrCast(@alignCast(f));
+        const p: *const parser.Fn(self.T) = @ptrCast(@alignCast(f));
         return p(s, a);
     }
-    return parser.parseAny(parser.Base(self.T), s, a);
+    return parser.parseAny(h.Base(self.T), s, a);
 }
 pub fn _destroy(self: Self, r: anytype, a: Allocator) void {
-    if (comptime h.isSlice(self.T) or @typeInfo(self.T) == .array) {
+    if (comptime h.isMultiple(self.T)) {
         for (@field(r, self.name)) |v| {
-            parser.destroyAny(parser.Base(self.T), v, a);
+            parser.destroyAny(h.TryMultiple(self.T), v, a);
         }
+        if (comptime h.isSlice(self.T)) {
+            a.free(@field(r, self.name));
+        }
+    } else if (comptime h.isOptional(self.T)) {
+        if (@field(r, self.name)) |v| {
+            parser.destroyAny(h.TryOptional(self.T), v, a);
+        }
+    } else {
+        parser.destroyAny(self.T, @field(r, self.name), a);
     }
-    parser.destroyAny(self.T, @field(r, self.name), a);
 }
 pub fn _match(self: Self, t: token.Type) bool {
     std.debug.assert(t == .opt);
@@ -236,7 +244,7 @@ fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!
     if (self._match(prefix)) {
         _ = it.next() catch unreachable;
         var s: String = undefined;
-        if (@typeInfo(self.T) == .array) {
+        if (comptime h.isArray(self.T)) {
             for (&@field(r, self.name), 0..) |*item, i| {
                 const t = it.nextMust() catch |err| {
                     self.log("requires {s}[{d}] after {s} but {any}", .{ self.common.argName.?, i, prefix, err });
@@ -273,7 +281,7 @@ fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!
                     self.log("requires allocator", .{});
                     return Error.Allocator;
                 }
-                var list = std.ArrayList(parser.Base(self.T)).initCapacity(a.?, @field(r, self.name).len + 1) catch return Error.Allocator;
+                var list = std.ArrayList(h.Base(self.T)).initCapacity(a.?, @field(r, self.name).len + 1) catch return Error.Allocator;
                 list.appendSliceAssumeCapacity(@field(r, self.name));
                 list.appendAssumeCapacity(value);
                 a.?.free(@field(r, self.name));
@@ -286,7 +294,7 @@ fn _consumeOptArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!
 }
 fn _consumePosArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!bool {
     var s: String = undefined;
-    if (@typeInfo(self.T) == .array) {
+    if (comptime h.isArray(self.T)) {
         for (&@field(r, self.name), 0..) |*item, i| {
             const t = it.nextMust() catch |err| {
                 self.log("requires {s}[{d}] but {any}", .{ self.common.argName.?, i, err });
@@ -382,6 +390,10 @@ test "Format usage" {
         try testing.expectEqualStrings(
             "[-o {OUT}]",
             comptime Self.optArg("out", bool).short('o').default(false)._checkOut()._usage(),
+        );
+        try testing.expectEqualStrings(
+            "[-o {OUT}]",
+            comptime Self.optArg("out", ?bool).short('o')._checkOut()._usage(),
         );
         try testing.expectEqualStrings(
             "-o {[2]OUT}",

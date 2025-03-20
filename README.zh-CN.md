@@ -25,6 +25,9 @@ pub fn main() !void {
         .arg(Arg.opt("verbose", u32)
             .short('v')
             .help("help of verbose"))
+        .arg(Arg.optArg("logfile", ?[]const u8)
+            .long("log")
+            .help("Store log into a file"))
         .sub(Command.new("install")
             .arg(Arg.posArg("name", []const u8))
             .arg(
@@ -43,6 +46,9 @@ pub fn main() !void {
         std.process.exit(1);
     };
     defer cmd.destroy(&args, allocator);
+    if (args.logfile) |logfile| {
+        std.debug.print("Store log into {s}\n", .{logfile});
+    }
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});
@@ -130,13 +136,13 @@ const zargs = @import("zargs");
         - 布尔选项（`boolOpt`），`T == bool`
         - 累加选项（`repeatOpt`），`@typeInfo(T) == .int`
     - 带参数选项（`argOpt`）
-        - 带单参数选项（`singleArgOpt`），T
+        - 带单参数选项（`singleArgOpt`），T，`?T`
         - 带固定数量参数的选项（`arrayArgOpt`），`[n]T`
         - 带不定数量参数的选项（`multiArgOpt`），`[]T`
 - 参数（`arg`）
     - 带选项参数（`optArg`）（等同于带参数选项）
     - 位置参数（`posArg`）
-        - 单位置参数（`singlePosArg`），T
+        - 单位置参数（`singlePosArg`），T，`?T`
         - 固定数量的位置参数（`arrayPosArg`），`[n]T`
 - 子命令（`subCmd`）
 
@@ -158,7 +164,10 @@ const zargs = @import("zargs");
 
 选项和参数可配置默认值（`.default`），配置后，该选项和参数就变为可选。
 
-即便没有显式配置，单选项也总有默认值：布尔选项默认为 `false`，累加选项默认为 `0`。由此可知，单选项总是可选的。
+- 即便没有显式配置，单选项也总有默认值：布尔选项默认为 `false`，累加选项默认为 `0`
+- 具有可选类型 `?T` 的选项或参数不可显式配置：强制默认为 `null`
+
+> 单选项、具有可选类型的带单参数选项或具有可选类型的单位置参数，总是可选的。
 
 #### 回调
 

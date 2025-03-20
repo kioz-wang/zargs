@@ -18,6 +18,9 @@ pub fn main() !void {
         .arg(Arg.opt("verbose", u32)
             .short('v')
             .help("help of verbose"))
+        .arg(Arg.optArg("logfile", ?[]const u8)
+            .long("log")
+            .help("Store log into a file"))
         .sub(Command.new("install")
             .arg(Arg.posArg("name", []const u8))
             .arg(
@@ -36,6 +39,9 @@ pub fn main() !void {
         std.process.exit(1);
     };
     defer cmd.destroy(&args, allocator);
+    if (args.logfile) |logfile| {
+        std.debug.print("Store log into {s}\n", .{logfile});
+    }
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});
