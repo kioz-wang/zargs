@@ -157,6 +157,88 @@ test Base {
     }
 }
 
+fn formatBase(v: anytype) []const u8 {
+    const T = @TypeOf(v);
+    if (T == String) return print("{s}", .{v});
+    return switch (@typeInfo(T)) {
+        .int, .bool, .@"struct" => print("{any}", .{v}),
+        .float => print("{:.3}", .{v}),
+        .@"enum" => print("{s}", .{@tagName(v)}),
+        else => unreachable,
+    };
+}
+
+pub fn NiceFormatter(T: type) type {
+    return struct {
+        v: T,
+        pub fn format(self: @This(), comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+            if (Base(T) == T) {
+                try writer.writeAll(formatBase(self.v));
+                return;
+            }
+            if (isOptional(T)) {
+                try writer.writeAll(if (self.v) |v_| formatBase(v_) else "null");
+                return;
+            }
+            if (isMultiple(T)) {
+                try writer.writeAll("{");
+                for (self.v, 0..) |v_, i| {
+                    if (i != 0) {
+                        try writer.writeAll(", ");
+                    }
+                    try writer.writeAll(formatBase(v_));
+                }
+                try writer.writeAll("}");
+                return;
+            }
+            unreachable;
+        }
+        pub fn value(v: T) @This() {
+            return .{ .v = v };
+        }
+    };
+}
+
+test "NiceFormatter Base" {
+    try testing.expectEqualStrings("1", print("{}", .{comptime NiceFormatter(u32).value(1)}));
+    try testing.expectEqualStrings("9.000e-1", print("{}", .{comptime NiceFormatter(f32).value(0.9)}));
+    try testing.expectEqualStrings("true", print("{}", .{comptime NiceFormatter(bool).value(true)}));
+    {
+        const Color = enum { Red, Green, Blue };
+        try testing.expectEqualStrings(
+            "Green",
+            print("{}", .{comptime NiceFormatter(Color).value(.Green)}),
+        );
+    }
+    {
+        const Person = struct { age: u32, name: String };
+        try testing.expectEqualStrings(
+            "helper.test.NiceFormatter Base.Person{ .age = 18, .name = { 74, 97, 99, 107 } }",
+            print("{}", .{comptime NiceFormatter(Person).value(.{ .age = 18, .name = "Jack" })}),
+        );
+    }
+}
+
+test "NiceFormatter Optional" {
+    try testing.expectEqualStrings("1", print("{}", .{comptime NiceFormatter(?u32).value(1)}));
+    try testing.expectEqualStrings("null", print("{}", .{comptime NiceFormatter(?u32).value(null)}));
+}
+
+test "NiceFormatter Multiple" {
+    try testing.expectEqualStrings(
+        "{}",
+        print("{}", .{comptime NiceFormatter([]String).value(&[_]String{})}),
+    );
+    try testing.expectEqualStrings(
+        "{hello, world}",
+        print("{}", .{comptime NiceFormatter([]const String).value(&[_]String{ "hello", "world" })}),
+    );
+    try testing.expectEqualStrings(
+        "{hello, world}",
+        print("{}", .{comptime NiceFormatter([2]String).value([_]String{ "hello", "world" })}),
+    );
+}
+
 pub const Parser = struct {
     pub fn boolean(s: String) ?bool {
         return switch (s.len) {

@@ -227,10 +227,10 @@ pub fn _help(self: Self) []const u8 {
         msg = h.print("{s}{s}", .{ msg, s });
     }
     if (self.common.default) |_| {
-        msg = h.print("{s}{s}(default: {any})", .{
+        msg = h.print("{s}{s}(default: {s})", .{
             msg,
             if (self.common.help) |_| "\n" ++ " " ** space else "",
-            self._toField().defaultValue(),
+            h.NiceFormatter(self.T).value(self._toField().defaultValue().?),
         });
     }
     return msg;
@@ -446,12 +446,25 @@ test "Format help" {
     {
         try testing.expectEqualStrings(
             \\[-o|--out {OUT}]        Help of out
-            \\                        (default: { 97, 46, 111, 117, 116 })
+            \\                        (default: a.out)
         ,
             comptime Self.optArg("out", String)
                 .short('o').long("out")
                 .default("a.out")
                 .help("Help of out")
+                ._checkOut()._help(),
+        );
+    }
+    {
+        const Color = enum { Red, Green, Blue };
+        try testing.expectEqualStrings(
+            \\[-c|--color {[3]COLORS}]    Help of colors
+            \\                            (default: {Red, Green, Blue})
+        ,
+            comptime Self.optArg("colors", [3]Color)
+                .short('c').long("color")
+                .default([_]Color{ .Red, .Green, .Blue })
+                .help("Help of colors")
                 ._checkOut()._help(),
         );
     }
