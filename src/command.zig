@@ -569,18 +569,22 @@ pub const Command = struct {
                 \\Usage: cmd [-h|--help] [-v]... [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}] [{MESSAGE}]
                 \\
                 \\Options:
-                \\[-h|--help]                    Show this help then exit
-                \\[-v]...                        Set log level
+                \\[-h|--help]             Show this help then exit
+                \\[-v]...                 Set log level
+                \\                        (default: 0)
                 \\
                 \\Options with arguments:
-                \\[--oint {OINT}]                Optional integer
-                \\--int {INT}                    Required integer
-                \\-f|--file {[]FILES}...         Multiple files
+                \\[--oint {OINT}]         Optional integer
+                \\                        (default: 1)
+                \\--int {INT}             Required integer
+                \\-f|--file {[]FILES}...      Multiple files
                 \\
                 \\Positional arguments:
-                \\[{OPTIONAL_POS}]               Optional position argument
-                \\{[2]IO}                        Array position arguments
-                \\[{MESSAGE}]                    Optional message
+                \\[{OPTIONAL_POS}]        Optional position argument
+                \\                        (default: 6)
+                \\{[2]IO}                 Array position arguments
+                \\[{MESSAGE}]             Optional message
+                \\                        (default: null)
             ,
                 cmd.help(),
             );
@@ -594,10 +598,10 @@ pub const Command = struct {
                 \\Usage: cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}
                 \\
                 \\Options:
-                \\[-h|--help]                    Show this help then exit
-                \\[-v]...
+                \\[-h|--help]             Show this help then exit
+                \\[-v]...                 (default: 0)
                 \\
-                \\Sub Commands:
+                \\Commands:
                 \\subcmd0
                 \\subcmd1
             ,

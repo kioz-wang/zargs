@@ -217,10 +217,23 @@ pub fn _usage(self: Self) []const u8 {
     };
 }
 pub fn _help(self: Self) []const u8 {
-    return if (self.common.help) |s|
-        h.print("{s:<30} {s}", .{ self._usage(), s })
-    else
-        self._usage();
+    var msg: []const u8 = self._usage();
+    if (self.common.help == null and self.common.default == null) {
+        return msg;
+    }
+    const space: usize = @max(24, h.alignIntUp(usize, msg.len, 4) + 4);
+    msg = h.print("{s}{s}", .{ msg, " " ** (space - msg.len) });
+    if (self.common.help) |s| {
+        msg = h.print("{s}{s}", .{ msg, s });
+    }
+    if (self.common.default) |_| {
+        msg = h.print("{s}{s}(default: {any})", .{
+            msg,
+            if (self.common.help) |_| "\n" ++ " " ** space else "",
+            self._toField().defaultValue(),
+        });
+    }
+    return msg;
 }
 pub const Error = error{
     Missing,
@@ -411,12 +424,37 @@ test "Format usage" {
 }
 
 test "Format help" {
-    const meta = Self.opt("out", bool).short('o')._checkOut();
-    try testing.expectEqualStrings("[-o]", comptime meta._usage());
-    try testing.expectEqualStrings(
-        "[-o]                           Help of out",
-        comptime meta.help("Help of out")._help(),
-    );
+    {
+        try testing.expectEqualStrings(
+            \\[-o]                    Help of out
+            \\                        (default: false)
+        ,
+            comptime Self.opt("out", bool)
+                .short('o').help("Help of out")
+                ._checkOut()._help(),
+        );
+    }
+    {
+        try testing.expectEqualStrings(
+            \\-o {OUT}                Help of out
+        ,
+            comptime Self.optArg("out", String)
+                .short('o').help("Help of out")
+                ._checkOut()._help(),
+        );
+    }
+    {
+        try testing.expectEqualStrings(
+            \\[-o|--out {OUT}]        Help of out
+            \\                        (default: { 97, 46, 111, 117, 116 })
+        ,
+            comptime Self.optArg("out", String)
+                .short('o').long("out")
+                .default("a.out")
+                .help("Help of out")
+                ._checkOut()._help(),
+        );
+    }
 }
 
 test "Consume opt" {

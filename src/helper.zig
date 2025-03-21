@@ -45,6 +45,20 @@ test upper {
     try testing.expectEqualStrings("UPPER", &upper("upPer"));
 }
 
+pub fn alignIntUp(I: type, i: I, a: I) I {
+    return @divTrunc(i, a) * a + if (@rem(i, a) == 0) 0 else a;
+}
+
+test alignIntUp {
+    try testing.expectEqual(0x100, alignIntUp(u32, 0x9, 0x100));
+    try testing.expectEqual(0x100, alignIntUp(u32, 0x100, 0x100));
+    try testing.expectEqual(0x1300, alignIntUp(u32, 0x1234, 0x100));
+    try testing.expectEqual(20, alignIntUp(u8, 11, 10));
+    try testing.expectEqual(20, alignIntUp(u8, 15, 10));
+    try testing.expectEqual(21, alignIntUp(u8, 16, 7));
+    try testing.expectEqual(21, alignIntUp(u8, 21, 7));
+}
+
 pub const FormatOptions = std.fmt.FormatOptions;
 
 pub const Usage = struct {
