@@ -310,7 +310,7 @@ pub const Command = struct {
             msg = msg ++ "\n" ++ m._help();
         }
         if (self._stat.cmd != 0) {
-            msg = msg ++ "\n\nSub Commands:";
+            msg = msg ++ "\n\nCommands:";
         }
         for (self._cmds) |c| {
             if (c.common.about) |s| {
