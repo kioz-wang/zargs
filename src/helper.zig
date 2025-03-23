@@ -102,6 +102,139 @@ pub const Usage = struct {
     }
 };
 
+pub const Order = enum {
+    Less,
+    Equal,
+    Greater,
+};
+
+/// compare between two values of base T
+///
+/// for enum and struct, if find `pub fn compare(self: T, v: T) Order`, use it
+pub fn compare(a: anytype, b: @TypeOf(a)) Order {
+    const B = @TypeOf(a);
+    if (B == comptime_int or B == comptime_float) return if (a > b) .Greater else if (a == b) .Equal else .Less;
+    return switch (@typeInfo(B)) {
+        .int, .float => if (a > b) .Greater else if (a == b) .Equal else .Less,
+        .@"enum" => if (@hasDecl(B, "compare")) a.compare(b) else blk: {
+            const _a = @intFromEnum(a);
+            const _b = @intFromEnum(b);
+            break :blk if (_a > _b) .Greater else if (_a == _b) .Equal else .Less;
+        },
+        .@"struct" => if (@hasDecl(B, "compare")) a.compare(b) else @compileError(print("require comparer for {s}", .{@typeName(B)})),
+        else => @compileError(print("unable compare in {s}", .{@typeName(B)})),
+    };
+}
+
+/// check equal between two values of base T
+///
+/// for struct, if find `pub fn equal(self: *const T, v: *const T) bool`, use it
+///
+/// for packed struct, just check equal directly
+pub fn equal(a: anytype, b: @TypeOf(a)) bool {
+    const B = @TypeOf(a);
+    if (B == String) return std.mem.eql(u8, a, b);
+    if (B == comptime_int or B == comptime_float) return a == b;
+    return switch (@typeInfo(B)) {
+        .int, .float, .bool, .@"enum" => a == b,
+        .@"struct" => |info| if (@hasDecl(B, "equal")) a.equal(b) else if (info.layout == .@"packed") a == b else @compileError(print("require equaler for {s}", .{@typeName(B)})),
+        else => @compileError(print("unable check equal in {s}", .{@typeName(B)})),
+    };
+}
+
+test compare {
+    try testing.expectEqual(compare(1, 2), Order.Less);
+    try testing.expectEqual(compare(2, 2), Order.Equal);
+    try testing.expectEqual(compare(3, 2), Order.Greater);
+    try testing.expectEqual(compare(@as(u32, 1), 2), Order.Less);
+    try testing.expectEqual(compare(@as(u32, 2), 2), Order.Equal);
+    try testing.expectEqual(compare(@as(u32, 3), 2), Order.Greater);
+    try testing.expectEqual(compare(1.0, 2.0), Order.Less);
+    try testing.expectEqual(compare(2.0, 2.0), Order.Equal);
+    try testing.expectEqual(compare(3.0, 2.0), Order.Greater);
+    try testing.expectEqual(compare(@as(f32, 1.0), 2.0), Order.Less);
+    try testing.expectEqual(compare(@as(f32, 2.0), 2.0), Order.Equal);
+    try testing.expectEqual(compare(@as(f32, 3.0), 2.0), Order.Greater);
+    {
+        const Color = enum { Red, Green, Blue };
+        try testing.expectEqual(compare(Color.Red, Color.Green), Order.Less);
+        try testing.expectEqual(compare(Color.Green, Color.Green), Order.Equal);
+        try testing.expectEqual(compare(Color.Blue, Color.Green), Order.Greater);
+    }
+    {
+        const Color = enum {
+            Red,
+            Green,
+            Blue,
+            pub fn compare(self: @This(), v: @This()) Order {
+                const _a = @intFromEnum(self);
+                const _b = @intFromEnum(v);
+                return if (_a > _b) .Greater else if (_a == _b) .Equal else .Less;
+            }
+        };
+        try testing.expectEqual(compare(Color.Red, Color.Green), Order.Less);
+        try testing.expectEqual(compare(Color.Green, Color.Green), Order.Equal);
+        try testing.expectEqual(compare(Color.Blue, Color.Green), Order.Greater);
+    }
+    {
+        const Person = struct {
+            age: u32,
+            name: String = undefined,
+            pub fn compare(self: @This(), v: @This()) Order {
+                const _a = self.age;
+                const _b = v.age;
+                return if (_a > _b) .Greater else if (_a == _b) .Equal else .Less;
+            }
+        };
+        try testing.expectEqual(compare(Person{ .age = 1 }, Person{ .age = 2 }), Order.Less);
+        try testing.expectEqual(compare(Person{ .age = 2 }, Person{ .age = 2 }), Order.Equal);
+        try testing.expectEqual(compare(Person{ .age = 3 }, Person{ .age = 2 }), Order.Greater);
+    }
+}
+
+test equal {
+    {
+        const stringA: []const u8 = "hello";
+        const stringB: []const u8 = "world";
+        try testing.expect(equal(stringA, stringA));
+        try testing.expect(!equal(stringB, stringA));
+    }
+    try testing.expect(equal(1, 1));
+    try testing.expect(!equal(2, 1));
+    try testing.expect(equal(@as(u32, 1), 1));
+    try testing.expect(!equal(@as(u32, 2), 1));
+    try testing.expect(equal(1.0, 1.0));
+    try testing.expect(!equal(2.0, 1.0));
+    try testing.expect(equal(@as(f32, 1.0), 1.0));
+    try testing.expect(!equal(@as(f32, 2.0), 1.0));
+    try testing.expect(equal(true, true));
+    try testing.expect(!equal(false, true));
+    {
+        const Color = enum { Red, Green, Blue };
+        try testing.expect(equal(Color.Green, Color.Green));
+        try testing.expect(!equal(Color.Red, Color.Green));
+    }
+    {
+        const Person = struct {
+            age: u32,
+            name: String = undefined,
+            pub fn equal(self: @This(), v: @This()) bool {
+                return self.age == v.age;
+            }
+        };
+        try testing.expect(equal(Person{ .age = 2 }, Person{ .age = 2 }));
+        try testing.expect(!equal(Person{ .age = 1 }, Person{ .age = 2 }));
+    }
+    {
+        const Person = packed struct {
+            age: u32,
+            sex: bool = true,
+        };
+        try testing.expect(equal(Person{ .age = 2 }, Person{ .age = 2 }));
+        try testing.expect(!equal(Person{ .age = 1 }, Person{ .age = 2 }));
+    }
+}
+
 pub fn TryBase(T: type) type {
     if (T == String) return T;
     return switch (@typeInfo(T)) {
