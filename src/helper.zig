@@ -1,39 +1,46 @@
 const std = @import("std");
 const testing = std.testing;
 
-pub const String = []const u8;
+pub const Alias = struct {
+    pub const String = []const u8;
+    pub const print = std.fmt.comptimePrint;
+    pub const FormatOptions = std.fmt.FormatOptions;
+};
 
-pub const print = std.fmt.comptimePrint;
+const String = Alias.String;
+const print = Alias.print;
 
-pub fn StringSet(capacity: comptime_int) type {
-    const A = std.ArrayListUnmanaged(String);
-    return struct {
-        base: A = undefined,
-        buffer: [capacity]String = undefined,
-        pub fn init(self: *@This()) void {
-            self.base = A.initBuffer(self.buffer[0..]);
-        }
-        pub fn contain(self: *const @This(), s: String) bool {
-            return for (self.base.items) |item| {
-                if (std.mem.eql(u8, item, s)) break true;
-            } else false;
-        }
-        pub fn add(self: *@This(), s: String) bool {
-            if (self.contain(s)) return false;
-            self.base.appendAssumeCapacity(s);
-            return true;
-        }
-    };
-}
+pub const Collection = struct {
+    pub fn StringSet(capacity: comptime_int) type {
+        const A = std.ArrayListUnmanaged(String);
+        return struct {
+            base: A = undefined,
+            buffer: [capacity]String = undefined,
+            pub fn init(self: *@This()) void {
+                self.base = A.initBuffer(self.buffer[0..]);
+            }
+            pub fn contain(self: *const @This(), s: String) bool {
+                return for (self.base.items) |item| {
+                    if (std.mem.eql(u8, item, s)) break true;
+                } else false;
+            }
+            pub fn add(self: *@This(), s: String) bool {
+                if (self.contain(s)) return false;
+                self.base.appendAssumeCapacity(s);
+                return true;
+            }
+        };
+    }
 
-test StringSet {
-    var set: StringSet(2) = .{};
-    set.init();
-    try testing.expect(!set.contain("a"));
-    try testing.expect(set.add("a"));
-    try testing.expect(set.contain("a"));
-    try testing.expect(!set.add("a"));
-}
+    test StringSet {
+        var set: StringSet(2) = .{};
+        set.init();
+        try testing.expect(!set.contain("a"));
+        try testing.expect(set.add("a"));
+        try testing.expect(set.contain("a"));
+        try testing.expect(!set.add("a"));
+    }
+};
 
 pub fn upper(comptime str: []const u8) [str.len]u8 {
     var s = std.mem.zeroes([str.len]u8);
@@ -59,236 +66,193 @@ test alignIntUp {
     try testing.expectEqual(21, alignIntUp(u8, 21, 7));
 }
 
-pub const FormatOptions = std.fmt.FormatOptions;
+pub const Compare = struct {
+    pub const Order = enum { Less, Equal, Greater };
 
-pub const Usage = struct {
-    pub fn opt(short: ?u8, long: ?[]const u8) []const u8 {
-        var usage: []const u8 = "";
-        if (short) |s| {
-            usage = print("-{c}", .{s});
-        }
-        if (short != null and long != null) {
-            usage = print("{s}|", .{usage});
-        }
-        if (long) |l| {
-            usage = print("{s}--{s}", .{ usage, l });
-        }
-        return usage;
-    }
-    pub fn arg(name: []const u8, T: type) []const u8 {
-        const pre = switch (@typeInfo(T)) {
-            .array => |info| print("[{d}]", .{info.len}),
-            .pointer => if (T == String) "" else "[]",
-            else => "",
+    /// compare between two values of base T
+    ///
+    /// for enum and struct, if find `pub fn compare(self: T, v: T) Order`, use it
+    pub fn compare(a: anytype, b: @TypeOf(a)) Order {
+        const B = @TypeOf(a);
+        if (B == comptime_int or B == comptime_float) return if (a > b) .Greater else if (a == b) .Equal else .Less;
+        return switch (@typeInfo(B)) {
+            .int, .float => if (a > b) .Greater else if (a == b) .Equal else .Less,
+            .@"enum" => if (@hasDecl(B, "compare")) a.compare(b) else blk: {
+                const _a = @intFromEnum(a);
+                const _b = @intFromEnum(b);
+                break :blk if (_a > _b) .Greater else if (_a == _b) .Equal else .Less;
+            },
+            .@"struct" => if (@hasDecl(B, "compare")) a.compare(b) else @compileError(print("require comparer for {s}", .{@typeName(B)})),
+            else => @compileError(print("unable compare in {s}", .{@typeName(B)})),
         };
-        return print("{{{s}{s}}}", .{ pre, name });
     }
-    pub fn optional(has_default: bool, u: []const u8) []const u8 {
-        return if (has_default) print("[{s}]", .{u}) else u;
+
+    /// check equal between two values of base T
+    ///
+    /// for struct, if find `pub fn equal(self: T, v: T) bool`, use it
+    ///
+    /// for packed struct, just check equal directly
+    pub fn equal(a: anytype, b: @TypeOf(a)) bool {
+        const B = @TypeOf(a);
+        if (B == String) return std.mem.eql(u8, a, b);
+        if (B == comptime_int or B == comptime_float) return a == b;
+        return switch (@typeInfo(B)) {
+            .int, .float, .bool, .@"enum" => a == b,
+            .@"struct" => |info| if (@hasDecl(B, "equal")) a.equal(b) else if (info.layout == .@"packed") a == b else @compileError(print("require equaler for {s}", .{@typeName(B)})),
+            else => @compileError(print("unable check equal in {s}", .{@typeName(B)})),
+        };
     }
-    test opt {
-        try testing.expectEqualStrings("-o", comptime opt('o', null));
-        try testing.expectEqualStrings("--out", comptime opt(null, "out"));
-        try testing.expectEqualStrings("-o|--out", comptime opt('o', "out"));
+
+    test compare {
+        try testing.expectEqual(compare(1, 2), Order.Less);
+        try testing.expectEqual(compare(2, 2), Order.Equal);
+        try testing.expectEqual(compare(3, 2), Order.Greater);
+        try testing.expectEqual(compare(@as(u32, 1), 2), Order.Less);
+        try testing.expectEqual(compare(@as(u32, 2), 2), Order.Equal);
+        try testing.expectEqual(compare(@as(u32, 3), 2), Order.Greater);
+        try testing.expectEqual(compare(1.0, 2.0), Order.Less);
+        try testing.expectEqual(compare(2.0, 2.0), Order.Equal);
+        try testing.expectEqual(compare(3.0, 2.0), Order.Greater);
+        try testing.expectEqual(compare(@as(f32, 1.0), 2.0), Order.Less);
+        try testing.expectEqual(compare(@as(f32, 2.0), 2.0), Order.Equal);
+        try testing.expectEqual(compare(@as(f32, 3.0), 2.0), Order.Greater);
+        {
+            const Color = enum { Red, Green, Blue };
+            try testing.expectEqual(compare(Color.Red, Color.Green), Order.Less);
+            try testing.expectEqual(compare(Color.Green, Color.Green), Order.Equal);
+            try testing.expectEqual(compare(Color.Blue, Color.Green), Order.Greater);
+        }
+        {
+            const Color = enum {
+                Red,
+                Green,
+                Blue,
+                pub fn compare(self: @This(), v: @This()) Order {
+                    const _a = @intFromEnum(self);
+                    const _b = @intFromEnum(v);
+                    return if (_a > _b) .Greater else if (_a == _b) .Equal else .Less;
+                }
+            };
+            try testing.expectEqual(compare(Color.Red, Color.Green), Order.Less);
+            try testing.expectEqual(compare(Color.Green, Color.Green), Order.Equal);
+            try testing.expectEqual(compare(Color.Blue, Color.Green), Order.Greater);
+        }
+        {
+            const Person = struct {
+                age: u32,
+                name: String = undefined,
+                pub fn compare(self: @This(), v: @This()) Order {
+                    const _a = self.age;
+                    const _b = v.age;
+                    return if (_a > _b) .Greater else if (_a == _b) .Equal else .Less;
+                }
+            };
+            try testing.expectEqual(compare(Person{ .age = 1 }, Person{ .age = 2 }), Order.Less);
+            try testing.expectEqual(compare(Person{ .age = 2 }, Person{ .age = 2 }), Order.Equal);
+            try testing.expectEqual(compare(Person{ .age = 3 }, Person{ .age = 2 }), Order.Greater);
+        }
     }
-    test arg {
-        try testing.expectEqualStrings("{OUT}", comptime arg("OUT", u32));
-        try testing.expectEqualStrings("{[2]OUT}", comptime arg("OUT", [2]u32));
-        try testing.expectEqualStrings("{[]OUT}", comptime arg("OUT", []const u32));
-    }
-    test optional {
-        try testing.expectEqualStrings("usage", comptime optional(false, "usage"));
-        try testing.expectEqualStrings("[usage]", comptime optional(true, "usage"));
+
+    test equal {
+        {
+            const stringA: []const u8 = "hello";
+            const stringB: []const u8 = "world";
+            try testing.expect(equal(stringA, stringA));
+            try testing.expect(!equal(stringB, stringA));
+        }
+        try testing.expect(equal(1, 1));
+        try testing.expect(!equal(2, 1));
+        try testing.expect(equal(@as(u32, 1), 1));
+        try testing.expect(!equal(@as(u32, 2), 1));
+        try testing.expect(equal(1.0, 1.0));
+        try testing.expect(!equal(2.0, 1.0));
+        try testing.expect(equal(@as(f32, 1.0), 1.0));
+        try testing.expect(!equal(@as(f32, 2.0), 1.0));
+        try testing.expect(equal(true, true));
+        try testing.expect(!equal(false, true));
+        {
+            const Color = enum { Red, Green, Blue };
+            try testing.expect(equal(Color.Green, Color.Green));
+            try testing.expect(!equal(Color.Red, Color.Green));
+        }
+        {
+            const Person = struct {
+                age: u32,
+                name: String = undefined,
+                pub fn equal(self: @This(), v: @This()) bool {
+                    return self.age == v.age;
+                }
+            };
+            try testing.expect(equal(Person{ .age = 2 }, Person{ .age = 2 }));
+            try testing.expect(!equal(Person{ .age = 1 }, Person{ .age = 2 }));
+        }
+        {
+            const Person = packed struct {
+                age: u32,
+                sex: bool = true,
+            };
+            try testing.expect(equal(Person{ .age = 2 }, Person{ .age = 2 }));
+            try testing.expect(!equal(Person{ .age = 1 }, Person{ .age = 2 }));
+        }
     }
 };
 
-pub const Order = enum {
-    Less,
-    Equal,
-    Greater,
+pub const Type = struct {
+    pub fn TryBase(T: type) type {
+        if (T == String) return T;
+        return switch (@typeInfo(T)) {
+            .int, .float, .bool, .@"enum", .@"struct" => T,
+            else => @compileError(print("illegal base type {s}, expect .int, .float, .bool, .@\"enum\", .@\"struct\" or []cosnt u8", .{@typeName(T)})),
+        };
+    }
+    pub fn isArray(T: type) bool {
+        return @typeInfo(T) == .array;
+    }
+    pub fn TryArray(T: type) type {
+        return if (isArray(T)) @typeInfo(T).array.child else T;
+    }
+    pub fn isSlice(T: type) bool {
+        return @typeInfo(T) == .pointer and T != String;
+    }
+    pub fn TrySlice(T: type) type {
+        return if (isSlice(T)) @typeInfo(T).pointer.child else T;
+    }
+    pub fn isMultiple(T: type) bool {
+        return isArray(T) or isSlice(T);
+    }
+    pub fn TryMultiple(T: type) type {
+        return if (isMultiple(T))
+            if (isArray(T)) TryArray(T) else TrySlice(T)
+        else
+            T;
+    }
+    pub fn isOptional(T: type) bool {
+        return @typeInfo(T) == .optional;
+    }
+    pub fn TryOptional(T: type) type {
+        return if (isOptional(T)) @typeInfo(T).optional.child else T;
+    }
+    pub fn Base(T: type) type {
+        return TryBase(
+            if (isMultiple(T)) TryMultiple(T) else if (isOptional(T)) TryOptional(T) else T,
+        );
+    }
+
+    test Base {
+        try testing.expect(u32 == Base(?u32));
+        try testing.expect(u32 == Base([]u32));
+        try testing.expect(u32 == Base([4]u32));
+        try testing.expect(String == Base(?String));
+        {
+            const T = struct { a: i32 };
+            try testing.expect(T == Base(?T));
+        }
+        {
+            const T = enum { Red, Blue };
+            try testing.expect(T == Base([]T));
+        }
+    }
 };
-
-/// compare between two values of base T
-///
-/// for enum and struct, if find `pub fn compare(self: T, v: T) Order`, use it
-pub fn compare(a: anytype, b: @TypeOf(a)) Order {
-    const B = @TypeOf(a);
-    if (B == comptime_int or B == comptime_float) return if (a > b) .Greater else if (a == b) .Equal else .Less;
-    return switch (@typeInfo(B)) {
-        .int, .float => if (a > b) .Greater else if (a == b) .Equal else .Less,
-        .@"enum" => if (@hasDecl(B, "compare")) a.compare(b) else blk: {
-            const _a = @intFromEnum(a);
-            const _b = @intFromEnum(b);
-            break :blk if (_a > _b) .Greater else if (_a == _b) .Equal else .Less;
-        },
-        .@"struct" => if (@hasDecl(B, "compare")) a.compare(b) else @compileError(print("require comparer for {s}", .{@typeName(B)})),
-        else => @compileError(print("unable compare in {s}", .{@typeName(B)})),
-    };
-}
-
-/// check equal between two values of base T
-///
-/// for struct, if find `pub fn equal(self: *const T, v: *const T) bool`, use it
-///
-/// for packed struct, just check equal directly
-pub fn equal(a: anytype, b: @TypeOf(a)) bool {
-    const B = @TypeOf(a);
-    if (B == String) return std.mem.eql(u8, a, b);
-    if (B == comptime_int or B == comptime_float) return a == b;
-    return switch (@typeInfo(B)) {
-        .int, .float, .bool, .@"enum" => a == b,
-        .@"struct" => |info| if (@hasDecl(B, "equal")) a.equal(b) else if (info.layout == .@"packed") a == b else @compileError(print("require equaler for {s}", .{@typeName(B)})),
-        else => @compileError(print("unable check equal in {s}", .{@typeName(B)})),
-    };
-}
-
-test compare {
-    try testing.expectEqual(compare(1, 2), Order.Less);
-    try testing.expectEqual(compare(2, 2), Order.Equal);
-    try testing.expectEqual(compare(3, 2), Order.Greater);
-    try testing.expectEqual(compare(@as(u32, 1), 2), Order.Less);
-    try testing.expectEqual(compare(@as(u32, 2), 2), Order.Equal);
-    try testing.expectEqual(compare(@as(u32, 3), 2), Order.Greater);
-    try testing.expectEqual(compare(1.0, 2.0), Order.Less);
-    try testing.expectEqual(compare(2.0, 2.0), Order.Equal);
-    try testing.expectEqual(compare(3.0, 2.0), Order.Greater);
-    try testing.expectEqual(compare(@as(f32, 1.0), 2.0), Order.Less);
-    try testing.expectEqual(compare(@as(f32, 2.0), 2.0), Order.Equal);
-    try testing.expectEqual(compare(@as(f32, 3.0), 2.0), Order.Greater);
-    {
-        const Color = enum { Red, Green, Blue };
-        try testing.expectEqual(compare(Color.Red, Color.Green), Order.Less);
-        try testing.expectEqual(compare(Color.Green, Color.Green), Order.Equal);
-        try testing.expectEqual(compare(Color.Blue, Color.Green), Order.Greater);
-    }
-    {
-        const Color = enum {
-            Red,
-            Green,
-            Blue,
-            pub fn compare(self: @This(), v: @This()) Order {
-                const _a = @intFromEnum(self);
-                const _b = @intFromEnum(v);
-                return if (_a > _b) .Greater else if (_a == _b) .Equal else .Less;
-            }
-        };
-        try testing.expectEqual(compare(Color.Red, Color.Green), Order.Less);
-        try testing.expectEqual(compare(Color.Green, Color.Green), Order.Equal);
-        try testing.expectEqual(compare(Color.Blue, Color.Green), Order.Greater);
-    }
-    {
-        const Person = struct {
-            age: u32,
-            name: String = undefined,
-            pub fn compare(self: @This(), v: @This()) Order {
-                const _a = self.age;
-                const _b = v.age;
-                return if (_a > _b) .Greater else if (_a == _b) .Equal else .Less;
-            }
-        };
-        try testing.expectEqual(compare(Person{ .age = 1 }, Person{ .age = 2 }), Order.Less);
-        try testing.expectEqual(compare(Person{ .age = 2 }, Person{ .age = 2 }), Order.Equal);
-        try testing.expectEqual(compare(Person{ .age = 3 }, Person{ .age = 2 }), Order.Greater);
-    }
-}
-
-test equal {
-    {
-        const stringA: []const u8 = "hello";
-        const stringB: []const u8 = "world";
-        try testing.expect(equal(stringA, stringA));
-        try testing.expect(!equal(stringB, stringA));
-    }
-    try testing.expect(equal(1, 1));
-    try testing.expect(!equal(2, 1));
-    try testing.expect(equal(@as(u32, 1), 1));
-    try testing.expect(!equal(@as(u32, 2), 1));
-    try testing.expect(equal(1.0, 1.0));
-    try testing.expect(!equal(2.0, 1.0));
-    try testing.expect(equal(@as(f32, 1.0), 1.0));
-    try testing.expect(!equal(@as(f32, 2.0), 1.0));
-    try testing.expect(equal(true, true));
-    try testing.expect(!equal(false, true));
-    {
-        const Color = enum { Red, Green, Blue };
-        try testing.expect(equal(Color.Green, Color.Green));
-        try testing.expect(!equal(Color.Red, Color.Green));
-    }
-    {
-        const Person = struct {
-            age: u32,
-            name: String = undefined,
-            pub fn equal(self: @This(), v: @This()) bool {
-                return self.age == v.age;
-            }
-        };
-        try testing.expect(equal(Person{ .age = 2 }, Person{ .age = 2 }));
-        try testing.expect(!equal(Person{ .age = 1 }, Person{ .age = 2 }));
-    }
-    {
-        const Person = packed struct {
-            age: u32,
-            sex: bool = true,
-        };
-        try testing.expect(equal(Person{ .age = 2 }, Person{ .age = 2 }));
-        try testing.expect(!equal(Person{ .age = 1 }, Person{ .age = 2 }));
-    }
-}
-
-pub fn TryBase(T: type) type {
-    if (T == String) return T;
-    return switch (@typeInfo(T)) {
-        .int, .float, .bool, .@"enum", .@"struct" => T,
-        else => @compileError(print("illegal base type {s}, expect .int, .float, .bool, .@\"enum\", .@\"struct\" or []cosnt u8", .{@typeName(T)})),
-    };
-}
-pub fn isArray(T: type) bool {
-    return @typeInfo(T) == .array;
-}
-pub fn TryArray(T: type) type {
-    return if (isArray(T)) @typeInfo(T).array.child else T;
-}
-pub fn isSlice(T: type) bool {
-    return @typeInfo(T) == .pointer and T != String;
-}
-pub fn TrySlice(T: type) type {
-    return if (isSlice(T)) @typeInfo(T).pointer.child else T;
-}
-pub fn isMultiple(T: type) bool {
-    return isArray(T) or isSlice(T);
-}
-pub fn TryMultiple(T: type) type {
-    return if (isMultiple(T))
-        if (isArray(T)) TryArray(T) else TrySlice(T)
-    else
-        T;
-}
-pub fn isOptional(T: type) bool {
-    return @typeInfo(T) == .optional;
-}
-pub fn TryOptional(T: type) type {
-    return if (isOptional(T)) @typeInfo(T).optional.child else T;
-}
-pub fn Base(T: type) type {
-    return TryBase(
-        if (isMultiple(T)) TryMultiple(T) else if (isOptional(T)) TryOptional(T) else T,
-    );
-}
-
-test Base {
-    try testing.expect(u32 == Base(?u32));
-    try testing.expect(u32 == Base([]u32));
-    try testing.expect(u32 == Base([4]u32));
-    try testing.expect(String == Base(?String));
-    {
-        const T = struct { a: i32 };
-        try testing.expect(T == Base(?T));
-    }
-    {
-        const T = enum { Red, Blue };
-        try testing.expect(T == Base([]T));
-    }
-}
 
 fn formatBase(v: anytype) []const u8 {
     const T = @TypeOf(v);
@@ -304,16 +268,16 @@ fn formatBase(v: anytype) []const u8 {
 pub fn NiceFormatter(T: type) type {
     return struct {
         v: T,
-        pub fn format(self: @This(), comptime _: []const u8, _: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-            if (Base(T) == T) {
+        pub fn format(self: @This(), comptime _: []const u8, _: Alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+            if (Type.Base(T) == T) {
                 try writer.writeAll(formatBase(self.v));
                 return;
             }
-            if (isOptional(T)) {
+            if (Type.isOptional(T)) {
                 try writer.writeAll(if (self.v) |v_| formatBase(v_) else "null");
                 return;
             }
-            if (isMultiple(T)) {
+            if (Type.isMultiple(T)) {
                 try writer.writeAll("{");
                 for (self.v, 0..) |v_, i| {
                     if (i != 0) {
@@ -405,6 +369,8 @@ pub const Parser = struct {
 };
 
 test {
-    _ = Usage;
+    _ = Collection;
+    _ = Compare;
+    _ = Type;
     _ = Parser;
 }

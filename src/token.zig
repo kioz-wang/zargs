@@ -1,7 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 const iter = @import("iter.zig");
-const String = @import("helper.zig").String;
+const String = @import("helper.zig").Alias.String;
 
 /// The original iterator that iterates over the raw string.
 const BaseIter = union(enum) {

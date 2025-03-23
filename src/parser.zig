@@ -1,8 +1,9 @@
 const std = @import("std");
 const testing = std.testing;
-const h = @import("helper.zig");
-const String = h.String;
 const Allocator = std.mem.Allocator;
+const helper = @import("helper.zig");
+const print = helper.Alias.print;
+const String = helper.Alias.String;
 
 /// parse String to any base T
 ///
@@ -20,11 +21,11 @@ pub fn parseAny(B: type, s: String, a: ?Allocator) ?B {
     return switch (@typeInfo(B)) {
         .int => std.fmt.parseInt(B, s, 0) catch null,
         .float => std.fmt.parseFloat(B, s) catch null,
-        .bool => h.Parser.boolean(s),
+        .bool => helper.Parser.boolean(s),
         .@"enum" => if (@hasDecl(B, "parse")) B.parse(s, a) else std.meta.stringToEnum(B, s),
-        .@"struct" => if (@hasDecl(B, "parse")) B.parse(s, a) else @compileError(h.print("require parser for {s}", .{@typeName(B)})),
+        .@"struct" => if (@hasDecl(B, "parse")) B.parse(s, a) else @compileError(print("require parser for {s}", .{@typeName(B)})),
         else => {
-            @compileError(h.print("unable parse to {s}", .{@typeName(B)}));
+            @compileError(print("unable parse to {s}", .{@typeName(B)}));
         },
     };
 }
@@ -45,7 +46,7 @@ pub fn destroyAny(B: type, v: B, a: Allocator) void {
 
 /// Parser of Base(T)
 pub fn Fn(T: type) type {
-    return fn (String, ?Allocator) ?h.Base(T);
+    return fn (String, ?Allocator) ?helper.Type.Base(T);
 }
 
 test "Compile Errors" {
