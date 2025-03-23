@@ -14,17 +14,18 @@ pub const Collection = struct {
     pub fn StringSet(capacity: comptime_int) type {
         const A = std.ArrayListUnmanaged(String);
         return struct {
+            const Self = @This();
             base: A = undefined,
             buffer: [capacity]String = undefined,
-            pub fn init(self: *@This()) void {
+            pub fn init(self: *Self) void {
                 self.base = A.initBuffer(self.buffer[0..]);
             }
-            pub fn contain(self: *const @This(), s: String) bool {
+            pub fn contain(self: *const Self, s: String) bool {
                 return for (self.base.items) |item| {
                     if (std.mem.eql(u8, item, s)) break true;
                 } else false;
             }
-            pub fn add(self: *@This(), s: String) bool {
+            pub fn add(self: *Self, s: String) bool {
                 if (self.contain(s)) return false;
                 self.base.appendAssumeCapacity(s);
                 return true;
@@ -267,8 +268,9 @@ fn formatBase(v: anytype) []const u8 {
 
 pub fn NiceFormatter(T: type) type {
     return struct {
+        const Self = @This();
         v: T,
-        pub fn format(self: @This(), comptime _: []const u8, _: Alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        pub fn format(self: Self, comptime _: []const u8, _: Alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
             if (Type.Base(T) == T) {
                 try writer.writeAll(formatBase(self.v));
                 return;
@@ -290,7 +292,7 @@ pub fn NiceFormatter(T: type) type {
             }
             unreachable;
         }
-        pub fn value(v: T) @This() {
+        pub fn value(v: T) Self {
             return .{ .v = v };
         }
     };
