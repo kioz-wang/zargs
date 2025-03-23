@@ -1,22 +1,28 @@
 const std = @import("std");
 const testing = std.testing;
-const h = @import("helper.zig");
-const String = h.String;
 const Allocator = std.mem.Allocator;
 
+const helper = @import("helper.zig");
+const print = helper.Alias.print;
+const String = helper.Alias.String;
+
 pub const TokenIter = @import("token.zig").Iter;
+
 const parser = @import("parser.zig");
-/// Universal parsing function
 pub const parseAny = parser.parseAny;
-const Meta = @import("Meta.zig");
+
+const Meta = @import("meta.zig").Meta;
 pub const Arg = Meta;
 
 /// Command builder
 pub const Command = struct {
+    const StringSet = helper.Collection.StringSet;
+    const isSlice = helper.Type.isSlice;
+    const TryOptional = helper.Type.TryOptional;
     const Self = @This();
 
     fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
-        std.debug.print(h.print("command({s}) {s}\n", .{ self.name, fmt }), args);
+        std.debug.print(print("command({s}) {s}\n", .{ self.name, fmt }), args);
     }
 
     name: [:0]const u8,
@@ -88,7 +94,7 @@ pub const Command = struct {
     }
     pub fn sub(self: Self, cmd: Self) Self {
         if (self.common.subName == null) {
-            @compileError(h.print("please call .requireSub(s) before .sub({s})", .{cmd.name}));
+            @compileError(print("please call .requireSub(s) before .sub({s})", .{cmd.name}));
         }
         var c = self;
         c._checkInCmdName(cmd.name);
@@ -118,7 +124,7 @@ pub const Command = struct {
         self: Self,
         name: [:0]const u8,
         T: type,
-        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*h.TryOptional(T)) void = null },
+        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*TryOptional(T)) void = null },
     ) Self {
         var meta = Meta.optArg(name, T);
         meta.common.help = common.help;
@@ -140,7 +146,7 @@ pub const Command = struct {
         self: Self,
         name: [:0]const u8,
         T: type,
-        common: struct { help: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*h.TryOptional(T)) void = null },
+        common: struct { help: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*TryOptional(T)) void = null },
     ) Self {
         var meta = Meta.posArg(name, T);
         meta.common.help = common.help;
@@ -160,28 +166,28 @@ pub const Command = struct {
     fn _checkInName(self: *const Self, meta: Meta) void {
         if (self.common.subName) |s| {
             if (meta.class == .posArg) {
-                @compileError(h.print("{} conflicts with subName", .{meta}));
+                @compileError(print("{} conflicts with subName", .{meta}));
             }
             if (std.mem.eql(u8, s, meta.name)) {
-                @compileError(h.print("name of {} conflicts with subName({s})", .{ meta, s }));
+                @compileError(print("name of {} conflicts with subName({s})", .{ meta, s }));
             }
         }
         for (self._args) |m| {
             if (std.mem.eql(u8, meta.name, m.name)) {
-                @compileError(h.print("name of {} conflicts with {}", .{ meta, m }));
+                @compileError(print("name of {} conflicts with {}", .{ meta, m }));
             }
         }
     }
     fn _checkInShort(self: *const Self, c: u8) void {
         if (self._builtin_help) |m| {
             if (m.common.short == c) {
-                @compileError(h.print("short_prefix({c}) conflicts with builtin {}", .{ c, m }));
+                @compileError(print("short_prefix({c}) conflicts with builtin {}", .{ c, m }));
             }
         }
         for (self._args) |m| {
             if (m.class == .opt or m.class == .optArg) {
                 if (m.common.short == c) {
-                    @compileError(h.print("short_prefix({c}) conflicts with  {}", .{ c, m }));
+                    @compileError(print("short_prefix({c}) conflicts with  {}", .{ c, m }));
                 }
             }
         }
@@ -190,7 +196,7 @@ pub const Command = struct {
         if (self._builtin_help) |m| {
             if (m.common.long) |l| {
                 if (std.mem.eql(u8, l, s)) {
-                    @compileError(h.print("long_prefix({s}) conflicts with builtin {}", .{ s, m }));
+                    @compileError(print("long_prefix({s}) conflicts with builtin {}", .{ s, m }));
                 }
             }
         }
@@ -198,7 +204,7 @@ pub const Command = struct {
             if (m.class == .opt or m.class == .optArg) {
                 if (m.common.long) |l| {
                     if (std.mem.eql(u8, l, s)) {
-                        @compileError(h.print("long_prefix({s}) conflicts with  {}", .{ s, m }));
+                        @compileError(print("long_prefix({s}) conflicts with  {}", .{ s, m }));
                     }
                 }
             }
@@ -219,7 +225,7 @@ pub const Command = struct {
     fn _checkInCmdName(self: *const Self, name: [:0]const u8) void {
         for (self._cmds) |c| {
             if (std.mem.eql(u8, c.name, name)) {
-                @compileError(h.print("name({s}) conflicts with subcommand({s})", .{ name, c.name }));
+                @compileError(print("name({s}) conflicts with subcommand({s})", .{ name, c.name }));
             }
         }
     }
@@ -227,15 +233,15 @@ pub const Command = struct {
     fn _usage(self: Self) []const u8 {
         var s: []const u8 = self.name;
         if (self._builtin_help) |m| {
-            s = h.print("{s} {s}", .{ s, m._usage() });
+            s = print("{s} {s}", .{ s, m._usage() });
         }
         for (self._args) |m| {
             if (m.class != .opt) continue;
-            s = h.print("{s} {s}", .{ s, m._usage() });
+            s = print("{s} {s}", .{ s, m._usage() });
         }
         for (self._args) |m| {
             if (m.class != .optArg) continue;
-            s = h.print("{s} {s}", .{ s, m._usage() });
+            s = print("{s} {s}", .{ s, m._usage() });
         }
         if (self._stat.posArg != 0 or self._stat.cmd != 0) {
             s = s ++ " [--]";
@@ -243,12 +249,12 @@ pub const Command = struct {
         for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default == null)
-                s = h.print("{s} {s}", .{ s, m._usage() });
+                s = print("{s} {s}", .{ s, m._usage() });
         }
         for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default != null)
-                s = h.print("{s} {s}", .{ s, m._usage() });
+                s = print("{s} {s}", .{ s, m._usage() });
         }
         if (self._stat.cmd != 0) {
             s = s ++ " {";
@@ -262,7 +268,7 @@ pub const Command = struct {
         return s;
     }
     pub fn usage(self: Self) *const [self._usage().len:0]u8 {
-        return h.print("{s}", .{comptime self._usage()});
+        return print("{s}", .{comptime self._usage()});
     }
 
     fn _help(self: Self) []const u8 {
@@ -314,7 +320,7 @@ pub const Command = struct {
         }
         for (self._cmds) |c| {
             if (c.common.about) |s| {
-                msg = msg ++ "\n" ++ h.print("{s:<30} {s}", .{ c.name, s });
+                msg = msg ++ "\n" ++ print("{s:<30} {s}", .{ c.name, s });
             } else {
                 msg = msg ++ "\n" ++ c.name;
             }
@@ -322,7 +328,7 @@ pub const Command = struct {
         return msg;
     }
     pub fn help(self: Self) *const [self._help().len:0]u8 {
-        return h.print("{s}", .{comptime self._help()});
+        return print("{s}", .{comptime self._help()});
     }
 
     const StructField = std.builtin.Type.StructField;
@@ -369,7 +375,7 @@ pub const Command = struct {
         }
         if (self.common.subName) |s| {
             if (self._stat.cmd == 0) {
-                @compileError(h.print("please call .sub(cmd) to add subcommands because subName({s}) is given", .{s}));
+                @compileError(print("please call .sub(cmd) to add subcommands because subName({s}) is given", .{s}));
             }
             r.fields = r.fields ++ [_]StructField{self.subCmdField()};
         }
@@ -433,7 +439,7 @@ pub const Command = struct {
     }
 
     pub fn parseFrom(self: Self, it: *TokenIter, a: ?Allocator) Error!self.Result() {
-        var matched: h.StringSet(self._stat.opt + self._stat.optArg) = .{};
+        var matched: StringSet(self._stat.opt + self._stat.optArg) = .{};
         matched.init();
 
         var r = std.mem.zeroInit(self.Result(), if (self.common.subName) |s| blk: {
@@ -460,7 +466,7 @@ pub const Command = struct {
                         hit = m._consume(&r, it, a) catch |e| return self._errCastMeta(e, false);
                         if (hit) {
                             if (!matched.add(m.name)) {
-                                if ((m.class == .opt and m.T != bool) or (m.class == .optArg and h.isSlice(m.T))) break;
+                                if ((m.class == .opt and m.T != bool) or (m.class == .optArg and isSlice(m.T))) break;
                                 self.log("match {} again with {}", .{ m, t.opt });
                                 return Error.RepeatOpt;
                             }
@@ -481,7 +487,7 @@ pub const Command = struct {
         inline for (self._args) |m| {
             if (m.class != .optArg) continue;
             if (m.common.default == null) {
-                if (!h.isSlice(m.T) and !matched.contain(m.name)) {
+                if (!isSlice(m.T) and !matched.contain(m.name)) {
                     self.log("requires {} but not found", .{m});
                     return Error.MissingOptArg;
                 }
@@ -769,5 +775,4 @@ pub const Command = struct {
 
 test {
     _ = Command;
-    _ = @import("token.zig");
 }
