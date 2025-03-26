@@ -4,11 +4,14 @@ const testing = std.testing;
 pub const Alias = struct {
     pub const String = []const u8;
     pub const print = std.fmt.comptimePrint;
+    pub const sprint = std.fmt.bufPrint;
     pub const FormatOptions = std.fmt.FormatOptions;
 };
 
 const String = Alias.String;
 const print = Alias.print;
+const sprint = Alias.sprint;
+const FormatOptions = Alias.FormatOptions;
 
 pub const Collection = struct {
     pub fn StringSet(capacity: comptime_int) type {
@@ -59,7 +62,7 @@ pub const Collection = struct {
             pub fn is_universal(self: Self) bool {
                 return self.left == null and self.right == null;
             }
-            pub fn format(self: Self, comptime _: []const u8, _: Alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+            pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
                 const s_empty = "∅";
                 const s_universal = "U";
                 const s_infinity = "∞";
@@ -72,11 +75,18 @@ pub const Collection = struct {
                     return;
                 }
                 if (self.left) |left| {
-                    try writer.writeAll(print("[{s}", .{formatAny(left)}));
+                    try writer.writeAll("[");
+                    try niceFormatType(left, fmt, options, writer);
                 } else {
                     try writer.writeAll(print("(-{s}", .{s_infinity}));
                 }
-                try writer.writeAll(print(",{s})", .{if (self.right) |right| formatAny(right) else s_infinity}));
+                try writer.writeAll(",");
+                if (self.right) |right| {
+                    try niceFormatType(right, fmt, options, writer);
+                } else {
+                    try writer.writeAll(s_infinity);
+                }
+                try writer.writeAll(")");
             }
             pub fn contain(self: Self, v: T) bool {
                 if (self.left) |left| {
@@ -96,11 +106,13 @@ pub const Collection = struct {
     }
 
     test "Range format" {
-        try testing.expectEqualStrings("U", print("{}", .{Range(u32).universal}));
-        try testing.expectEqualStrings("∅", print("{}", .{Range(u32).empty}));
-        try testing.expectEqualStrings("(-∞,1)", print("{}", .{comptime Range(i32).init(null, 1)}));
-        try testing.expectEqualStrings("[-1,1)", print("{}", .{comptime Range(i32).init(-1, 1)}));
-        try testing.expectEqualStrings("[-1,∞)", print("{}", .{comptime Range(i32).init(-1, null)}));
+        var buffer: [16]u8 = undefined;
+        try testing.expectEqualStrings("U", try sprint(&buffer, "{}", .{Range(u32).universal}));
+        try testing.expectEqualStrings("∅", try sprint(&buffer, "{}", .{Range(u32).empty}));
+        try testing.expectEqualStrings("(-∞,1)", try sprint(&buffer, "{}", .{comptime Range(i32).init(null, 1)}));
+        try testing.expectEqualStrings("[-1,1)", try sprint(&buffer, "{}", .{comptime Range(i32).init(-1, 1)}));
+        try testing.expectEqualStrings("[-1,∞)", try sprint(&buffer, "{}", .{comptime Range(i32).init(-1, null)}));
+        try testing.expectEqualStrings("[  -f,  +c)", try sprint(&buffer, "{x:>4}", .{comptime Range(i32).init(-0xf, 0xc)}));
     }
 
     test "Range contain" {
@@ -366,14 +378,14 @@ pub const Type = struct {
     }
 };
 
-pub fn formatAny(v: anytype) []const u8 {
-    const T = @TypeOf(v);
-    if (T == String) return print("{s}", .{v});
+fn niceFormatType(value: anytype, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+    const T = @TypeOf(value);
+    if (T == String) {
+        return std.fmt.formatBuf(value, options, writer);
+    }
     return switch (@typeInfo(T)) {
-        .int, .bool, .@"struct" => print("{any}", .{v}),
-        .float => print("{:.3}", .{v}),
-        .@"enum" => print("{s}", .{@tagName(v)}),
-        else => @compileError(print("No formatAny implemented for {s}", .{@typeName(T)})),
+        .@"enum" => std.fmt.formatBuf(@tagName(value), options, writer),
+        else => std.fmt.formatType(value, fmt, options, writer, std.options.fmt_max_depth),
     };
 }
 
@@ -381,27 +393,25 @@ pub fn NiceFormatter(T: type) type {
     return struct {
         const Self = @This();
         v: T,
-        pub fn format(self: Self, comptime _: []const u8, _: Alias.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-            if (Type.Base(T) == T) {
-                try writer.writeAll(formatAny(self.v));
-                return;
+        pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+            if (comptime Type.Base(T) == T) {
+                return niceFormatType(self.v, fmt, options, writer);
             }
-            if (Type.isOptional(T)) {
-                try writer.writeAll(if (self.v) |v_| formatAny(v_) else "null");
-                return;
+            if (comptime Type.isOptional(T)) {
+                return if (self.v) |v_| niceFormatType(v_, fmt, options, writer) else writer.writeAll("null");
             }
-            if (Type.isMultiple(T)) {
+            if (comptime Type.isMultiple(T)) {
                 try writer.writeAll("{");
                 for (self.v, 0..) |v_, i| {
                     if (i != 0) {
                         try writer.writeAll(", ");
                     }
-                    try writer.writeAll(formatAny(v_));
+                    try niceFormatType(v_, fmt, options, writer);
                 }
                 try writer.writeAll("}");
                 return;
             }
-            unreachable;
+            @compileError(print("Unable to format {s}", .{@typeName(T)}));
         }
         pub fn value(v: T) Self {
             return .{ .v = v };
@@ -410,9 +420,13 @@ pub fn NiceFormatter(T: type) type {
 }
 
 test "NiceFormatter Base" {
-    try testing.expectEqualStrings("1", print("{}", .{comptime NiceFormatter(u32).value(1)}));
-    try testing.expectEqualStrings("9.000e-1", print("{}", .{comptime NiceFormatter(f32).value(0.9)}));
-    try testing.expectEqualStrings("true", print("{}", .{comptime NiceFormatter(bool).value(true)}));
+    {
+        var buffer: [16]u8 = undefined;
+        try testing.expectEqualStrings("1", try sprint(&buffer, "{}", .{NiceFormatter(u32).value(1)}));
+        try testing.expectEqualStrings("9.000e-1", try sprint(&buffer, "{:.3}", .{NiceFormatter(f32).value(0.9)}));
+        try testing.expectEqualStrings("true", try sprint(&buffer, "{}", .{NiceFormatter(bool).value(true)}));
+        try testing.expectEqualStrings("1", print("{}", .{comptime NiceFormatter(u32).value(1)}));
+    }
     {
         const Color = enum { Red, Green, Blue };
         try testing.expectEqualStrings(
@@ -430,8 +444,13 @@ test "NiceFormatter Base" {
 }
 
 test "NiceFormatter Optional" {
+    var buffer: [16]u8 = undefined;
+    try testing.expectEqualStrings("1", try sprint(&buffer, "{}", .{NiceFormatter(?u32).value(1)}));
+    try testing.expectEqualStrings("f", try sprint(&buffer, "{x}", .{NiceFormatter(?u32).value(0xf)}));
+    try testing.expectEqualStrings("##f", try sprint(&buffer, "{x:#>3}", .{NiceFormatter(?u32).value(0xf)}));
+    try testing.expectEqualStrings("null", try sprint(&buffer, "{}", .{NiceFormatter(?u32).value(null)}));
+    try testing.expectEqualStrings(" hello", try sprint(&buffer, "{:>6}", .{NiceFormatter(?String).value("hello")}));
     try testing.expectEqualStrings("1", print("{}", .{comptime NiceFormatter(?u32).value(1)}));
-    try testing.expectEqualStrings("null", print("{}", .{comptime NiceFormatter(?u32).value(null)}));
 }
 
 test "NiceFormatter Multiple" {
@@ -444,8 +463,16 @@ test "NiceFormatter Multiple" {
         print("{}", .{comptime NiceFormatter([]const String).value(&[_]String{ "hello", "world" })}),
     );
     try testing.expectEqualStrings(
-        "{hello, world}",
-        print("{}", .{comptime NiceFormatter([2]String).value([_]String{ "hello", "world" })}),
+        "{_hello, _world}",
+        print("{:_>6}", .{comptime NiceFormatter([2]String).value([_]String{ "hello", "world" })}),
+    );
+    try testing.expectEqualStrings(
+        "{15, 192}",
+        print("{}", .{comptime NiceFormatter([]const i32).value(&[_]i32{ 0xf, 0xc0 })}),
+    );
+    try testing.expectEqualStrings(
+        "{0f, c0}",
+        print("{x:02}", .{comptime NiceFormatter([]const u32).value(&[_]u32{ 0xf, 0xc0 })}),
     );
 }
 

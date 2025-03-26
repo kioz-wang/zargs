@@ -280,7 +280,7 @@ pub const Meta = struct {
             msg = print("{s}{s}", .{ msg, s });
         }
         if (self.common.default) |_| {
-            msg = print("{s}{s}(default: {s})", .{
+            msg = print("{s}{s}(default: {})", .{
                 msg,
                 if (self.common.help) |_| "\n" ++ " " ** space else "",
                 NiceFormatter(self.T).value(self._toField().defaultValue().?),
