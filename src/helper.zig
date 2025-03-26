@@ -184,9 +184,8 @@ pub const Compare = struct {
     /// for enum and struct, if find `pub fn compare(self: T, v: T) Order`, use it
     pub fn compare(a: anytype, b: @TypeOf(a)) Order {
         const T = @TypeOf(a);
-        if (T == comptime_int or T == comptime_float) return if (a > b) .Greater else if (a == b) .Equal else .Less;
         return switch (@typeInfo(T)) {
-            .int, .float => if (a > b) .Greater else if (a == b) .Equal else .Less,
+            .int, .comptime_int, .float, .comptime_float => if (a > b) .Greater else if (a == b) .Equal else .Less,
             .@"enum" => if (std.meta.hasMethod(T, "compare")) a.compare(b) else blk: {
                 const _a = @intFromEnum(a);
                 const _b = @intFromEnum(b);
@@ -205,9 +204,8 @@ pub const Compare = struct {
     pub fn equal(a: anytype, b: @TypeOf(a)) bool {
         const T = @TypeOf(a);
         if (T == String) return std.mem.eql(u8, a, b);
-        if (T == comptime_int or T == comptime_float) return a == b;
         return switch (@typeInfo(T)) {
-            .int, .float, .bool => a == b,
+            .int, .comptime_int, .float, .comptime_float, .bool => a == b,
             .@"enum" => if (std.meta.hasMethod(T, "equal")) a.equal(b) else if (std.meta.hasMethod(T, "compare")) a.compare(b) == Order.Equal else a == b,
             .@"struct" => |info| if (std.meta.hasMethod(T, "equal")) a.equal(b) else if (std.meta.hasMethod(T, "compare")) a.compare(b) == Order.Equal else if (info.layout == .@"packed") a == b else @compileError(print("No equal method implemented for {s}", .{@typeName(T)})),
             else => @compileError(print("No equal method implemented for {s}", .{@typeName(T)})),
