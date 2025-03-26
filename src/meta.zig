@@ -337,7 +337,7 @@ pub const Meta = struct {
     }
     pub fn _help(self: Self) []const u8 {
         var msg: []const u8 = self._usage();
-        if (self.common.help == null and self.common.default == null) {
+        if (self.common.help == null and self.common.default == null and self.common.ranges == null and self.common.choices == null) {
             return msg;
         }
         const space: usize = @max(24, helper.alignIntUp(usize, msg.len, 4) + 4);
@@ -346,10 +346,32 @@ pub const Meta = struct {
             msg = print("{s}{s}", .{ msg, s });
         }
         if (self.common.default) |_| {
-            msg = print("{s}{s}(default: {})", .{
+            msg = print("{s}{s}(default={})", .{
                 msg,
                 if (self.common.help) |_| "\n" ++ " " ** space else "",
                 niceFormatter(self._toField().defaultValue().?),
+            });
+        }
+        if (self.common.ranges) |rs| {
+            const p: *const Ranges(Base(self.T)) = @ptrCast(@alignCast(rs));
+            msg = print("{s}{s}(ranges{})", .{
+                msg,
+                if (self.common.help != null or self.common.default != null)
+                    "\n" ++ " " ** space
+                else
+                    "",
+                niceFormatter(p.rs),
+            });
+        }
+        if (self.common.choices) |cs| {
+            const p: *const []const Base(self.T) = @ptrCast(@alignCast(cs));
+            msg = print("{s}{s}(choices{})", .{
+                msg,
+                if (self.common.help != null or self.common.default != null or self.common.ranges != null)
+                    "\n" ++ " " ** space
+                else
+                    "",
+                niceFormatter(p.*),
             });
         }
         return msg;
@@ -548,7 +570,7 @@ pub const Meta = struct {
         {
             try testing.expectEqualStrings(
                 \\[-o]                    Help of out
-                \\                        (default: false)
+                \\                        (default=false)
             ,
                 comptime Self.opt("out", bool)
                     .short('o').help("Help of out")
@@ -567,7 +589,7 @@ pub const Meta = struct {
         {
             try testing.expectEqualStrings(
                 \\[-o|--out {OUT}]        Help of out
-                \\                        (default: a.out)
+                \\                        (default=a.out)
             ,
                 comptime Self.optArg("out", String)
                     .short('o').long("out")
@@ -580,12 +602,34 @@ pub const Meta = struct {
             const Color = enum { Red, Green, Blue };
             try testing.expectEqualStrings(
                 \\[-c|--color {[3]COLORS}]    Help of colors
-                \\                            (default: {Red, Green, Blue})
+                \\                            (default={Red, Green, Blue})
             ,
                 comptime Self.optArg("colors", [3]Color)
                     .short('c').long("color")
                     .default([_]Color{ .Red, .Green, .Blue })
                     .help("Help of colors")
+                    ._checkOut()._help(),
+            );
+        }
+        {
+            try testing.expectEqualStrings(
+                \\[{U32}]                 (default=3)
+                \\                        (ranges{[5,10), [32,∞)})
+                \\                        (choices{15, 29})
+            ,
+                comptime Self.posArg("u32", u32)
+                    .default(3)
+                    .ranges(Ranges(u32).new().u(5, 10).u(32, null))
+                    .choices(&.{ 15, 29 })
+                    ._checkOut()._help(),
+            );
+        }
+        {
+            try testing.expectEqualStrings(
+                \\{CC}                    (choices{gcc, clang})
+            ,
+                comptime Self.posArg("cc", String)
+                    .choices(&.{ "gcc", "clang" })
                     ._checkOut()._help(),
             );
         }

@@ -578,20 +578,20 @@ pub const Command = struct {
                 \\Options:
                 \\[-h|--help]             Show this help then exit
                 \\[-v]...                 Set log level
-                \\                        (default: 0)
+                \\                        (default=0)
                 \\
                 \\Options with arguments:
                 \\[--oint {OINT}]         Optional integer
-                \\                        (default: 1)
+                \\                        (default=1)
                 \\--int {INT}             Required integer
                 \\-f|--file {[]FILES}...      Multiple files
                 \\
                 \\Positional arguments:
                 \\[{OPTIONAL_POS}]        Optional position argument
-                \\                        (default: 6)
+                \\                        (default=6)
                 \\{[2]IO}                 Array position arguments
                 \\[{MESSAGE}]             Optional message
-                \\                        (default: null)
+                \\                        (default=null)
             ,
                 cmd.help(),
             );
@@ -606,7 +606,7 @@ pub const Command = struct {
                 \\
                 \\Options:
                 \\[-h|--help]             Show this help then exit
-                \\[-v]...                 (default: 0)
+                \\[-v]...                 (default=0)
                 \\
                 \\Commands:
                 \\subcmd0
