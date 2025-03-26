@@ -2,6 +2,7 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const Arg = zargs.Arg;
+const Ranges = zargs.Ranges;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
@@ -28,8 +29,8 @@ pub fn main() !void {
                 .long("out"))
             .arg(Arg.optArg("count", u32)
             .short('c')
-            .default(6)
-            .ranges(&.{ .init(5, 7), .init(13, null) })))
+            .default(10)
+            .ranges(Ranges(u32).new().u(5, 7).u(13, null))))
         .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;

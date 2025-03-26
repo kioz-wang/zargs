@@ -45,6 +45,39 @@ const FormatHelper = struct {
     }
 };
 
+pub fn Ranges(T: type) type {
+    const Range = helper.Collection.Range(T);
+    return struct {
+        const Self = @This();
+        rs: []const Range = &.{},
+        pub fn new() Self {
+            return .{};
+        }
+        pub fn u(self: Self, l: ?T, r: ?T) Self {
+            const range = Range.init(l, r);
+            if (range.is_empty() or range.is_universal()) {
+                @compileError(print("mustn't union range {}", .{r}));
+            }
+            var ranges = self;
+            ranges.rs = ranges.rs ++ [_]Range{range};
+            return ranges;
+        }
+        pub fn _checkOut(self: Self) Self {
+            if (self.rs.len == 0) {
+                @compileError(print("requires to union at least one range", .{}));
+            }
+            // TODO: Merge ranges
+            return self;
+        }
+        pub fn contain(self: Self, v: T) bool {
+            for (self.rs) |r| {
+                if (r.contain(v)) return true;
+            }
+            return false;
+        }
+    };
+}
+
 pub const Meta = struct {
     const token = @import("token.zig");
     const parser = @import("parser.zig");
@@ -57,7 +90,6 @@ pub const Meta = struct {
     const TryOptional = helper.Type.TryOptional;
     const TryMultiple = helper.Type.TryMultiple;
     const niceFormatter = helper.niceFormatter;
-    const Range = helper.Collection.Range;
     const Self = @This();
 
     name: [:0]const u8,
@@ -163,20 +195,12 @@ pub const Meta = struct {
         meta.common.argName = s;
         return meta;
     }
-    pub fn ranges(self: Self, rs: []const Range(Base(self.T))) Self {
+    pub fn ranges(self: Self, rs: Ranges(Base(self.T))) Self {
         if (self.class == .opt) {
             @compileError(print("{} not support .ranges", self));
         }
-        if (rs.len == 0) {
-            @compileError(print("{} not support empty ranges", .{self}));
-        }
-        for (rs) |r| {
-            if (r.is_empty() or r.is_universal()) {
-                @compileError(print("{} not support range {}", .{ self, r }));
-            }
-        }
         var meta = self;
-        meta.common.ranges = @ptrCast(&rs);
+        meta.common.ranges = @ptrCast(&rs._checkOut());
         return meta;
     }
 
@@ -226,18 +250,6 @@ pub const Meta = struct {
             .type = self.T,
         };
     }
-    fn _checkRanges(self: Self, value: Base(self.T)) bool {
-        const R = Range(Base(self.T));
-        if (self.common.ranges) |rs| {
-            const p: *const []const R = @ptrCast(@alignCast(rs));
-            for (p.*) |r| {
-                if (r.contain(value)) return true;
-            }
-            self.log("parsed as {} but out of ranges {}", .{ niceFormatter(value), niceFormatter(p.*) });
-            return false;
-        }
-        return true;
-    }
     fn _checkChoices(self: Self, value: Base(self.T)) bool {
         // TODO
         _ = value;
@@ -248,12 +260,15 @@ pub const Meta = struct {
             const p: *const parser.Fn(self.T) = @ptrCast(@alignCast(f));
             break :blk p(s, a);
         } else parser.parseAny(Base(self.T), s, a)) |value| {
-            if (self._checkRanges(value)) {
-                return value;
-            } else {
-                if (a) |_| parser.destroyAny(value, a.?);
-                return null;
+            if (self.common.ranges) |rs| {
+                const p: *const Ranges(Base(self.T)) = @ptrCast(@alignCast(rs));
+                if (!p.contain(value)) {
+                    self.log("parsed as {} but out of ranges {}", .{ niceFormatter(value), niceFormatter(p.rs) });
+                    if (a) |_| parser.destroyAny(value, a.?);
+                    return null;
+                }
             }
+            return value;
         } else {
             self.log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
             return null;
@@ -675,7 +690,11 @@ pub const Meta = struct {
                 }
             };
             var res = std.mem.zeroes(struct { mem: Mem });
-            const meta_mem = Self.posArg("mem", Mem).ranges(&.{.init(null, Mem{ .len = 16 })})._checkOut();
+            const meta_mem = Self.posArg("mem", Mem)
+                .ranges(
+                    Ranges(Mem).new()
+                        .u(null, Mem{ .len = 16 }),
+                )._checkOut();
             var it = try token.Iter.initList(&[_]String{"32"}, .{});
             try testing.expectError(
                 Error.Invalid,

@@ -13,6 +13,7 @@ pub const parseAny = parser.parseAny;
 
 const Meta = @import("meta.zig").Meta;
 pub const Arg = Meta;
+pub const Ranges = @import("meta.zig").Ranges;
 
 /// Command builder
 pub const Command = struct {
