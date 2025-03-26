@@ -259,22 +259,6 @@ pub const Meta = struct {
             return null;
         }
     }
-    pub fn _destroy(self: Self, r: anytype, a: Allocator) void {
-        if (comptime isMultiple(self.T)) {
-            for (@field(r, self.name)) |v| {
-                parser.destroyAny(v, a);
-            }
-            if (comptime isSlice(self.T)) {
-                a.free(@field(r, self.name));
-            }
-        } else if (comptime isOptional(self.T)) {
-            if (@field(r, self.name)) |v| {
-                parser.destroyAny(v, a);
-            }
-        } else {
-            parser.destroyAny(@field(r, self.name), a);
-        }
-    }
     pub fn _match(self: Self, t: token.Type) bool {
         std.debug.assert(t == .opt);
         std.debug.assert(self.class != .posArg);
@@ -430,6 +414,22 @@ pub const Meta = struct {
             p(&@field(r, self.name));
         }
         return consumed;
+    }
+    pub fn _destroy(self: Self, r: anytype, a: Allocator) void {
+        if (comptime isMultiple(self.T)) {
+            for (@field(r, self.name)) |v| {
+                parser.destroyAny(v, a);
+            }
+            if (comptime isSlice(self.T)) {
+                a.free(@field(r, self.name));
+            }
+        } else if (comptime isOptional(self.T)) {
+            if (@field(r, self.name)) |v| {
+                parser.destroyAny(v, a);
+            }
+        } else {
+            parser.destroyAny(@field(r, self.name), a);
+        }
     }
 
     test "Compile Errors" {
