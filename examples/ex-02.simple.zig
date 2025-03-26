@@ -2,6 +2,7 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const Arg = zargs.Arg;
+const Ranges = zargs.Ranges;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
@@ -15,19 +16,12 @@ pub fn main() !void {
         .about("This is a demo intended to be showcased in the README.")
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
-        .arg(Arg.opt("verbose", u32)
-            .short('v')
-            .help("help of verbose"))
-        .arg(Arg.optArg("logfile", ?[]const u8)
-            .long("log")
-            .help("Store log into a file"))
+        .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
+        .arg(Arg.optArg("logfile", ?[]const u8).long("log").help("Store log into a file"))
         .sub(Command.new("install")
-            .arg(Arg.posArg("name", []const u8))
-            .arg(
-            Arg.optArg("output", []const u8)
-                .short('o')
-                .long("out"),
-        ))
+            .arg(Arg.posArg("name", []const u8).choices(&.{ "gcc", "clang" }))
+            .arg(Arg.optArg("output", []const u8).short('o').long("out"))
+            .arg(Arg.optArg("count", u32).short('c').default(10).ranges(Ranges(u32).new().u(5, 7).u(13, null))))
         .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;

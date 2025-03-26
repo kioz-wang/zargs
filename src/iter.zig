@@ -6,7 +6,7 @@ const String = @import("helper.zig").String;
 ///
 /// The type `R` is the return type of the `go` method, which could be `?T` or `E!?T`. The `specifier` is the format string for the type `R`.
 pub fn Wrapper(I: type, R: type, specifier: ?[]const u8) type {
-    if (!@hasDecl(I, "go")) {
+    if (!std.meta.hasMethod(I, "go")) {
         @compileError(std.fmt.comptimePrint("Require {s}.go", .{@typeName(I)}));
     }
     const is_ErrorUnion = @typeInfo(R) == .error_union;
@@ -56,7 +56,7 @@ pub fn Wrapper(I: type, R: type, specifier: ?[]const u8) type {
         }
         /// If the iterator has a `deinit` method, it will be called.
         pub fn deinit(self: *Self) void {
-            if (@hasDecl(I, "deinit")) {
+            if (std.meta.hasMethod(I, "deinit")) {
                 self.it.deinit();
             }
         }

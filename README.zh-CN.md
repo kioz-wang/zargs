@@ -9,6 +9,7 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const Arg = zargs.Arg;
+const Ranges = zargs.Ranges;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
@@ -22,19 +23,12 @@ pub fn main() !void {
         .about("This is a demo intended to be showcased in the README.")
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
-        .arg(Arg.opt("verbose", u32)
-            .short('v')
-            .help("help of verbose"))
-        .arg(Arg.optArg("logfile", ?[]const u8)
-            .long("log")
-            .help("Store log into a file"))
+        .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
+        .arg(Arg.optArg("logfile", ?[]const u8).long("log").help("Store log into a file"))
         .sub(Command.new("install")
-            .arg(Arg.posArg("name", []const u8))
-            .arg(
-            Arg.optArg("output", []const u8)
-                .short('o')
-                .long("out"),
-        ))
+            .arg(Arg.posArg("name", []const u8).choices(&.{ "gcc", "clang" }))
+            .arg(Arg.optArg("output", []const u8).short('o').long("out"))
+            .arg(Arg.optArg("count", u32).short('c').default(10).ranges(Ranges(u32).new().u(5, 7).u(13, null))))
         .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
@@ -168,6 +162,20 @@ const zargs = @import("zargs");
 - 具有可选类型 `?T` 的选项或参数不可显式配置：强制默认为 `null`
 
 > 单选项、具有可选类型的带单参数选项或具有可选类型的单位置参数，总是可选的。
+
+#### 取值范围
+
+可以为参数配置取值范围（`.ranges`, `.choices`），这将在解析后执行有效性检查。
+
+> 不会对默认值执行有效性检查（这是一个特性？😄）
+
+##### 范围
+
+当 T 实现了 `compare` 时，可以为该参数配置范围。
+
+##### 可选项
+
+当 T 实现了 `equal` 时，可以为该参数配置可选项。
 
 #### 回调
 

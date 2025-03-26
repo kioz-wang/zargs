@@ -9,6 +9,7 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const Arg = zargs.Arg;
+const Ranges = zargs.Ranges;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
@@ -22,19 +23,12 @@ pub fn main() !void {
         .about("This is a demo intended to be showcased in the README.")
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
-        .arg(Arg.opt("verbose", u32)
-            .short('v')
-            .help("help of verbose"))
-        .arg(Arg.optArg("logfile", ?[]const u8)
-            .long("log")
-            .help("Store log into a file"))
+        .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
+        .arg(Arg.optArg("logfile", ?[]const u8).long("log").help("Store log into a file"))
         .sub(Command.new("install")
-            .arg(Arg.posArg("name", []const u8))
-            .arg(
-            Arg.optArg("output", []const u8)
-                .short('o')
-                .long("out"),
-        ))
+            .arg(Arg.posArg("name", []const u8).choices(&.{ "gcc", "clang" }))
+            .arg(Arg.optArg("output", []const u8).short('o').long("out"))
+            .arg(Arg.optArg("count", u32).short('c').default(10).ranges(Ranges(u32).new().u(5, 7).u(13, null))))
         .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
@@ -168,6 +162,20 @@ Options and arguments can be configured with default values (`.default`). Once c
 - Options or arguments with an optional type `?T` cannot be explicitly configured: they are forced to default to `null`.
 
 > Single options, options with a single argument of optional type, or single positional arguments of optional type are always optional.
+
+#### Value Range Constraints
+
+You can configure value range constraints (`.ranges`, `.choices`) for arguments, which will perform validation checks after parsing.
+
+> Validation checks are not performed on default values (Is this a feature? 😄)
+
+##### Range Constraints
+
+When type `T` implements `compare`, you can configure range constraints for the argument.
+
+##### Predefined Choices
+
+When type `T` implements `equal`, you can configure predefined choices for the argument.
 
 #### Callbacks
 
