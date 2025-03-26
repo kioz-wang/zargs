@@ -56,7 +56,8 @@ pub const Meta = struct {
     const isMultiple = helper.Type.isMultiple;
     const TryOptional = helper.Type.TryOptional;
     const TryMultiple = helper.Type.TryMultiple;
-    const NiceFormatter = helper.NiceFormatter;
+    const niceFormatter = helper.niceFormatter;
+    const Range = helper.Collection.Range;
     const Self = @This();
 
     name: [:0]const u8,
@@ -72,6 +73,7 @@ pub const Meta = struct {
         short: ?u8 = null, // opt, optArg
         long: ?[]const u8 = null, // opt, optArg
         argName: ?[]const u8 = null, // optArg, posArg
+        ranges: ?*const anyopaque = null,
     };
     const Class = enum { opt, optArg, posArg };
 
@@ -161,6 +163,22 @@ pub const Meta = struct {
         meta.common.argName = s;
         return meta;
     }
+    pub fn ranges(self: Self, rs: []const Range(Base(self.T))) Self {
+        if (self.class == .opt) {
+            @compileError(print("{} not support .ranges", self));
+        }
+        if (rs.len == 0) {
+            @compileError(print("{} not support empty ranges", .{self}));
+        }
+        for (rs) |r| {
+            if (r.is_empty() or r.is_universal()) {
+                @compileError(print("{} not support range {}", .{ self, r }));
+            }
+        }
+        var meta = self;
+        meta.common.ranges = @ptrCast(&rs);
+        return meta;
+    }
 
     pub fn _checkOut(self: Self) Self {
         var meta = self;
@@ -208,27 +226,53 @@ pub const Meta = struct {
             .type = self.T,
         };
     }
-    fn _parseAny(self: Self, s: String, a: ?Allocator) ?Base(self.T) {
-        if (self.common.parseFn) |f| {
-            const p: *const parser.Fn(self.T) = @ptrCast(@alignCast(f));
-            return p(s, a);
+    fn _checkRanges(self: Self, value: Base(self.T)) bool {
+        const R = Range(Base(self.T));
+        if (self.common.ranges) |rs| {
+            const p: *const []const R = @ptrCast(@alignCast(rs));
+            for (p.*) |r| {
+                if (r.contain(value)) return true;
+            }
+            self.log("parsed as {} but out of ranges {}", .{ niceFormatter(value), niceFormatter(p.*) });
+            return false;
         }
-        return parser.parseAny(Base(self.T), s, a);
+        return true;
+    }
+    fn _checkChoices(self: Self, value: Base(self.T)) bool {
+        // TODO
+        _ = value;
+        return true;
+    }
+    fn _parseAny(self: Self, s: String, a: ?Allocator) ?Base(self.T) {
+        if (if (self.common.parseFn) |f| blk: {
+            const p: *const parser.Fn(self.T) = @ptrCast(@alignCast(f));
+            break :blk p(s, a);
+        } else parser.parseAny(Base(self.T), s, a)) |value| {
+            if (self._checkRanges(value)) {
+                return value;
+            } else {
+                if (a) |_| parser.destroyAny(value, a.?);
+                return null;
+            }
+        } else {
+            self.log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
+            return null;
+        }
     }
     pub fn _destroy(self: Self, r: anytype, a: Allocator) void {
         if (comptime isMultiple(self.T)) {
             for (@field(r, self.name)) |v| {
-                parser.destroyAny(TryMultiple(self.T), v, a);
+                parser.destroyAny(v, a);
             }
             if (comptime isSlice(self.T)) {
                 a.free(@field(r, self.name));
             }
         } else if (comptime isOptional(self.T)) {
             if (@field(r, self.name)) |v| {
-                parser.destroyAny(TryOptional(self.T), v, a);
+                parser.destroyAny(v, a);
             }
         } else {
-            parser.destroyAny(self.T, @field(r, self.name), a);
+            parser.destroyAny(@field(r, self.name), a);
         }
     }
     pub fn _match(self: Self, t: token.Type) bool {
@@ -283,7 +327,7 @@ pub const Meta = struct {
             msg = print("{s}{s}(default: {})", .{
                 msg,
                 if (self.common.help) |_| "\n" ++ " " ** space else "",
-                NiceFormatter(self.T).value(self._toField().defaultValue().?),
+                niceFormatter(self._toField().defaultValue().?),
             });
         }
         return msg;
@@ -321,10 +365,7 @@ pub const Meta = struct {
                         return Error.Missing;
                     }
                     s = t.arg;
-                    item.* = self._parseAny(s, a) orelse {
-                        self.log("unable to parse {s} to {s}[{d}]", .{ s, self.common.argName.?, i });
-                        return Error.Invalid;
-                    };
+                    item.* = self._parseAny(s, a) orelse return Error.Invalid;
                 }
             } else {
                 const t = it.nextMust() catch |err| {
@@ -338,10 +379,7 @@ pub const Meta = struct {
                         return Error.Missing;
                     },
                 };
-                const value = self._parseAny(s, a) orelse {
-                    self.log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
-                    return Error.Invalid;
-                };
+                const value = self._parseAny(s, a) orelse return Error.Invalid;
                 @field(r, self.name) = if (comptime isSlice(self.T)) blk: {
                     if (a == null) {
                         self.log("requires allocator", .{});
@@ -367,10 +405,7 @@ pub const Meta = struct {
                     return Error.Missing;
                 };
                 s = t.as_posArg().posArg;
-                item.* = self._parseAny(s, a) orelse {
-                    self.log("unable to parse {s} to {s}[{d}]", .{ s, self.common.argName.?, i });
-                    return Error.Invalid;
-                };
+                item.* = self._parseAny(s, a) orelse return Error.Invalid;
             }
         } else {
             const t = it.nextMust() catch |err| {
@@ -378,10 +413,7 @@ pub const Meta = struct {
                 return Error.Missing;
             };
             s = t.as_posArg().posArg;
-            const value = self._parseAny(s, a) orelse {
-                self.log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
-                return Error.Invalid;
-            };
+            const value = self._parseAny(s, a) orelse return Error.Invalid;
             @field(r, self.name) = value;
         }
         return true;
@@ -624,6 +656,31 @@ pub const Meta = struct {
             try testing.expect(try meta_out._consumePosArg(&res, &it, null));
             try testing.expect(try meta_twins._consumePosArg(&res, &it, null));
             try testing.expectEqualDeep(R{ .out = false, .twins = [2]u32{ 1, 2 } }, res);
+        }
+        {
+            const Mem = struct {
+                buf: []u8 = undefined,
+                len: usize,
+                pub fn parse(s: String, a: ?Allocator) ?@This() {
+                    const allocator = a orelse return null;
+                    const len = parser.parseAny(usize, s, null) orelse return null;
+                    const buf = allocator.alloc(u8, len) catch return null;
+                    return .{ .buf = buf, .len = len };
+                }
+                pub fn destroy(self: @This(), a: Allocator) void {
+                    a.free(self.buf);
+                }
+                pub fn compare(self: @This(), v: @This()) helper.Compare.Order {
+                    return helper.Compare.compare(self.len, v.len);
+                }
+            };
+            var res = std.mem.zeroes(struct { mem: Mem });
+            const meta_mem = Self.posArg("mem", Mem).ranges(&.{.init(null, Mem{ .len = 16 })})._checkOut();
+            var it = try token.Iter.initList(&[_]String{"32"}, .{});
+            try testing.expectError(
+                Error.Invalid,
+                meta_mem._consumePosArg(&res, &it, testing.allocator),
+            );
         }
     }
 };

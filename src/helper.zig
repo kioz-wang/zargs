@@ -54,8 +54,8 @@ pub const Collection = struct {
             pub fn init(l: ?T, r: ?T) Self {
                 return .{ .left = l, .right = r };
             }
-            const empty = Self.init(std.mem.zeroes(T), std.mem.zeroes(T));
-            const universal = Self.init(null, null);
+            pub const empty = Self.init(std.mem.zeroes(T), std.mem.zeroes(T));
+            pub const universal = Self.init(null, null);
             pub fn is_empty(self: Self) bool {
                 return self.left != null and self.right != null and _compare(self.left.?, self.right.?) == .Equal;
             }
@@ -417,6 +417,10 @@ pub fn NiceFormatter(T: type) type {
             return .{ .v = v };
         }
     };
+}
+
+pub fn niceFormatter(value: anytype) NiceFormatter(@TypeOf(value)) {
+    return NiceFormatter(@TypeOf(value)).value(value);
 }
 
 test "NiceFormatter Base" {

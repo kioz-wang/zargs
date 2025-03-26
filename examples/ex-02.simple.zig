@@ -23,11 +23,13 @@ pub fn main() !void {
             .help("Store log into a file"))
         .sub(Command.new("install")
             .arg(Arg.posArg("name", []const u8))
-            .arg(
-            Arg.optArg("output", []const u8)
+            .arg(Arg.optArg("output", []const u8)
                 .short('o')
-                .long("out"),
-        ))
+                .long("out"))
+            .arg(Arg.optArg("count", u32)
+            .short('c')
+            .default(6)
+            .ranges(&.{ .init(5, 7), .init(13, null) })))
         .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;

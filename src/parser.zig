@@ -31,7 +31,8 @@ pub fn parseAny(T: type, s: String, a: ?Allocator) ?T {
 /// destroy any base T value
 ///
 /// for struct, if find `pub fn destroy(self: T, a: Allocator) void`, use it
-pub fn destroyAny(T: type, v: T, a: Allocator) void {
+pub fn destroyAny(v: anytype, a: Allocator) void {
+    const T = @TypeOf(v);
     if (T == String) {
         a.free(v);
         return;
