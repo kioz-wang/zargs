@@ -90,6 +90,7 @@ pub const Meta = struct {
     const TryOptional = helper.Type.TryOptional;
     const TryMultiple = helper.Type.TryMultiple;
     const niceFormatter = helper.niceFormatter;
+    const equal = helper.Compare.equal;
     const Self = @This();
 
     name: [:0]const u8,
@@ -105,7 +106,8 @@ pub const Meta = struct {
         short: ?u8 = null, // opt, optArg
         long: ?[]const u8 = null, // opt, optArg
         argName: ?[]const u8 = null, // optArg, posArg
-        ranges: ?*const anyopaque = null,
+        ranges: ?*const anyopaque = null, // optArg, posArg
+        choices: ?*const anyopaque = null, // optArg, posArg
     };
     const Class = enum { opt, optArg, posArg };
 
@@ -203,6 +205,17 @@ pub const Meta = struct {
         meta.common.ranges = @ptrCast(&rs._checkOut());
         return meta;
     }
+    pub fn choices(self: Self, cs: []const Base(self.T)) Self {
+        if (self.class == .opt) {
+            @compileError(print("{} not support .choices", self));
+        }
+        if (cs.len == 0) {
+            @compileError(print("requires at least one choice", .{}));
+        }
+        var meta = self;
+        meta.common.choices = @ptrCast(&cs);
+        return meta;
+    }
 
     pub fn _checkOut(self: Self) Self {
         var meta = self;
@@ -251,8 +264,14 @@ pub const Meta = struct {
         };
     }
     fn _checkChoices(self: Self, value: Base(self.T)) bool {
-        // TODO
-        _ = value;
+        if (self.common.choices) |cs| {
+            const p: *const []const Base(self.T) = @ptrCast(@alignCast(cs));
+            for (p.*) |c| {
+                if (equal(c, value)) return true;
+            }
+            self.log("parsed as {} but out of choices {}", .{ niceFormatter(value), niceFormatter(p.*) });
+            return false;
+        }
         return true;
     }
     fn _parseAny(self: Self, s: String, a: ?Allocator) ?Base(self.T) {
@@ -267,6 +286,10 @@ pub const Meta = struct {
                     if (a) |_| parser.destroyAny(value, a.?);
                     return null;
                 }
+            }
+            if (!self._checkChoices(value)) {
+                if (a) |_| parser.destroyAny(value, a.?);
+                return null;
             }
             return value;
         } else {
@@ -672,34 +695,60 @@ pub const Meta = struct {
             try testing.expect(try meta_twins._consumePosArg(&res, &it, null));
             try testing.expectEqualDeep(R{ .out = false, .twins = [2]u32{ 1, 2 } }, res);
         }
+    }
+
+    test "Consume posArg with ranges" {
+        const Mem = struct {
+            buf: []u8 = undefined,
+            len: usize,
+            pub fn parse(s: String, a: ?Allocator) ?@This() {
+                const allocator = a orelse return null;
+                const len = parser.parseAny(usize, s, null) orelse return null;
+                const buf = allocator.alloc(u8, len) catch return null;
+                return .{ .buf = buf, .len = len };
+            }
+            pub fn destroy(self: @This(), a: Allocator) void {
+                a.free(self.buf);
+            }
+            pub fn compare(self: @This(), v: @This()) helper.Compare.Order {
+                return helper.Compare.compare(self.len, v.len);
+            }
+        };
+        var r = std.mem.zeroes(struct { mem: Mem });
+        const meta_mem = Self.posArg("mem", Mem)
+            .ranges(
+                Ranges(Mem).new()
+                    .u(null, Mem{ .len = 16 }),
+            )._checkOut();
         {
-            const Mem = struct {
-                buf: []u8 = undefined,
-                len: usize,
-                pub fn parse(s: String, a: ?Allocator) ?@This() {
-                    const allocator = a orelse return null;
-                    const len = parser.parseAny(usize, s, null) orelse return null;
-                    const buf = allocator.alloc(u8, len) catch return null;
-                    return .{ .buf = buf, .len = len };
-                }
-                pub fn destroy(self: @This(), a: Allocator) void {
-                    a.free(self.buf);
-                }
-                pub fn compare(self: @This(), v: @This()) helper.Compare.Order {
-                    return helper.Compare.compare(self.len, v.len);
-                }
-            };
-            var res = std.mem.zeroes(struct { mem: Mem });
-            const meta_mem = Self.posArg("mem", Mem)
-                .ranges(
-                    Ranges(Mem).new()
-                        .u(null, Mem{ .len = 16 }),
-                )._checkOut();
+            var it = try token.Iter.initList(&[_]String{"8"}, .{});
+            try testing.expect(try meta_mem._consumePosArg(&r, &it, testing.allocator));
+            try testing.expectEqual(8, r.mem.len);
+            try testing.expectEqual(8, r.mem.buf.len);
+            meta_mem._destroy(r, testing.allocator);
+        }
+        {
             var it = try token.Iter.initList(&[_]String{"32"}, .{});
             try testing.expectError(
                 Error.Invalid,
-                meta_mem._consumePosArg(&res, &it, testing.allocator),
+                meta_mem._consumePosArg(&r, &it, testing.allocator),
             );
+        }
+    }
+
+    test "Consume posArg with choices" {
+        const R = struct { out: String };
+        var r = std.mem.zeroes(R);
+        const meta_out = Self.posArg("out", String).choices(&.{ "install", "remove" })._checkOut();
+        {
+            var it = try token.Iter.initList(&[_]String{"remove"}, .{});
+            try testing.expect(try meta_out._consumePosArg(&r, &it, testing.allocator));
+            try testing.expectEqualStrings("remove", r.out);
+            meta_out._destroy(r, testing.allocator);
+        }
+        {
+            var it = try token.Iter.initList(&[_]String{"update"}, .{});
+            try testing.expectError(Error.Invalid, meta_out._consumePosArg(&r, &it, testing.allocator));
         }
     }
 };
