@@ -108,6 +108,7 @@ pub const Meta = struct {
         argName: ?[]const u8 = null, // optArg, posArg
         ranges: ?*const anyopaque = null, // optArg, posArg
         choices: ?*const anyopaque = null, // optArg, posArg
+        raw_choices: ?[]const String = null, // optArg, posArg
     };
     const Class = enum { opt, optArg, posArg };
 
@@ -191,7 +192,7 @@ pub const Meta = struct {
     }
     pub fn argName(self: Self, s: []const u8) Self {
         if (self.class == .opt) {
-            @compileError(print("{} not support .argName", self));
+            @compileError(print("{} not support .argName", .{self}));
         }
         var meta = self;
         meta.common.argName = s;
@@ -199,7 +200,10 @@ pub const Meta = struct {
     }
     pub fn ranges(self: Self, rs: Ranges(Base(self.T))) Self {
         if (self.class == .opt) {
-            @compileError(print("{} not support .ranges", self));
+            @compileError(print("{} not support .ranges", .{self}));
+        }
+        if (self.common.raw_choices) |_| {
+            @compileError(print("{} .ranges conflicts with .raw_choices", .{self}));
         }
         var meta = self;
         meta.common.ranges = @ptrCast(&rs._checkOut());
@@ -207,13 +211,30 @@ pub const Meta = struct {
     }
     pub fn choices(self: Self, cs: []const Base(self.T)) Self {
         if (self.class == .opt) {
-            @compileError(print("{} not support .choices", self));
+            @compileError(print("{} not support .choices", .{self}));
+        }
+        if (self.common.raw_choices) |_| {
+            @compileError(print("{} .choices conflicts with .raw_choices", .{self}));
         }
         if (cs.len == 0) {
             @compileError(print("requires at least one choice", .{}));
         }
         var meta = self;
         meta.common.choices = @ptrCast(&cs);
+        return meta;
+    }
+    pub fn raw_choices(self: Self, cs: []const String) Self {
+        if (self.class == .opt) {
+            @compileError(print("{} not support .raw_choices", .{self}));
+        }
+        if (self.common.ranges != null or self.common.choices != null) {
+            @compileError(print("{} .raw_choices conflicts with .ranges or .choices", .{self}));
+        }
+        if (cs.len == 0) {
+            @compileError(print("requires at least one raw_choice", .{}));
+        }
+        var meta = self;
+        meta.common.raw_choices = cs;
         return meta;
     }
 
@@ -291,14 +312,23 @@ pub const Meta = struct {
                 const rs_found = rs.contain(value);
                 if (!rs_found) {
                     self.log("parsed as {} but out of ranges{}", .{ niceFormatter(value), niceFormatter(rs.rs) });
-        }
+                }
                 return rs_found;
             } else {
-        return true;
+                return true;
             }
         }
     }
     fn _parseAny(self: Self, s: String, a: ?Allocator) ?Base(self.T) {
+        if (self.common.raw_choices) |rcs| {
+            const rcs_found = for (rcs) |rc| {
+                if (equal(rc, s)) break true;
+            } else false;
+            if (!rcs_found) {
+                self.log("to parse {s} but out of raw_choices{}", .{ s, niceFormatter(rcs) });
+                return null;
+            }
+        }
         if (if (self.common.parseFn) |f| blk: {
             const p: *const parser.Fn(self.T) = @ptrCast(@alignCast(f));
             break :blk p(s, a);
@@ -353,7 +383,7 @@ pub const Meta = struct {
     }
     pub fn _help(self: Self) []const u8 {
         var msg: []const u8 = self._usage();
-        if (self.common.help == null and self.common.default == null and self.common.ranges == null and self.common.choices == null) {
+        if (self.common.help == null and self.common.default == null and self.common.ranges == null and self.common.choices == null and self.common.raw_choices == null) {
             return msg;
         }
         const space: usize = @max(24, helper.alignIntUp(usize, msg.len, 4) + 4);
@@ -388,6 +418,16 @@ pub const Meta = struct {
                 else
                     "",
                 niceFormatter(p.*),
+            });
+        }
+        if (self.common.raw_choices) |cs| {
+            msg = print("{s}{s}(raw_choices{})", .{
+                msg,
+                if (self.common.help != null or self.common.default != null)
+                    "\n" ++ " " ** space
+                else
+                    "",
+                niceFormatter(cs),
             });
         }
         return msg;
@@ -649,6 +689,15 @@ pub const Meta = struct {
                     ._checkOut()._help(),
             );
         }
+        {
+            try testing.expectEqualStrings(
+                \\{CC}                    (raw_choices{gcc, clang})
+            ,
+                comptime Self.posArg("cc", String)
+                    .raw_choices(&.{ "gcc", "clang" })
+                    ._checkOut()._help(),
+            );
+        }
     }
 
     test "Consume opt" {
@@ -791,7 +840,7 @@ pub const Meta = struct {
         }
     }
 
-    test "Consume posArg with ranges" {
+    test "Consume posArg with ranges or raw_choices" {
         const Mem = struct {
             buf: []u8 = undefined,
             len: usize,
@@ -808,20 +857,29 @@ pub const Meta = struct {
                 return helper.Compare.compare(self.len, v.len);
             }
         };
-        var r = std.mem.zeroes(struct { mem: Mem });
-        const meta_mem = Self.posArg("mem", Mem)
-            .ranges(
-                Ranges(Mem).new()
-                    .u(null, Mem{ .len = 16 }),
-            )._checkOut();
+        const R = struct { mem: Mem };
+        const meta = Self.posArg("mem", Mem);
         {
-            var it = try token.Iter.initList(&[_]String{"8"}, .{});
-            try testing.expect(try meta_mem._consumePosArg(&r, &it, testing.allocator));
-            try testing.expectEqual(8, r.mem.len);
-            try testing.expectEqual(8, r.mem.buf.len);
-            meta_mem._destroy(r, testing.allocator);
+            const meta_mem = meta.ranges(Ranges(Mem).new().u(null, Mem{ .len = 16 }))._checkOut();
+            var r = std.mem.zeroes(R);
+            {
+                var it = try token.Iter.initList(&[_]String{"8"}, .{});
+                try testing.expect(try meta_mem._consumePosArg(&r, &it, testing.allocator));
+                try testing.expectEqual(8, r.mem.len);
+                try testing.expectEqual(8, r.mem.buf.len);
+                meta_mem._destroy(r, testing.allocator);
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{"32"}, .{});
+                try testing.expectError(
+                    Error.Invalid,
+                    meta_mem._consumePosArg(&r, &it, testing.allocator),
+                );
+            }
         }
         {
+            const meta_mem = meta.raw_choices(&.{ "1", "2", "3", "16" })._checkOut();
+            var r = std.mem.zeroes(R);
             var it = try token.Iter.initList(&[_]String{"32"}, .{});
             try testing.expectError(
                 Error.Invalid,

@@ -4,6 +4,8 @@
 
 另一个 Zig 编译时参数解析器！开始构建你的命令行吧！
 
+![run](examples/run.ex-02.gif)
+
 ```zig
 const std = @import("std");
 const zargs = @import("zargs");
@@ -26,9 +28,9 @@ pub fn main() !void {
         .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
         .arg(Arg.optArg("logfile", ?[]const u8).long("log").help("Store log into a file"))
         .sub(Command.new("install")
-            .arg(Arg.posArg("name", []const u8).choices(&.{ "gcc", "clang" }))
+            .arg(Arg.posArg("name", []const u8).raw_choices(&.{ "gcc", "clang" }))
             .arg(Arg.optArg("output", []const u8).short('o').long("out"))
-            .arg(Arg.optArg("count", u32).short('c').default(10).ranges(Ranges(u32).new().u(5, 7).u(13, null))))
+            .arg(Arg.optArg("count", u32).short('c').default(10).ranges(Ranges(u32).new().u(5, 7).u(13, null)).choices(&.{ 10, 11 })))
         .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
@@ -165,17 +167,19 @@ const zargs = @import("zargs");
 
 #### 取值范围
 
-可以为参数配置取值范围（`.ranges`, `.choices`），这将在解析后执行有效性检查。
+可以为参数配置值取值范围（`.ranges`, `.choices`），这将在解析后执行有效性检查。
 
 > 不会对默认值执行有效性检查（这是一个特性？😄）
 
+如果为参数构造值取值范围太麻烦，那么可以为参数配置`raw_choices`，这会在解析前进行过滤。
+
 ##### 范围
 
-当 T 实现了 `compare` 时，可以为该参数配置范围。
+当 T 实现了 `compare` 时，可以为该参数配置值范围。
 
 ##### 可选项
 
-当 T 实现了 `equal` 时，可以为该参数配置可选项。
+当 T 实现了 `equal` 时，可以为该参数配置值可选项。
 
 #### 回调
 
