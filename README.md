@@ -4,6 +4,8 @@
 
 Another Comptime-argparse for Zig! Let's start to build your command line!
 
+![run](examples/run.ex-02.gif)
+
 ```zig
 const std = @import("std");
 const zargs = @import("zargs");
@@ -26,9 +28,9 @@ pub fn main() !void {
         .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
         .arg(Arg.optArg("logfile", ?[]const u8).long("log").help("Store log into a file"))
         .sub(Command.new("install")
-            .arg(Arg.posArg("name", []const u8).choices(&.{ "gcc", "clang" }))
+            .arg(Arg.posArg("name", []const u8).raw_choices(&.{ "gcc", "clang" }))
             .arg(Arg.optArg("output", []const u8).short('o').long("out"))
-            .arg(Arg.optArg("count", u32).short('c').default(10).ranges(Ranges(u32).new().u(5, 7).u(13, null))))
+            .arg(Arg.optArg("count", u32).short('c').default(10).ranges(Ranges(u32).new().u(5, 7).u(13, null)).choices(&.{ 10, 11 })))
         .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
@@ -163,19 +165,23 @@ Options and arguments can be configured with default values (`.default`). Once c
 
 > Single options, options with a single argument of optional type, or single positional arguments of optional type are always optional.
 
-#### Value Range Constraints
+#### Value Ranges
 
-You can configure value range constraints (`.ranges`, `.choices`) for arguments, which will perform validation checks after parsing.
+Value ranges (`.ranges`, `.choices`) can be configured for arguments, which are validated after parsing.
 
-> Validation checks are not performed on default values (Is this a feature? 😄)
+> Default values are not validated (intentional feature? 😄)
 
-##### Range Constraints
+If constructing value ranges is cumbersome, `.raw_choices` can be used to filter values before parsing.
+Ranges
 
-When type `T` implements `compare`, you can configure range constraints for the argument.
+##### Ranges
 
-##### Predefined Choices
+When `T` implements compare, value `.ranges` can be configured for the argument.
+Choices
 
-When type `T` implements `equal`, you can configure predefined choices for the argument.
+##### Choices
+
+When `T` implements equal, value `.choices` can be configured for the argument.
 
 #### Callbacks
 
