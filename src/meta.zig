@@ -263,31 +263,47 @@ pub const Meta = struct {
             .type = self.T,
         };
     }
-    fn _checkChoices(self: Self, value: Base(self.T)) bool {
-        if (self.common.choices) |cs| {
-            const p: *const []const Base(self.T) = @ptrCast(@alignCast(cs));
-            for (p.*) |c| {
-                if (equal(c, value)) return true;
+    fn _ranges(self: Self) ?*const Ranges(Base(self.T)) {
+        return if (self.common.ranges) |opa| @ptrCast(@alignCast(opa)) else null;
+    }
+    fn _choices(self: Self) ?*const []const Base(self.T) {
+        return if (self.common.choices) |opa| @ptrCast(@alignCast(opa)) else null;
+    }
+    fn _checkValue(self: Self, value: Base(self.T)) bool {
+        if (comptime self._choices()) |cs| {
+            const cs_found = for (cs.*) |c| {
+                if (equal(c, value)) break true;
+            } else false;
+            if (comptime self._ranges()) |rs| {
+                const rs_found = rs.contain(value);
+                if (!cs_found and !rs_found) {
+                    self.log("parsed as {} but out of choices{} and ranges{}", .{ niceFormatter(value), niceFormatter(cs.*), niceFormatter(rs.rs) });
+                }
+                return cs_found or rs_found;
+            } else {
+                if (!cs_found) {
+                    self.log("parsed as {} but out of choices{}", .{ niceFormatter(value), niceFormatter(cs.*) });
+                }
+                return cs_found;
             }
-            self.log("parsed as {} but out of choices {}", .{ niceFormatter(value), niceFormatter(p.*) });
-            return false;
+        } else {
+            if (comptime self._ranges()) |rs| {
+                const rs_found = rs.contain(value);
+                if (!rs_found) {
+                    self.log("parsed as {} but out of ranges{}", .{ niceFormatter(value), niceFormatter(rs.rs) });
         }
+                return rs_found;
+            } else {
         return true;
+            }
+        }
     }
     fn _parseAny(self: Self, s: String, a: ?Allocator) ?Base(self.T) {
         if (if (self.common.parseFn) |f| blk: {
             const p: *const parser.Fn(self.T) = @ptrCast(@alignCast(f));
             break :blk p(s, a);
         } else parser.parseAny(Base(self.T), s, a)) |value| {
-            if (self.common.ranges) |rs| {
-                const p: *const Ranges(Base(self.T)) = @ptrCast(@alignCast(rs));
-                if (!p.contain(value)) {
-                    self.log("parsed as {} but out of ranges {}", .{ niceFormatter(value), niceFormatter(p.rs) });
-                    if (a) |_| parser.destroyAny(value, a.?);
-                    return null;
-                }
-            }
-            if (!self._checkChoices(value)) {
+            if (!self._checkValue(value)) {
                 if (a) |_| parser.destroyAny(value, a.?);
                 return null;
             }
@@ -707,6 +723,40 @@ pub const Meta = struct {
                 .files = &[_]String{ "bin0", "bin1" },
                 .twins = [2]u32{ 1, 2 },
             }, res);
+        }
+    }
+
+    test "Consume optArg with both ranges and choices" {
+        const R = struct { int: []i32 };
+        const meta = Self.optArg("int", []i32).short('i');
+        {
+            const meta_int = meta.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
+            var r = std.mem.zeroes(R);
+            var it = try token.Iter.initLine("-i=-1 -i 3 -i 5 -i=23", null, .{});
+            try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
+            try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
+            try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
+            try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
+            try testing.expectEqualDeep(&[_]i32{ -1, 3, 5, 23 }, r.int);
+            meta_int._destroy(r, testing.allocator);
+        }
+        {
+            const meta_int = meta.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
+            var r = std.mem.zeroes(R);
+            var it = try token.Iter.initLine("-i 6", null, .{});
+            try testing.expectError(Error.Invalid, meta_int._consumeOptArg(&r, &it, testing.allocator));
+        }
+        {
+            const meta_int = meta.ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
+            var r = std.mem.zeroes(R);
+            var it = try token.Iter.initLine("-i 6", null, .{});
+            try testing.expectError(Error.Invalid, meta_int._consumeOptArg(&r, &it, testing.allocator));
+        }
+        {
+            const meta_int = meta.choices(&.{ 3, 5, 7 })._checkOut();
+            var r = std.mem.zeroes(R);
+            var it = try token.Iter.initLine("-i 6", null, .{});
+            try testing.expectError(Error.Invalid, meta_int._consumeOptArg(&r, &it, testing.allocator));
         }
     }
 
