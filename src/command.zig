@@ -50,7 +50,7 @@ pub const Command = struct {
         author: ?[]const u8 = null,
         homepage: ?[]const u8 = null,
         callBackFn: ?*const anyopaque = null,
-        alias: []const String = &.{},
+        alias: []const [:0]const u8 = &.{},
         /// Use subcommands, specifying the name of the subcommand's enum union field.
         subName: ?[:0]const u8 = null,
     };
@@ -78,9 +78,9 @@ pub const Command = struct {
         cmd.common.author = s;
         return cmd;
     }
-    pub fn alias(self: Self, s: String) Self {
+    pub fn alias(self: Self, s: [:0]const u8) Self {
         var cmd = self;
-        cmd.common.alias = cmd.common.alias ++ [_]String{s};
+        cmd.common.alias = cmd.common.alias ++ [_][:0]const u8{s};
         return cmd;
     }
     pub fn requireSub(self: Self, s: [:0]const u8) Self {
@@ -106,6 +106,9 @@ pub const Command = struct {
         }
         var c = self;
         c._checkInCmdName(cmd.name);
+        for (cmd.common.alias) |s| {
+            c._checkInCmdName(s);
+        }
         c._cmds = c._cmds ++ [_]Self{cmd};
         c._stat.cmd += 1;
         return c;
@@ -247,6 +250,11 @@ pub const Command = struct {
             if (std.mem.eql(u8, c.name, name)) {
                 @compileError(print("name({s}) conflicts with subcommand({s})", .{ name, c.name }));
             }
+            for (c.common.alias) |s| {
+                if (std.mem.eql(u8, s, name)) {
+                    @compileError(print("name({s}) conflicts with subcommand({s})'s alias({s})", .{ name, c.name, s }));
+                }
+            }
         }
     }
 
@@ -345,7 +353,7 @@ pub const Command = struct {
                 msg = msg ++ "\n" ++ c.name;
             }
             if (c.common.alias.len != 0) {
-                msg = msg ++ "\n" ++ print("(alias{})", .{niceFormatter(c.common.alias)});
+                msg = msg ++ "\n" ++ print("(alias{})", .{niceFormatter(@as([]const String, c.common.alias))});
             }
         }
         return msg;
@@ -629,8 +637,8 @@ pub const Command = struct {
         {
             const cmd = Self.new("cmd").requireSub("sub")
                 .arg(Meta.opt("verbose", u8).short('v'))
-                .sub(Self.new("subcmd0"))
-                .sub(Self.new("subcmd1").alias("alias0").alias("alias1"));
+                .sub(Self.new("subcmd0").alias("alias0").alias("alias1"))
+                .sub(Self.new("subcmd1").alias("alias3"));
             try testing.expectEqualStrings(
                 \\Usage: cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}
                 \\
@@ -640,8 +648,9 @@ pub const Command = struct {
                 \\
                 \\Commands:
                 \\subcmd0
-                \\subcmd1
                 \\(alias{alias0, alias1})
+                \\subcmd1
+                \\(alias{alias3})
             ,
                 cmd.help(),
             );
