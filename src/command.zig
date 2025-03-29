@@ -387,21 +387,6 @@ pub const Command = struct {
         self.common.callBackFn = @ptrCast(&f);
     }
 
-    pub fn destroy(self: Self, r: *const self.Result(), allocator: Allocator) void {
-        inline for (self._args) |m| {
-            m._destroy(r, allocator);
-        }
-        if (self.common.subName) |s| {
-            inline for (self._cmds) |c| {
-                if (std.enums.nameCast(std.meta.Tag(self.SubCmdUnion()), c.name) == @field(r, s)) {
-                    const a = &@field(@field(r, s), c.name);
-                    c.destroy(a, allocator);
-                    break;
-                }
-            }
-        }
-    }
-
     const Error = error{
         RepeatOpt,
         UnknownOpt,
@@ -533,6 +518,21 @@ pub const Command = struct {
             p(&r);
         }
         return r;
+    }
+
+    pub fn destroy(self: Self, r: *const self.Result(), allocator: Allocator) void {
+        inline for (self._args) |m| {
+            m._destroy(r, allocator);
+        }
+        if (self.common.subName) |s| {
+            inline for (self._cmds) |c| {
+                if (std.enums.nameCast(std.meta.Tag(self.SubCmdUnion()), c.name) == @field(r, s)) {
+                    const a = &@field(@field(r, s), c.name);
+                    c.destroy(a, allocator);
+                    break;
+                }
+            }
+        }
     }
 
     test "Compile Errors" {
