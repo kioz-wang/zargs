@@ -125,7 +125,7 @@ pub const Command = struct {
             meta.common.short = &[_]u8{c};
         }
         if (common.long) |s| {
-            meta.common.long = [_]String{s};
+            meta.common.long = &[_]String{s};
         }
         if (common.default) |v| {
             meta.common.default = @ptrCast(&v);
@@ -147,7 +147,7 @@ pub const Command = struct {
             meta.common.short = &[_]u8{c};
         }
         if (common.long) |s| {
-            meta.common.long = [_]String{s};
+            meta.common.long = &[_]String{s};
         }
         meta.common.argName = common.argName;
         if (common.default) |v| {
