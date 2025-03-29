@@ -16,6 +16,7 @@ const Ranges = zargs.Ranges;
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
     const remove = Command.new("remove")
+        .alias("rm").alias("uninstall").alias("del")
         .opt("verbose", u32, .{ .short = 'v' })
         .optArg("count", u32, .{ .short = 'c', .argName = "CNT", .default = 9 })
         .posArg("name", []const u8, .{});

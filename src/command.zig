@@ -20,6 +20,7 @@ pub const Command = struct {
     const StringSet = helper.Collection.StringSet;
     const isSlice = helper.Type.isSlice;
     const TryOptional = helper.Type.TryOptional;
+    const niceFormatter = helper.niceFormatter;
     const Self = @This();
 
     fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
@@ -49,6 +50,7 @@ pub const Command = struct {
         author: ?[]const u8 = null,
         homepage: ?[]const u8 = null,
         callBackFn: ?*const anyopaque = null,
+        alias: []const String = &.{},
         /// Use subcommands, specifying the name of the subcommand's enum union field.
         subName: ?[:0]const u8 = null,
     };
@@ -74,6 +76,11 @@ pub const Command = struct {
     pub fn author(self: Self, s: []const u8) Self {
         var cmd = self;
         cmd.common.author = s;
+        return cmd;
+    }
+    pub fn alias(self: Self, s: String) Self {
+        var cmd = self;
+        cmd.common.alias = cmd.common.alias ++ [_]String{s};
         return cmd;
     }
     pub fn requireSub(self: Self, s: [:0]const u8) Self {
@@ -321,9 +328,12 @@ pub const Command = struct {
         }
         for (self._cmds) |c| {
             if (c.common.about) |s| {
-                msg = msg ++ "\n" ++ print("{s:<30} {s}", .{ c.name, s });
+                msg = msg ++ "\n" ++ print("{s:<24} {s}", .{ c.name, s });
             } else {
                 msg = msg ++ "\n" ++ c.name;
+            }
+            if (c.common.alias.len != 0) {
+                msg = msg ++ "\n" ++ print("(alias{})", .{niceFormatter(c.common.alias)});
             }
         }
         return msg;
@@ -385,6 +395,14 @@ pub const Command = struct {
 
     pub fn callBack(self: *Self, f: fn (*self.Result()) void) void {
         self.common.callBackFn = @ptrCast(&f);
+    }
+
+    fn _match(self: Self, t: String) bool {
+        if (std.mem.eql(u8, self.name, t)) return true;
+        for (self.common.alias) |s| {
+            if (std.mem.eql(u8, s, t)) return true;
+        }
+        return false;
     }
 
     const Error = error{
@@ -500,7 +518,7 @@ pub const Command = struct {
             const t = (it.viewMust() catch unreachable).as_posArg().posArg;
             var hit = false;
             inline for (self._cmds) |c| {
-                if (std.mem.eql(u8, c.name, t)) {
+                if (c._match(t)) {
                     _ = it.next() catch unreachable;
                     it.reinit();
                     @field(r, s) = @unionInit(self.SubCmdUnion(), c.name, try c.parseFrom(it, a));
@@ -600,7 +618,7 @@ pub const Command = struct {
             const cmd = Self.new("cmd").requireSub("sub")
                 .arg(Meta.opt("verbose", u8).short('v'))
                 .sub(Self.new("subcmd0"))
-                .sub(Self.new("subcmd1"));
+                .sub(Self.new("subcmd1").alias("alias0").alias("alias1"));
             try testing.expectEqualStrings(
                 \\Usage: cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}
                 \\
@@ -611,6 +629,7 @@ pub const Command = struct {
                 \\Commands:
                 \\subcmd0
                 \\subcmd1
+                \\(alias{alias0, alias1})
             ,
                 cmd.help(),
             );
@@ -660,7 +679,7 @@ pub const Command = struct {
         const cmd = Self.new("cmd").requireSub("sub")
             .arg(Meta.opt("verbose", u8).short('v'))
             .sub(Self.new("subcmd0"))
-            .sub(Self.new("subcmd1"));
+            .sub(Self.new("subcmd1").alias("alias0"));
         {
             var it = try TokenIter.initList(&[_]String{"-v"}, .{});
             try testing.expectError(Error.MissingSubCmd, cmd.parseFrom(&it, null));
@@ -668,6 +687,13 @@ pub const Command = struct {
         {
             var it = try TokenIter.initList(&[_]String{"subcmd2"}, .{});
             try testing.expectError(Error.UnknownSubCmd, cmd.parseFrom(&it, null));
+        }
+        {
+            var it = try TokenIter.initList(&[_]String{"alias0"}, .{});
+            try testing.expectEqual(
+                cmd.Result(){ .sub = .{ .subcmd1 = .{} } },
+                try cmd.parseFrom(&it, null),
+            );
         }
     }
 
