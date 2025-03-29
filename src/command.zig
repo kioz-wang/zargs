@@ -114,12 +114,16 @@ pub const Command = struct {
         self: Self,
         name: [:0]const u8,
         T: type,
-        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, default: ?T = null, callBackFn: ?fn (*T) void = null },
+        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?String = null, default: ?T = null, callBackFn: ?fn (*T) void = null },
     ) Self {
         var meta = Meta.opt(name, T);
         meta.common.help = common.help;
-        meta.common.short = common.short;
-        meta.common.long = common.long;
+        if (common.short) |c| {
+            meta.common.short = &[_]u8{c};
+        }
+        if (common.long) |s| {
+            meta.common.long = [_]String{s};
+        }
         if (common.default) |v| {
             meta.common.default = @ptrCast(&v);
         }
@@ -132,12 +136,16 @@ pub const Command = struct {
         self: Self,
         name: [:0]const u8,
         T: type,
-        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*TryOptional(T)) void = null },
+        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?String = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*TryOptional(T)) void = null },
     ) Self {
         var meta = Meta.optArg(name, T);
         meta.common.help = common.help;
-        meta.common.short = common.short;
-        meta.common.long = common.long;
+        if (common.short) |c| {
+            meta.common.short = &[_]u8{c};
+        }
+        if (common.long) |s| {
+            meta.common.long = [_]String{s};
+        }
         meta.common.argName = common.argName;
         if (common.default) |v| {
             meta = meta.default(v);
@@ -188,31 +196,35 @@ pub const Command = struct {
     }
     fn _checkInShort(self: *const Self, c: u8) void {
         if (self._builtin_help) |m| {
-            if (m.common.short == c) {
-                @compileError(print("short_prefix({c}) conflicts with builtin {}", .{ c, m }));
+            for (m.common.short) |_c| {
+                if (_c == c) {
+                    @compileError(print("short_prefix({c}) conflicts with builtin {}", .{ c, m }));
+                }
             }
         }
         for (self._args) |m| {
             if (m.class == .opt or m.class == .optArg) {
-                if (m.common.short == c) {
-                    @compileError(print("short_prefix({c}) conflicts with  {}", .{ c, m }));
+                for (m.common.short) |_c| {
+                    if (_c == c) {
+                        @compileError(print("short_prefix({c}) conflicts with {}", .{ c, m }));
+                    }
                 }
             }
         }
     }
     fn _checkInLong(self: *const Self, s: []const u8) void {
         if (self._builtin_help) |m| {
-            if (m.common.long) |l| {
-                if (std.mem.eql(u8, l, s)) {
+            for (m.common.long) |_l| {
+                if (std.mem.eql(u8, _l, s)) {
                     @compileError(print("long_prefix({s}) conflicts with builtin {}", .{ s, m }));
                 }
             }
         }
         for (self._args) |m| {
             if (m.class == .opt or m.class == .optArg) {
-                if (m.common.long) |l| {
-                    if (std.mem.eql(u8, l, s)) {
-                        @compileError(print("long_prefix({s}) conflicts with  {}", .{ s, m }));
+                for (m.common.long) |_l| {
+                    if (std.mem.eql(u8, _l, s)) {
+                        @compileError(print("long_prefix({s}) conflicts with {}", .{ s, m }));
                     }
                 }
             }
@@ -226,8 +238,8 @@ pub const Command = struct {
                     self._builtin_help = null;
                 }
             }
-            if (meta.common.short) |c| self._checkInShort(c);
-            if (meta.common.long) |s| self._checkInLong(s);
+            for (meta.common.short) |c| self._checkInShort(c);
+            for (meta.common.long) |s| self._checkInLong(s);
         }
     }
     fn _checkInCmdName(self: *const Self, name: [:0]const u8) void {

@@ -89,6 +89,7 @@ pub const Meta = struct {
     const isMultiple = helper.Type.isMultiple;
     const TryOptional = helper.Type.TryOptional;
     const TryMultiple = helper.Type.TryMultiple;
+    const NiceFormatter = helper.NiceFormatter;
     const niceFormatter = helper.niceFormatter;
     const equal = helper.Compare.equal;
     const Self = @This();
@@ -103,8 +104,8 @@ pub const Meta = struct {
         default: ?*const anyopaque = null,
         parseFn: ?*const anyopaque = null, // optArg, posArg
         callBackFn: ?*const anyopaque = null,
-        short: ?u8 = null, // opt, optArg
-        long: ?[]const u8 = null, // opt, optArg
+        short: []const u8 = &.{}, // opt, optArg
+        long: []const String = &.{}, // opt, optArg
         argName: ?[]const u8 = null, // optArg, posArg
         ranges: ?*const anyopaque = null, // optArg, posArg
         choices: ?*const anyopaque = null, // optArg, posArg
@@ -179,15 +180,15 @@ pub const Meta = struct {
             @compileError(print("{} not support .short", .{self}));
         }
         var meta = self;
-        meta.common.short = c;
+        meta.common.short = meta.common.short ++ [_]u8{c};
         return meta;
     }
-    pub fn long(self: Self, s: []const u8) Self {
+    pub fn long(self: Self, s: String) Self {
         if (self.class == .posArg) {
             @compileError(print("{} not support .long", .{self}));
         }
         var meta = self;
-        meta.common.long = s;
+        meta.common.long = meta.common.long ++ [_]String{s};
         return meta;
     }
     pub fn argName(self: Self, s: []const u8) Self {
@@ -262,7 +263,7 @@ pub const Meta = struct {
         }
         if (self.class == .opt or self.class == .optArg) {
             // Check short and long
-            if (self.common.short == null and self.common.long == null) {
+            if (self.common.short.len == 0 and self.common.long.len == 0) {
                 @compileError(print("{} requires short or long", .{self}));
             }
         }
@@ -348,11 +349,13 @@ pub const Meta = struct {
         std.debug.assert(self.class != .posArg);
         switch (t.opt) {
             .short => |c| {
-                if (c == self.common.short) return true;
+                for (self.common.short) |_c| {
+                    if (c == _c) return true;
+                }
             },
             .long => |s| {
-                if (self.common.long) |l| {
-                    if (std.mem.eql(u8, l, s)) return true;
+                for (self.common.long) |_l| {
+                    if (std.mem.eql(u8, _l, s)) return true;
                 }
             },
         }
@@ -360,16 +363,20 @@ pub const Meta = struct {
     }
     pub fn _usage(self: Self) []const u8 {
         const FH = FormatHelper;
+        const _short = self.common.short;
+        const main_short = if (_short.len == 0) null else _short[0];
+        const _long = self.common.long;
+        const main_long = if (_long.len == 0) null else _long[0];
         return switch (self.class) {
             .opt => print("{s}{s}", .{
-                FH.optional(true, FH.opt(self.common.short, self.common.long)),
+                FH.optional(true, FH.opt(main_short, main_long)),
                 if (self.T == bool) "" else "...",
             }),
             .optArg => print("{s}{s}", .{
                 FH.optional(
                     self.common.default != null,
                     print("{s} {s}", .{
-                        FH.opt(self.common.short, self.common.long),
+                        FH.opt(main_short, main_long),
                         FH.arg(self.common.argName.?, self.T),
                     }),
                 ),
@@ -429,6 +436,19 @@ pub const Meta = struct {
                     "",
                 niceFormatter(cs),
             });
+        }
+        if (self.common.short.len > 1 or self.common.long.len > 1) {
+            msg = print("{s}\n(alias ", .{msg});
+            if (self.common.short.len > 1) {
+                msg = print("{s}short{c}", .{ msg, NiceFormatter([]u8).value(@constCast(self.common.short[1..])) });
+            }
+            if (self.common.short.len > 1 and self.common.long.len > 1) {
+                msg = print("{s} ", .{msg});
+            }
+            if (self.common.long.len > 1) {
+                msg = print("{s}long{}", .{ msg, NiceFormatter([]const String).value(self.common.long[1..]) });
+            }
+            msg = print("{s})", .{msg});
         }
         return msg;
     }
@@ -581,10 +601,11 @@ pub const Meta = struct {
             try testing.expect(!meta._match(.{ .opt = .{ .long = "input" } }));
         }
         {
-            const meta = Self.optArg("out", bool).short('o').long("out")._checkOut();
+            const meta = Self.optArg("out", bool).short('o').long("out").long("output")._checkOut();
             try testing.expect(meta._match(.{ .opt = .{ .short = 'o' } }));
             try testing.expect(!meta._match(.{ .opt = .{ .short = 'i' } }));
             try testing.expect(meta._match(.{ .opt = .{ .long = "out" } }));
+            try testing.expect(meta._match(.{ .opt = .{ .long = "output" } }));
             try testing.expect(!meta._match(.{ .opt = .{ .long = "input" } }));
         }
     }
@@ -625,11 +646,13 @@ pub const Meta = struct {
     test "Format help" {
         {
             try testing.expectEqualStrings(
-                \\[-o]                    Help of out
+                \\[-o|--out]              Help of out
                 \\                        (default=false)
+                \\(alias short{u, t} long{output})
             ,
                 comptime Self.opt("out", bool)
-                    .short('o').help("Help of out")
+                    .short('o').short('u').short('t')
+                    .long("out").long("output").help("Help of out")
                     ._checkOut()._help(),
             );
         }
@@ -646,9 +669,10 @@ pub const Meta = struct {
             try testing.expectEqualStrings(
                 \\[-o|--out {OUT}]        Help of out
                 \\                        (default=a.out)
+                \\(alias long{output})
             ,
                 comptime Self.optArg("out", String)
-                    .short('o').long("out")
+                    .short('o').long("out").long("output")
                     .default("a.out")
                     .help("Help of out")
                     ._checkOut()._help(),
