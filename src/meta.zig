@@ -884,17 +884,17 @@ pub const Meta = struct {
         const R = struct { mem: Mem };
         const meta = Self.posArg("mem", Mem);
         {
-            const meta_mem = meta.ranges(Ranges(Mem).new().u(null, Mem{ .len = 16 }))._checkOut();
+            const meta_mem = meta.ranges(Ranges(Mem).new().u(null, Mem{ .len = 5 }))._checkOut();
             var r = std.mem.zeroes(R);
             {
-                var it = try token.Iter.initList(&[_]String{"8"}, .{});
+                var it = try token.Iter.initList(&[_]String{"3"}, .{});
                 try testing.expect(try meta_mem._consumePosArg(&r, &it, testing.allocator));
-                try testing.expectEqual(8, r.mem.len);
-                try testing.expectEqual(8, r.mem.buf.len);
+                try testing.expectEqual(3, r.mem.len);
+                try testing.expectEqual(3, r.mem.buf.len);
                 meta_mem._destroy(r, testing.allocator);
             }
             {
-                var it = try token.Iter.initList(&[_]String{"32"}, .{});
+                var it = try token.Iter.initList(&[_]String{"8"}, .{});
                 try testing.expectError(
                     Error.Invalid,
                     meta_mem._consumePosArg(&r, &it, testing.allocator),
