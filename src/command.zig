@@ -20,6 +20,7 @@ pub const Command = struct {
     const StringSet = helper.Collection.StringSet;
     const isSlice = helper.Type.isSlice;
     const TryOptional = helper.Type.TryOptional;
+    const niceFormatter = helper.niceFormatter;
     const Self = @This();
 
     fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
@@ -49,6 +50,7 @@ pub const Command = struct {
         author: ?[]const u8 = null,
         homepage: ?[]const u8 = null,
         callBackFn: ?*const anyopaque = null,
+        alias: []const [:0]const u8 = &.{},
         /// Use subcommands, specifying the name of the subcommand's enum union field.
         subName: ?[:0]const u8 = null,
     };
@@ -76,6 +78,11 @@ pub const Command = struct {
         cmd.common.author = s;
         return cmd;
     }
+    pub fn alias(self: Self, s: [:0]const u8) Self {
+        var cmd = self;
+        cmd.common.alias = cmd.common.alias ++ [_][:0]const u8{s};
+        return cmd;
+    }
     pub fn requireSub(self: Self, s: [:0]const u8) Self {
         var cmd = self;
         cmd.common.subName = s;
@@ -99,6 +106,9 @@ pub const Command = struct {
         }
         var c = self;
         c._checkInCmdName(cmd.name);
+        for (cmd.common.alias) |s| {
+            c._checkInCmdName(s);
+        }
         c._cmds = c._cmds ++ [_]Self{cmd};
         c._stat.cmd += 1;
         return c;
@@ -107,12 +117,16 @@ pub const Command = struct {
         self: Self,
         name: [:0]const u8,
         T: type,
-        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, default: ?T = null, callBackFn: ?fn (*T) void = null },
+        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?String = null, default: ?T = null, callBackFn: ?fn (*T) void = null },
     ) Self {
         var meta = Meta.opt(name, T);
         meta.common.help = common.help;
-        meta.common.short = common.short;
-        meta.common.long = common.long;
+        if (common.short) |c| {
+            meta.common.short = &[_]u8{c};
+        }
+        if (common.long) |s| {
+            meta.common.long = &[_]String{s};
+        }
         if (common.default) |v| {
             meta.common.default = @ptrCast(&v);
         }
@@ -125,12 +139,16 @@ pub const Command = struct {
         self: Self,
         name: [:0]const u8,
         T: type,
-        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*TryOptional(T)) void = null },
+        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?String = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*TryOptional(T)) void = null },
     ) Self {
         var meta = Meta.optArg(name, T);
         meta.common.help = common.help;
-        meta.common.short = common.short;
-        meta.common.long = common.long;
+        if (common.short) |c| {
+            meta.common.short = &[_]u8{c};
+        }
+        if (common.long) |s| {
+            meta.common.long = &[_]String{s};
+        }
         meta.common.argName = common.argName;
         if (common.default) |v| {
             meta = meta.default(v);
@@ -181,31 +199,35 @@ pub const Command = struct {
     }
     fn _checkInShort(self: *const Self, c: u8) void {
         if (self._builtin_help) |m| {
-            if (m.common.short == c) {
-                @compileError(print("short_prefix({c}) conflicts with builtin {}", .{ c, m }));
+            for (m.common.short) |_c| {
+                if (_c == c) {
+                    @compileError(print("short_prefix({c}) conflicts with builtin {}", .{ c, m }));
+                }
             }
         }
         for (self._args) |m| {
             if (m.class == .opt or m.class == .optArg) {
-                if (m.common.short == c) {
-                    @compileError(print("short_prefix({c}) conflicts with  {}", .{ c, m }));
+                for (m.common.short) |_c| {
+                    if (_c == c) {
+                        @compileError(print("short_prefix({c}) conflicts with {}", .{ c, m }));
+                    }
                 }
             }
         }
     }
     fn _checkInLong(self: *const Self, s: []const u8) void {
         if (self._builtin_help) |m| {
-            if (m.common.long) |l| {
-                if (std.mem.eql(u8, l, s)) {
+            for (m.common.long) |_l| {
+                if (std.mem.eql(u8, _l, s)) {
                     @compileError(print("long_prefix({s}) conflicts with builtin {}", .{ s, m }));
                 }
             }
         }
         for (self._args) |m| {
             if (m.class == .opt or m.class == .optArg) {
-                if (m.common.long) |l| {
-                    if (std.mem.eql(u8, l, s)) {
-                        @compileError(print("long_prefix({s}) conflicts with  {}", .{ s, m }));
+                for (m.common.long) |_l| {
+                    if (std.mem.eql(u8, _l, s)) {
+                        @compileError(print("long_prefix({s}) conflicts with {}", .{ s, m }));
                     }
                 }
             }
@@ -219,14 +241,19 @@ pub const Command = struct {
                     self._builtin_help = null;
                 }
             }
-            if (meta.common.short) |c| self._checkInShort(c);
-            if (meta.common.long) |s| self._checkInLong(s);
+            for (meta.common.short) |c| self._checkInShort(c);
+            for (meta.common.long) |s| self._checkInLong(s);
         }
     }
     fn _checkInCmdName(self: *const Self, name: [:0]const u8) void {
         for (self._cmds) |c| {
             if (std.mem.eql(u8, c.name, name)) {
                 @compileError(print("name({s}) conflicts with subcommand({s})", .{ name, c.name }));
+            }
+            for (c.common.alias) |s| {
+                if (std.mem.eql(u8, s, name)) {
+                    @compileError(print("name({s}) conflicts with subcommand({s})'s alias({s})", .{ name, c.name, s }));
+                }
             }
         }
     }
@@ -321,9 +348,12 @@ pub const Command = struct {
         }
         for (self._cmds) |c| {
             if (c.common.about) |s| {
-                msg = msg ++ "\n" ++ print("{s:<30} {s}", .{ c.name, s });
+                msg = msg ++ "\n" ++ print("{s:<24} {s}", .{ c.name, s });
             } else {
                 msg = msg ++ "\n" ++ c.name;
+            }
+            if (c.common.alias.len != 0) {
+                msg = msg ++ "\n" ++ print("(alias{})", .{niceFormatter(@as([]const String, c.common.alias))});
             }
         }
         return msg;
@@ -387,19 +417,12 @@ pub const Command = struct {
         self.common.callBackFn = @ptrCast(&f);
     }
 
-    pub fn destroy(self: Self, r: *const self.Result(), allocator: Allocator) void {
-        inline for (self._args) |m| {
-            m._destroy(r, allocator);
+    fn _match(self: Self, t: String) bool {
+        if (std.mem.eql(u8, self.name, t)) return true;
+        for (self.common.alias) |s| {
+            if (std.mem.eql(u8, s, t)) return true;
         }
-        if (self.common.subName) |s| {
-            inline for (self._cmds) |c| {
-                if (std.enums.nameCast(std.meta.Tag(self.SubCmdUnion()), c.name) == @field(r, s)) {
-                    const a = &@field(@field(r, s), c.name);
-                    c.destroy(a, allocator);
-                    break;
-                }
-            }
-        }
+        return false;
     }
 
     const Error = error{
@@ -515,7 +538,7 @@ pub const Command = struct {
             const t = (it.viewMust() catch unreachable).as_posArg().posArg;
             var hit = false;
             inline for (self._cmds) |c| {
-                if (std.mem.eql(u8, c.name, t)) {
+                if (c._match(t)) {
                     _ = it.next() catch unreachable;
                     it.reinit();
                     @field(r, s) = @unionInit(self.SubCmdUnion(), c.name, try c.parseFrom(it, a));
@@ -533,6 +556,21 @@ pub const Command = struct {
             p(&r);
         }
         return r;
+    }
+
+    pub fn destroy(self: Self, r: *const self.Result(), allocator: Allocator) void {
+        inline for (self._args) |m| {
+            m._destroy(r, allocator);
+        }
+        if (self.common.subName) |s| {
+            inline for (self._cmds) |c| {
+                if (std.enums.nameCast(std.meta.Tag(self.SubCmdUnion()), c.name) == @field(r, s)) {
+                    const a = &@field(@field(r, s), c.name);
+                    c.destroy(a, allocator);
+                    break;
+                }
+            }
+        }
     }
 
     test "Compile Errors" {
@@ -599,8 +637,8 @@ pub const Command = struct {
         {
             const cmd = Self.new("cmd").requireSub("sub")
                 .arg(Meta.opt("verbose", u8).short('v'))
-                .sub(Self.new("subcmd0"))
-                .sub(Self.new("subcmd1"));
+                .sub(Self.new("subcmd0").alias("alias0").alias("alias1"))
+                .sub(Self.new("subcmd1").alias("alias3"));
             try testing.expectEqualStrings(
                 \\Usage: cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}
                 \\
@@ -610,7 +648,9 @@ pub const Command = struct {
                 \\
                 \\Commands:
                 \\subcmd0
+                \\(alias{alias0, alias1})
                 \\subcmd1
+                \\(alias{alias3})
             ,
                 cmd.help(),
             );
@@ -660,7 +700,7 @@ pub const Command = struct {
         const cmd = Self.new("cmd").requireSub("sub")
             .arg(Meta.opt("verbose", u8).short('v'))
             .sub(Self.new("subcmd0"))
-            .sub(Self.new("subcmd1"));
+            .sub(Self.new("subcmd1").alias("alias0"));
         {
             var it = try TokenIter.initList(&[_]String{"-v"}, .{});
             try testing.expectError(Error.MissingSubCmd, cmd.parseFrom(&it, null));
@@ -668,6 +708,13 @@ pub const Command = struct {
         {
             var it = try TokenIter.initList(&[_]String{"subcmd2"}, .{});
             try testing.expectError(Error.UnknownSubCmd, cmd.parseFrom(&it, null));
+        }
+        {
+            var it = try TokenIter.initList(&[_]String{"alias0"}, .{});
+            try testing.expectEqual(
+                cmd.Result(){ .sub = .{ .subcmd1 = .{} } },
+                try cmd.parseFrom(&it, null),
+            );
         }
     }
 

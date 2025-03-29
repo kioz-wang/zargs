@@ -334,7 +334,7 @@ pub const Type = struct {
         return if (isArray(T)) @typeInfo(T).array.child else T;
     }
     pub fn isSlice(T: type) bool {
-        return @typeInfo(T) == .pointer and T != String;
+        return @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .slice and T != String;
     }
     pub fn TrySlice(T: type) type {
         return if (isSlice(T)) @typeInfo(T).pointer.child else T;
@@ -360,10 +360,35 @@ pub const Type = struct {
         );
     }
 
+    test isMultiple {
+        try testing.expect(isMultiple([4]u8));
+        try testing.expect(isSlice([]u8));
+        {
+            var ab = [_]u8{ 'a', 'b' };
+            try testing.expect(isMultiple(@TypeOf(ab)));
+            try testing.expect(isArray(@TypeOf(ab)));
+            try testing.expect(isSlice(@TypeOf(@as([]u8, @ptrCast(&ab)))));
+            try testing.expect(isSlice(@TypeOf(@as([]u8, @ptrCast(ab[0..1])))));
+        }
+        {
+            const ab = [_]u8{ 'a', 'b' };
+            try testing.expect(isMultiple(@TypeOf(ab)));
+            try testing.expect(isArray(@TypeOf(ab)));
+            try testing.expectEqual(String, @TypeOf(@as([]const u8, &ab)));
+            try testing.expectEqual(String, @TypeOf(@as([]const u8, ab[0..])));
+        }
+    }
+
     test Base {
         try testing.expect(u32 == Base(?u32));
         try testing.expect(u32 == Base([]u32));
         try testing.expect(u32 == Base([4]u32));
+        try testing.expect(u8 == Base([]u8));
+        try testing.expect(u8 == Base([4]u8));
+        {
+            const ab = [_]u8{ 'a', 'b', 'c' };
+            try testing.expect(u8 == Base(@TypeOf(ab)));
+        }
         try testing.expect(String == Base(?String));
         {
             const T = struct { a: i32 };
@@ -428,6 +453,18 @@ test "NiceFormatter Base" {
         try testing.expectEqualStrings("9.000e-1", try sprint(&buffer, "{:.3}", .{NiceFormatter(f32).value(0.9)}));
         try testing.expectEqualStrings("true", try sprint(&buffer, "{}", .{NiceFormatter(bool).value(true)}));
         try testing.expectEqualStrings("1", print("{}", .{comptime NiceFormatter(u32).value(1)}));
+        {
+            const ab = [_]u8{ 'a', 'b' };
+            try testing.expectEqualStrings("{a, b}", print("{c}", .{comptime NiceFormatter([2]u8).value(ab)}));
+            try testing.expectEqualStrings("{a, b}", print("{c}", .{comptime niceFormatter(ab)}));
+            try testing.expectEqualStrings("{a, b}", try sprint(&buffer, "{c}", .{niceFormatter(ab)}));
+            try testing.expectEqualStrings("ab", try sprint(&buffer, "{c}", .{NiceFormatter([]const u8).value(&ab)}));
+        }
+        {
+            var ab = [_]u8{ 'a', 'b' };
+            try testing.expectEqualStrings("{a, b}", try sprint(&buffer, "{c}", .{NiceFormatter([]u8).value(&ab)}));
+            try testing.expectEqualStrings("{a, b}", try sprint(&buffer, "{c}", .{NiceFormatter([2]u8).value(ab)}));
+        }
     }
     {
         const Color = enum { Red, Green, Blue };
