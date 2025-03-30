@@ -360,6 +360,37 @@ pub const Type = struct {
         );
     }
 
+    test "Check type" {
+        {
+            var ab = [_]u8{ 'a', 'b' };
+            ab[0] = ab[0];
+            try testing.expectEqual([2]u8, @TypeOf(ab));
+            try testing.expectEqual(*[2]u8, @TypeOf(&ab));
+            try testing.expectEqual(*[2]u8, @TypeOf(ab[0..]));
+            try testing.expectEqual(*[1]u8, @TypeOf(ab[1..]));
+            try testing.expectEqual([]u8, @TypeOf(@as([]u8, ab[1..])));
+            {
+                var i: usize = 0;
+                i = 1;
+                try testing.expectEqual([]u8, @TypeOf(ab[i..]));
+            }
+        }
+        {
+            const ab = [_]u8{ 'a', 'b' };
+            try testing.expectEqual([2]u8, @TypeOf(ab));
+            try testing.expectEqual(*const [2]u8, @TypeOf(&ab));
+            try testing.expectEqual(*const [2]u8, @TypeOf(ab[0..]));
+            try testing.expectEqual(*const [1]u8, @TypeOf(ab[1..]));
+            try testing.expectEqual([]const u8, @TypeOf(@as([]const u8, ab[1..])));
+            {
+                var i: usize = 0;
+                i = 1;
+                try testing.expectEqual([]const u8, @TypeOf(ab[i..]));
+                try testing.expectEqual([]u8, @TypeOf(@constCast(ab[i..])));
+            }
+        }
+    }
+
     test isMultiple {
         try testing.expect(isMultiple([4]u8));
         try testing.expect(isSlice([]u8));
@@ -367,8 +398,13 @@ pub const Type = struct {
             var ab = [_]u8{ 'a', 'b' };
             try testing.expect(isMultiple(@TypeOf(ab)));
             try testing.expect(isArray(@TypeOf(ab)));
-            try testing.expect(isSlice(@TypeOf(@as([]u8, @ptrCast(&ab)))));
-            try testing.expect(isSlice(@TypeOf(@as([]u8, @ptrCast(ab[0..1])))));
+            try testing.expect(isSlice(@TypeOf(@as([]u8, &ab))));
+            try testing.expect(isSlice(@TypeOf(@as([]u8, ab[0..]))));
+            {
+                var i: usize = 0;
+                i = 1;
+                try testing.expect(isSlice(@TypeOf(ab[i..])));
+            }
         }
         {
             const ab = [_]u8{ 'a', 'b' };
@@ -376,6 +412,12 @@ pub const Type = struct {
             try testing.expect(isArray(@TypeOf(ab)));
             try testing.expectEqual(String, @TypeOf(@as([]const u8, &ab)));
             try testing.expectEqual(String, @TypeOf(@as([]const u8, ab[0..])));
+            {
+                var i: usize = 0;
+                i = 1;
+                try testing.expectEqual(String, @TypeOf(ab[i..]));
+                try testing.expect(isSlice(@TypeOf(@constCast(ab[i..]))));
+            }
         }
     }
 
