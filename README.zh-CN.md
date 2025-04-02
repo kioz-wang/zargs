@@ -252,12 +252,18 @@ const zargs = @import("zargs");
 #### 为命令添加回调
 
 ```zig
-comptime cmd.callBack(struct {
-        const C = cmd;
-        fn f(_: *C.Result()) void {
-            std.debug.print("CallBack of {s}\n", .{ C.name });
+const install = Command.new("install");
+const _demo = Command.new("demo").requireSub("action")
+    .sub(install.callBack(struct {
+        fn f(_: *install.Result()) void {
+            std.debug.print("CallBack of {s}\n", .{install.name});
         }
-    }.f);
+    }.f));
+const demo = _demo.callBack(struct {
+    fn f(_: *_demo.Result()) void {
+        std.debug.print("CallBack of {s}\n", .{_demo.name});
+    }
+}.f);
 ```
 
 ### 编译时生成解析器
