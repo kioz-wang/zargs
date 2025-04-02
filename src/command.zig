@@ -7,7 +7,8 @@ const print = helper.Alias.print;
 const String = helper.Alias.String;
 const LiteralString = helper.Alias.LiteralString;
 
-pub const TokenIter = @import("token.zig").Iter;
+const token = @import("token.zig");
+pub const TokenIter = token.Iter;
 
 const parser = @import("parser.zig");
 pub const parseAny = parser.parseAny;
@@ -44,6 +45,7 @@ pub const Command = struct {
     /// It is enabled by default, but if a `opt` or `arg` named "help" is added, it will automatically be disabled.
     _builtin_help: ?Meta = Meta.opt("help", bool)
         .help("Show this help then exit").short('h').long("help"),
+    _config: ?token.Config = null,
 
     const Common = struct {
         version: ?LiteralString = null,
@@ -181,6 +183,11 @@ pub const Command = struct {
             meta.common.callBackFn = @ptrCast(&f);
         }
         return self.arg(meta);
+    }
+    pub fn setConfig(self: Self, config: token.Config) Self {
+        var cmd = self;
+        cmd._config = config;
+        return cmd;
     }
 
     fn _checkInName(self: *const Self, meta: Meta) void {
@@ -459,7 +466,7 @@ pub const Command = struct {
     }
 
     pub fn parse(self: Self, a: Allocator) !self.Result() {
-        var it = try TokenIter.init(a, .{});
+        var it = try TokenIter.init(a, self._config orelse .{});
         defer it.deinit();
         _ = try it.next();
         return self.parseFrom(&it, a);
@@ -543,7 +550,7 @@ pub const Command = struct {
             inline for (self._cmds) |c| {
                 if (c._match(t)) {
                     _ = it.next() catch unreachable;
-                    it.reinit();
+                    it.reinit(c._config);
                     @field(r, s) = @unionInit(self.SubCmdUnion(), c.name, try c.parseFrom(it, a));
                     hit = true;
                     break;
@@ -821,6 +828,56 @@ pub const Command = struct {
                     R{ .integer = null, .output = null, .message = null },
                     args,
                 );
+            }
+        }
+
+        test "Parse with custom config" {
+            const _a = Self.new("A")
+                .arg(Arg.opt("verbose", u32).short('v').long("verbose"))
+                .arg(Arg.opt("ignore", bool).short('i').long("ignore"))
+                .arg(Arg.optArg("output", String).long("out").short('o'))
+                .arg(Arg.posArg("input", String));
+            const _b = Self.new("B")
+                .arg(Arg.opt("verbose", u32).short('v').long("verbose"))
+                .arg(Arg.opt("ignore", bool).short('i').long("ignore"))
+                .arg(Arg.optArg("output", String).long("out").short('o'));
+            const _c = Self.new("C")
+                .arg(Arg.opt("verbose", u32).short('v').long("verbose"))
+                .arg(Arg.opt("ignore", bool).short('i').long("ignore"))
+                .arg(Arg.optArg("output", String).long("out").short('o'));
+            const R = _c.requireSub("sub").sub(
+                _b.requireSub("sub").sub(_a),
+            ).Result();
+            const r = R{ .verbose = 2, .ignore = false, .output = "c", .sub = .{
+                .B = .{ .verbose = 1, .ignore = true, .output = "b", .sub = .{
+                    .A = .{ .verbose = 1, .ignore = false, .output = "a", .input = "in" },
+                } },
+            } };
+            {
+                const c = _c.requireSub("sub").sub(
+                    _b.requireSub("sub").sub(_a),
+                );
+                var it = try TokenIter.initLine("-vvo=c B -vi --out=b A -vo a -- in", null, .{});
+                const args = try c.parseFrom(&it, testing.allocator);
+                defer c.destroy(&args, testing.allocator);
+                try testing.expectEqualDeep(r, args);
+            }
+            {
+                const c = _c.requireSub("sub").sub(
+                    _b.requireSub("sub").sub(_a.setConfig(.{
+                        .terminator = "**",
+                        .prefix_long = "+++",
+                        .prefix_short = "@",
+                        .connector = "=>",
+                    })).setConfig(.{
+                        .terminator = "##",
+                        .connector = ":",
+                    }),
+                );
+                var it = try TokenIter.initLine("-vvo=c B -vi --out:b ## A @v +++out=>a ** in", null, .{});
+                const args = try c.parseFrom(&it, testing.allocator);
+                defer c.destroy(&args, testing.allocator);
+                try testing.expectEqualDeep(r, args);
             }
         }
     };

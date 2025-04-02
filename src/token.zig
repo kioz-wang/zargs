@@ -666,10 +666,13 @@ pub const Iter = struct {
         self.it.it._state = .pos;
     }
     /// Reset the state of the internal FSM. Only used for subcommand parsing.
-    pub fn reinit(self: *Self) void {
+    pub fn reinit(self: *Self, config: ?Config) void {
         self.it.it._state = .begin;
         self.it.cache = null;
         self.it.it.it.cache = null;
+        if (config) |c| {
+            self.it.it.config = c;
+        }
     }
     pub fn debug(self: *Self, b: bool) void {
         self.it.debug = b;
