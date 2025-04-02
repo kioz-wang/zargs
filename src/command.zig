@@ -5,6 +5,7 @@ const Allocator = std.mem.Allocator;
 const helper = @import("helper.zig");
 const print = helper.Alias.print;
 const String = helper.Alias.String;
+const LiteralString = helper.Alias.LiteralString;
 
 pub const TokenIter = @import("token.zig").Iter;
 
@@ -20,14 +21,14 @@ pub const Command = struct {
     const StringSet = helper.Collection.StringSet;
     const isSlice = helper.Type.isSlice;
     const TryOptional = helper.Type.TryOptional;
-    const niceFormatter = helper.niceFormatter;
+    const nice = helper.Formatter.nice;
     const Self = @This();
 
-    fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
+    fn log(self: Self, comptime fmt: String, args: anytype) void {
         std.debug.print(print("command({s}) {s}\n", .{ self.name, fmt }), args);
     }
 
-    name: [:0]const u8,
+    name: LiteralString,
     common: Common = .{},
 
     _args: []const Meta = &.{},
@@ -45,45 +46,45 @@ pub const Command = struct {
         .help("Show this help then exit").short('h').long("help"),
 
     const Common = struct {
-        version: ?[]const u8 = null,
-        about: ?[]const u8 = null,
-        author: ?[]const u8 = null,
-        homepage: ?[]const u8 = null,
+        version: ?LiteralString = null,
+        about: ?LiteralString = null,
+        author: ?LiteralString = null,
+        homepage: ?LiteralString = null,
         callBackFn: ?*const anyopaque = null,
-        alias: []const [:0]const u8 = &.{},
+        alias: []const LiteralString = &.{},
         /// Use subcommands, specifying the name of the subcommand's enum union field.
-        subName: ?[:0]const u8 = null,
+        subName: ?LiteralString = null,
     };
 
-    pub fn new(name: [:0]const u8) Self {
+    pub fn new(name: LiteralString) Self {
         return .{ .name = name };
     }
-    pub fn version(self: Self, s: []const u8) Self {
+    pub fn version(self: Self, s: LiteralString) Self {
         var cmd = self;
         cmd.common.version = s;
         return cmd;
     }
-    pub fn about(self: Self, s: []const u8) Self {
+    pub fn about(self: Self, s: LiteralString) Self {
         var cmd = self;
         cmd.common.about = s;
         return cmd;
     }
-    pub fn homepage(self: Self, s: []const u8) Self {
+    pub fn homepage(self: Self, s: LiteralString) Self {
         var cmd = self;
         cmd.common.homepage = s;
         return cmd;
     }
-    pub fn author(self: Self, s: []const u8) Self {
+    pub fn author(self: Self, s: LiteralString) Self {
         var cmd = self;
         cmd.common.author = s;
         return cmd;
     }
-    pub fn alias(self: Self, s: [:0]const u8) Self {
+    pub fn alias(self: Self, s: LiteralString) Self {
         var cmd = self;
-        cmd.common.alias = cmd.common.alias ++ [_][:0]const u8{s};
+        cmd.common.alias = cmd.common.alias ++ [_]LiteralString{s};
         return cmd;
     }
-    pub fn requireSub(self: Self, s: [:0]const u8) Self {
+    pub fn requireSub(self: Self, s: LiteralString) Self {
         var cmd = self;
         cmd.common.subName = s;
         return cmd;
@@ -115,9 +116,9 @@ pub const Command = struct {
     }
     pub fn opt(
         self: Self,
-        name: [:0]const u8,
+        name: LiteralString,
         T: type,
-        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?String = null, default: ?T = null, callBackFn: ?fn (*T) void = null },
+        common: struct { help: ?LiteralString = null, short: ?u8 = null, long: ?String = null, default: ?T = null, callBackFn: ?fn (*T) void = null },
     ) Self {
         var meta = Meta.opt(name, T);
         meta.common.help = common.help;
@@ -137,9 +138,9 @@ pub const Command = struct {
     }
     pub fn optArg(
         self: Self,
-        name: [:0]const u8,
+        name: LiteralString,
         T: type,
-        common: struct { help: ?[]const u8 = null, short: ?u8 = null, long: ?String = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*TryOptional(T)) void = null },
+        common: struct { help: ?LiteralString = null, short: ?u8 = null, long: ?String = null, argName: ?LiteralString = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*TryOptional(T)) void = null },
     ) Self {
         var meta = Meta.optArg(name, T);
         meta.common.help = common.help;
@@ -163,9 +164,9 @@ pub const Command = struct {
     }
     pub fn posArg(
         self: Self,
-        name: [:0]const u8,
+        name: LiteralString,
         T: type,
-        common: struct { help: ?[]const u8 = null, argName: ?[]const u8 = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*TryOptional(T)) void = null },
+        common: struct { help: ?LiteralString = null, argName: ?LiteralString = null, default: ?T = null, parseFn: ?parser.Fn(T) = null, callBackFn: ?fn (*TryOptional(T)) void = null },
     ) Self {
         var meta = Meta.posArg(name, T);
         meta.common.help = common.help;
@@ -215,7 +216,7 @@ pub const Command = struct {
             }
         }
     }
-    fn _checkInLong(self: *const Self, s: []const u8) void {
+    fn _checkInLong(self: *const Self, s: String) void {
         if (self._builtin_help) |m| {
             for (m.common.long) |_l| {
                 if (std.mem.eql(u8, _l, s)) {
@@ -245,7 +246,7 @@ pub const Command = struct {
             for (meta.common.long) |s| self._checkInLong(s);
         }
     }
-    fn _checkInCmdName(self: *const Self, name: [:0]const u8) void {
+    fn _checkInCmdName(self: *const Self, name: LiteralString) void {
         for (self._cmds) |c| {
             if (std.mem.eql(u8, c.name, name)) {
                 @compileError(print("name({s}) conflicts with subcommand({s})", .{ name, c.name }));
@@ -353,7 +354,7 @@ pub const Command = struct {
                 msg = msg ++ "\n" ++ c.name;
             }
             if (c.common.alias.len != 0) {
-                msg = msg ++ "\n" ++ print("(alias{})", .{niceFormatter(@as([]const String, c.common.alias))});
+                msg = msg ++ "\n" ++ print("(alias{})", .{nice(c.common.alias)});
             }
         }
         return msg;
@@ -573,254 +574,256 @@ pub const Command = struct {
         }
     }
 
-    test "Compile Errors" {
-        // TODO https://github.com/ziglang/zig/issues/513
-        return error.SkipZigTest;
-    }
-
-    test "Format usage" {
-        const subcmd0 = Self.new("subcmd0")
-            .arg(Meta.optArg("optional_int", i32).long("oint").default(1).argName("OINT"))
-            .arg(Meta.optArg("int", i32).long("int"))
-            .arg(Meta.optArg("files", []const String).short('f').long("file"))
-            .arg(Meta.posArg("optional_pos", u32).default(6))
-            .arg(Meta.posArg("io", [2]String))
-            .arg(Meta.posArg("message", String).default("hello"));
-        const cmd = Self.new("cmd").requireSub("sub")
-            .arg(Meta.opt("verbose", u8).short('v'))
-            .sub(subcmd0)
-            .sub(Self.new("subcmd1"));
-        try testing.expectEqualStrings(
-            "cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}",
-            cmd.usage(),
-        );
-        try testing.expectEqualStrings(
-            "subcmd0 [-h|--help] [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}] [{MESSAGE}]",
-            subcmd0.usage(),
-        );
-    }
-
-    test "Format help" {
-        {
-            const cmd = Self.new("cmd")
-                .arg(Meta.opt("verbose", u8).short('v').help("Set log level"))
-                .arg(Meta.optArg("optional_int", i32).long("oint").default(1).argName("OINT").help("Optional integer"))
-                .arg(Meta.optArg("int", i32).long("int").help("Required integer"))
-                .arg(Meta.optArg("files", []String).short('f').long("file").help("Multiple files"))
-                .arg(Meta.posArg("optional_pos", u32).default(6).help("Optional position argument"))
-                .arg(Meta.posArg("io", [2]String).help("Array position arguments"))
-                .arg(Meta.posArg("message", ?String).help("Optional message"));
-            try testing.expectEqualStrings(
-                \\Usage: cmd [-h|--help] [-v]... [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}] [{MESSAGE}]
-                \\
-                \\Options:
-                \\[-h|--help]             Show this help then exit
-                \\[-v]...                 Set log level
-                \\                        (default=0)
-                \\
-                \\Options with arguments:
-                \\[--oint {OINT}]         Optional integer
-                \\                        (default=1)
-                \\--int {INT}             Required integer
-                \\-f|--file {[]FILES}...      Multiple files
-                \\
-                \\Positional arguments:
-                \\[{OPTIONAL_POS}]        Optional position argument
-                \\                        (default=6)
-                \\{[2]IO}                 Array position arguments
-                \\[{MESSAGE}]             Optional message
-                \\                        (default=null)
-            ,
-                cmd.help(),
-            );
+    const _test = struct {
+        test "Compile Errors" {
+            // TODO https://github.com/ziglang/zig/issues/513
+            return error.SkipZigTest;
         }
-        {
+
+        test "Format usage" {
+            const subcmd0 = Self.new("subcmd0")
+                .arg(Meta.optArg("optional_int", i32).long("oint").default(1).argName("OINT"))
+                .arg(Meta.optArg("int", i32).long("int"))
+                .arg(Meta.optArg("files", []const String).short('f').long("file"))
+                .arg(Meta.posArg("optional_pos", u32).default(6))
+                .arg(Meta.posArg("io", [2]String))
+                .arg(Meta.posArg("message", String).default("hello"));
             const cmd = Self.new("cmd").requireSub("sub")
                 .arg(Meta.opt("verbose", u8).short('v'))
-                .sub(Self.new("subcmd0").alias("alias0").alias("alias1"))
-                .sub(Self.new("subcmd1").alias("alias3"));
+                .sub(subcmd0)
+                .sub(Self.new("subcmd1"));
             try testing.expectEqualStrings(
-                \\Usage: cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}
-                \\
-                \\Options:
-                \\[-h|--help]             Show this help then exit
-                \\[-v]...                 (default=0)
-                \\
-                \\Commands:
-                \\subcmd0
-                \\(alias{alias0, alias1})
-                \\subcmd1
-                \\(alias{alias3})
-            ,
-                cmd.help(),
+                "cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}",
+                cmd.usage(),
+            );
+            try testing.expectEqualStrings(
+                "subcmd0 [-h|--help] [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}] [{MESSAGE}]",
+                subcmd0.usage(),
             );
         }
-    }
 
-    test "Parse Error without subcommand" {
-        const cmd = Self.new("cmd")
-            .arg(Meta.optArg("int", i32).long("int").help("Required integer"))
-            .arg(Meta.optArg("files", []const String).short('f').long("file").help("Multiple files"))
-            .arg(Meta.posArg("pos", u32).help("Required position argument"));
-        {
-            var it = try TokenIter.initList(&[_]String{"-"}, .{});
-            try testing.expectError(Error.TokenIter, cmd.parseFrom(&it, null));
-        }
-        {
-            var it = try TokenIter.initList(&[_]String{"--int="}, .{});
-            try testing.expectError(Error.MissingOptArg, cmd.parseFrom(&it, null));
-        }
-        {
-            var it = try TokenIter.initList(&[_]String{"--int=a"}, .{});
-            try testing.expectError(Error.InvalidOptArg, cmd.parseFrom(&it, null));
-        }
-        {
-            var it = try TokenIter.initList(&[_]String{ "--int=1", "--int", "2" }, .{});
-            try testing.expectError(Error.RepeatOpt, cmd.parseFrom(&it, null));
-        }
-        {
-            var it = try TokenIter.initList(&[_]String{"-t"}, .{});
-            try testing.expectError(Error.UnknownOpt, cmd.parseFrom(&it, null));
-        }
-        {
-            var it = try TokenIter.initList(&[_]String{"--"}, .{});
-            try testing.expectError(Error.MissingOptArg, cmd.parseFrom(&it, null));
-        }
-        {
-            var it = try TokenIter.initList(&[_]String{ "--int=1", "--" }, .{});
-            try testing.expectError(Error.MissingPosArg, cmd.parseFrom(&it, null));
-        }
-        {
-            var it = try TokenIter.initList(&[_]String{ "--int=1", "--", "a" }, .{});
-            try testing.expectError(Error.InvalidPosArg, cmd.parseFrom(&it, null));
-        }
-    }
-
-    test "Parse Error with subcommand" {
-        const cmd = Self.new("cmd").requireSub("sub")
-            .arg(Meta.opt("verbose", u8).short('v'))
-            .sub(Self.new("subcmd0"))
-            .sub(Self.new("subcmd1").alias("alias0"));
-        {
-            var it = try TokenIter.initList(&[_]String{"-v"}, .{});
-            try testing.expectError(Error.MissingSubCmd, cmd.parseFrom(&it, null));
-        }
-        {
-            var it = try TokenIter.initList(&[_]String{"subcmd2"}, .{});
-            try testing.expectError(Error.UnknownSubCmd, cmd.parseFrom(&it, null));
-        }
-        {
-            var it = try TokenIter.initList(&[_]String{"alias0"}, .{});
-            try testing.expectEqual(
-                cmd.Result(){ .sub = .{ .subcmd1 = .{} } },
-                try cmd.parseFrom(&it, null),
-            );
-        }
-    }
-
-    test "Parse with callBack" {
-        comptime var cmd = Self.new("cmd")
-            .arg(Meta.opt("verbose", u8).short('v'))
-            .arg(Meta.optArg("count", u32).short('c').default(3).callBackFn(struct {
-                fn f(v: *u32) void {
-                    v.* *= 10;
-                }
-            }.f))
-            .arg(Meta.posArg("pos", String));
-        const R = cmd.Result();
-        comptime cmd.callBack(struct {
-            fn f(r: *R) void {
-                std.debug.print("verbose is {d}\n", .{r.verbose});
-                r.*.verbose += 10;
+        test "Format help" {
+            {
+                const cmd = Self.new("cmd")
+                    .arg(Meta.opt("verbose", u8).short('v').help("Set log level"))
+                    .arg(Meta.optArg("optional_int", i32).long("oint").default(1).argName("OINT").help("Optional integer"))
+                    .arg(Meta.optArg("int", i32).long("int").help("Required integer"))
+                    .arg(Meta.optArg("files", []String).short('f').long("file").help("Multiple files"))
+                    .arg(Meta.posArg("optional_pos", u32).default(6).help("Optional position argument"))
+                    .arg(Meta.posArg("io", [2]String).help("Array position arguments"))
+                    .arg(Meta.posArg("message", ?String).help("Optional message"));
+                try testing.expectEqualStrings(
+                    \\Usage: cmd [-h|--help] [-v]... [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [{OPTIONAL_POS}] [{MESSAGE}]
+                    \\
+                    \\Options:
+                    \\[-h|--help]             Show this help then exit
+                    \\[-v]...                 Set log level
+                    \\                        (default=0)
+                    \\
+                    \\Options with arguments:
+                    \\[--oint {OINT}]         Optional integer
+                    \\                        (default=1)
+                    \\--int {INT}             Required integer
+                    \\-f|--file {[]FILES}...      Multiple files
+                    \\
+                    \\Positional arguments:
+                    \\[{OPTIONAL_POS}]        Optional position argument
+                    \\                        (default=6)
+                    \\{[2]IO}                 Array position arguments
+                    \\[{MESSAGE}]             Optional message
+                    \\                        (default=null)
+                ,
+                    cmd.help(),
+                );
             }
-        }.f);
-        {
-            var it = try TokenIter.initLine("-c 2 -vv hello", null, .{});
-            const args = try cmd.parseFrom(&it, null);
-            try testing.expectEqualDeep(
-                R{ .verbose = 12, .count = 20, .pos = "hello" },
-                args,
-            );
+            {
+                const cmd = Self.new("cmd").requireSub("sub")
+                    .arg(Meta.opt("verbose", u8).short('v'))
+                    .sub(Self.new("subcmd0").alias("alias0").alias("alias1"))
+                    .sub(Self.new("subcmd1").alias("alias3"));
+                try testing.expectEqualStrings(
+                    \\Usage: cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}
+                    \\
+                    \\Options:
+                    \\[-h|--help]             Show this help then exit
+                    \\[-v]...                 (default=0)
+                    \\
+                    \\Commands:
+                    \\subcmd0
+                    \\(alias{ alias0, alias1 })
+                    \\subcmd1
+                    \\(alias{ alias3 })
+                ,
+                    cmd.help(),
+                );
+            }
         }
-        {
-            var it = try TokenIter.initLine("-v hello", null, .{});
-            const args = try cmd.parseFrom(&it, null);
-            try testing.expectEqualDeep(
-                R{ .verbose = 11, .count = 3, .pos = "hello" },
-                args,
-            );
-        }
-    }
 
-    test "Parse struct with parser and allocator" {
-        const Mem = struct {
-            buf: []u8,
-            pub fn parse(s: String, a: ?Allocator) ?@This() {
-                const allocator = a orelse return null;
-                const len = parseAny(usize, s, null) orelse return null;
-                const buf = allocator.alloc(u8, len) catch return null;
-                return .{ .buf = buf };
+        test "Parse Error without subcommand" {
+            const cmd = Self.new("cmd")
+                .arg(Meta.optArg("int", i32).long("int").help("Required integer"))
+                .arg(Meta.optArg("files", []const String).short('f').long("file").help("Multiple files"))
+                .arg(Meta.posArg("pos", u32).help("Required position argument"));
+            {
+                var it = try TokenIter.initList(&[_]String{"-"}, .{});
+                try testing.expectError(Error.TokenIter, cmd.parseFrom(&it, null));
             }
-            pub fn destroy(self: @This(), a: Allocator) void {
-                a.free(self.buf);
+            {
+                var it = try TokenIter.initList(&[_]String{"--int="}, .{});
+                try testing.expectError(Error.MissingOptArg, cmd.parseFrom(&it, null));
             }
-        };
-        const cmd = Self.new("cmd")
-            .posArg("mem", [2]Mem, .{ .callBackFn = struct {
-                fn f(v: *[2]Mem) void {
-                    for (v.*) |m| {
-                        const msg = "Hello World!";
-                        const len = @min(m.buf.len, msg.len);
-                        @memcpy(m.buf, msg[0..len]);
+            {
+                var it = try TokenIter.initList(&[_]String{"--int=a"}, .{});
+                try testing.expectError(Error.InvalidOptArg, cmd.parseFrom(&it, null));
+            }
+            {
+                var it = try TokenIter.initList(&[_]String{ "--int=1", "--int", "2" }, .{});
+                try testing.expectError(Error.RepeatOpt, cmd.parseFrom(&it, null));
+            }
+            {
+                var it = try TokenIter.initList(&[_]String{"-t"}, .{});
+                try testing.expectError(Error.UnknownOpt, cmd.parseFrom(&it, null));
+            }
+            {
+                var it = try TokenIter.initList(&[_]String{"--"}, .{});
+                try testing.expectError(Error.MissingOptArg, cmd.parseFrom(&it, null));
+            }
+            {
+                var it = try TokenIter.initList(&[_]String{ "--int=1", "--" }, .{});
+                try testing.expectError(Error.MissingPosArg, cmd.parseFrom(&it, null));
+            }
+            {
+                var it = try TokenIter.initList(&[_]String{ "--int=1", "--", "a" }, .{});
+                try testing.expectError(Error.InvalidPosArg, cmd.parseFrom(&it, null));
+            }
+        }
+
+        test "Parse Error with subcommand" {
+            const cmd = Self.new("cmd").requireSub("sub")
+                .arg(Meta.opt("verbose", u8).short('v'))
+                .sub(Self.new("subcmd0"))
+                .sub(Self.new("subcmd1").alias("alias0"));
+            {
+                var it = try TokenIter.initList(&[_]String{"-v"}, .{});
+                try testing.expectError(Error.MissingSubCmd, cmd.parseFrom(&it, null));
+            }
+            {
+                var it = try TokenIter.initList(&[_]String{"subcmd2"}, .{});
+                try testing.expectError(Error.UnknownSubCmd, cmd.parseFrom(&it, null));
+            }
+            {
+                var it = try TokenIter.initList(&[_]String{"alias0"}, .{});
+                try testing.expectEqual(
+                    cmd.Result(){ .sub = .{ .subcmd1 = .{} } },
+                    try cmd.parseFrom(&it, null),
+                );
+            }
+        }
+
+        test "Parse with callBack" {
+            comptime var cmd = Self.new("cmd")
+                .arg(Meta.opt("verbose", u8).short('v'))
+                .arg(Meta.optArg("count", u32).short('c').default(3).callBackFn(struct {
+                    fn f(v: *u32) void {
+                        v.* *= 10;
                     }
+                }.f))
+                .arg(Meta.posArg("pos", String));
+            const R = cmd.Result();
+            comptime cmd.callBack(struct {
+                fn f(r: *R) void {
+                    std.debug.print("verbose is {d}\n", .{r.verbose});
+                    r.*.verbose += 10;
                 }
-            }.f })
-            .optArg("number", []i32, .{ .short = 'i' })
-            .optArg("message", []String, .{ .short = 'm' });
-        const R = cmd.Result();
-        var args: R = undefined;
-        {
-            var it = try TokenIter.initLine("-m hello -i 0xf -i 6 -m world 2 7", null, .{});
-            args = try cmd.parseFrom(&it, testing.allocator);
+            }.f);
+            {
+                var it = try TokenIter.initLine("-c 2 -vv hello", null, .{});
+                const args = try cmd.parseFrom(&it, null);
+                try testing.expectEqualDeep(
+                    R{ .verbose = 12, .count = 20, .pos = "hello" },
+                    args,
+                );
+            }
+            {
+                var it = try TokenIter.initLine("-v hello", null, .{});
+                const args = try cmd.parseFrom(&it, null);
+                try testing.expectEqualDeep(
+                    R{ .verbose = 11, .count = 3, .pos = "hello" },
+                    args,
+                );
+            }
         }
-        try testing.expectEqual(0xf, args.number[0]);
-        try testing.expectEqual(6, args.number[1]);
-        args.number[1] *= 10;
-        try testing.expectEqual(60, args.number[1]);
-        try testing.expectEqualStrings("hello", args.message[0]);
-        try testing.expectEqualStrings("world", args.message[1]);
-        try testing.expectEqualStrings("He", args.mem[0].buf);
-        try testing.expectEqualStrings("Hello W", args.mem[1].buf);
-        defer cmd.destroy(&args, testing.allocator);
-    }
 
-    test "Parse with optional type" {
-        const cmd = Self.new("cmd")
-            .arg(Arg.optArg("integer", ?i32).long("int"))
-            .arg(Arg.optArg("output", ?String).long("out"))
-            .arg(Arg.posArg("message", ?String));
-        const R = cmd.Result();
-        {
-            var it = try TokenIter.initLine("--int 3 --out hello world", null, .{});
-            const args = try cmd.parseFrom(&it, testing.allocator);
+        test "Parse struct with parser and allocator" {
+            const Mem = struct {
+                buf: []u8,
+                pub fn parse(s: String, a: ?Allocator) ?@This() {
+                    const allocator = a orelse return null;
+                    const len = parseAny(usize, s, null) orelse return null;
+                    const buf = allocator.alloc(u8, len) catch return null;
+                    return .{ .buf = buf };
+                }
+                pub fn destroy(self: @This(), a: Allocator) void {
+                    a.free(self.buf);
+                }
+            };
+            const cmd = Self.new("cmd")
+                .posArg("mem", [2]Mem, .{ .callBackFn = struct {
+                    fn f(v: *[2]Mem) void {
+                        for (v.*) |m| {
+                            const msg = "Hello World!";
+                            const len = @min(m.buf.len, msg.len);
+                            @memcpy(m.buf, msg[0..len]);
+                        }
+                    }
+                }.f })
+                .optArg("number", []i32, .{ .short = 'i' })
+                .optArg("message", []String, .{ .short = 'm' });
+            const R = cmd.Result();
+            var args: R = undefined;
+            {
+                var it = try TokenIter.initLine("-m hello -i 0xf -i 6 -m world 2 7", null, .{});
+                args = try cmd.parseFrom(&it, testing.allocator);
+            }
+            try testing.expectEqual(0xf, args.number[0]);
+            try testing.expectEqual(6, args.number[1]);
+            args.number[1] *= 10;
+            try testing.expectEqual(60, args.number[1]);
+            try testing.expectEqualStrings("hello", args.message[0]);
+            try testing.expectEqualStrings("world", args.message[1]);
+            try testing.expectEqualStrings("He", args.mem[0].buf);
+            try testing.expectEqualStrings("Hello W", args.mem[1].buf);
             defer cmd.destroy(&args, testing.allocator);
-            try testing.expectEqualDeep(
-                R{ .integer = 3, .output = "hello", .message = "world" },
-                args,
-            );
         }
-        {
-            var it = try TokenIter.initLine("", null, .{});
-            const args = try cmd.parseFrom(&it, testing.allocator);
-            defer cmd.destroy(&args, testing.allocator);
-            try testing.expectEqualDeep(
-                R{ .integer = null, .output = null, .message = null },
-                args,
-            );
+
+        test "Parse with optional type" {
+            const cmd = Self.new("cmd")
+                .arg(Arg.optArg("integer", ?i32).long("int"))
+                .arg(Arg.optArg("output", ?String).long("out"))
+                .arg(Arg.posArg("message", ?String));
+            const R = cmd.Result();
+            {
+                var it = try TokenIter.initLine("--int 3 --out hello world", null, .{});
+                const args = try cmd.parseFrom(&it, testing.allocator);
+                defer cmd.destroy(&args, testing.allocator);
+                try testing.expectEqualDeep(
+                    R{ .integer = 3, .output = "hello", .message = "world" },
+                    args,
+                );
+            }
+            {
+                var it = try TokenIter.initLine("", null, .{});
+                const args = try cmd.parseFrom(&it, testing.allocator);
+                defer cmd.destroy(&args, testing.allocator);
+                try testing.expectEqualDeep(
+                    R{ .integer = null, .output = null, .message = null },
+                    args,
+                );
+            }
         }
-    }
+    };
 };
 
 test {
-    _ = Command;
+    _ = Command._test;
 }
