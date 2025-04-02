@@ -483,7 +483,7 @@ pub const Command = struct {
                     if (self._builtin_help) |m| {
                         if (m._match(t)) {
                             std.debug.print("{s}\n", .{self.help()});
-                            std.process.exit(1);
+                            std.process.exit(0);
                         }
                     }
                     inline for (self._args) |m| {
