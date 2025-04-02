@@ -414,8 +414,10 @@ pub const Command = struct {
         return @Type(.{ .@"struct" = r });
     }
 
-    pub fn callBack(self: *Self, f: fn (*self.Result()) void) void {
-        self.common.callBackFn = @ptrCast(&f);
+    pub fn callBack(self: Self, f: fn (*self.Result()) void) Self {
+        var cmd = self;
+        cmd.common.callBackFn = @ptrCast(&f);
+        return cmd;
     }
 
     fn _match(self: Self, t: String) bool {
@@ -730,7 +732,7 @@ pub const Command = struct {
                 }.f))
                 .arg(Meta.posArg("pos", String));
             const R = cmd.Result();
-            comptime cmd.callBack(struct {
+            cmd = cmd.callBack(struct {
                 fn f(r: *R) void {
                     std.debug.print("verbose is {d}\n", .{r.verbose});
                     r.*.verbose += 10;
