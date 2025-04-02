@@ -484,9 +484,6 @@ pub const Formatter = struct {
             const Self = @This();
             v: T,
             pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-                if (T == LiteralString) {
-                    return std.fmt.formatType(self.v, fmt, options, writer, std.options.fmt_max_depth);
-                }
                 if (comptime Type.isOptional(T)) {
                     return if (self.v) |v_| nice(v_).format(fmt, options, writer) else writer.writeAll("null");
                 }
@@ -500,6 +497,9 @@ pub const Formatter = struct {
                     }
                     try writer.writeAll(" }");
                     return;
+                }
+                if (T == LiteralString or T == String) {
+                    return std.fmt.formatType(self.v, if (fmt.len == 0) "s" else fmt, options, writer, std.options.fmt_max_depth);
                 }
                 if (comptime Type.isBase(T)) {
                     return switch (@typeInfo(T)) {
@@ -535,6 +535,7 @@ pub const Formatter = struct {
                     try testing.expectEqualStrings("{ a, b }", try sprint(&buffer, "{c}", .{Nice([]const u8).value(&ab)}));
                     try testing.expectEqualStrings("ab", try sprint(&buffer, "{s}", .{Nice([]const u8).value(&ab)}));
                     try testing.expectEqualStrings("ab", try sprint(&buffer, "{s}", .{nice(@as([]const u8, &ab))}));
+                    try testing.expectEqualStrings("ab", try sprint(&buffer, "{}", .{nice(@as([]const u8, &ab))}));
                 }
                 {
                     var ab = [_]u8{ 'a', 'b' };
@@ -545,6 +546,7 @@ pub const Formatter = struct {
                     const s: [:0]const u8 = "hello";
                     try testing.expectEqualStrings("{ h, e, l, l, o }", try sprint(&buffer, "{c}", .{nice(s)}));
                     try testing.expectEqualStrings("hello", try sprint(&buffer, "{s}", .{nice(s)}));
+                    try testing.expectEqualStrings("hello", try sprint(&buffer, "{}", .{nice(s)}));
                 }
             }
             {
