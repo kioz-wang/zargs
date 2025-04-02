@@ -112,7 +112,12 @@ pub const Command = struct {
         for (cmd.common.alias) |s| {
             c._checkInCmdName(s);
         }
-        c._cmds = c._cmds ++ [_]Self{cmd};
+        c._cmds = c._cmds ++ [_]Self{
+            if (cmd._config == null and self._config != null)
+                cmd.setConfig(self._config.?)
+            else
+                cmd,
+        };
         c._stat.cmd += 1;
         return c;
     }
@@ -381,6 +386,7 @@ pub const Command = struct {
             e = e ++ [_]EnumField{.{ .name = c.name, .value = i }};
             u = u ++ [_]UnionField{.{ .name = c.name, .type = c.Result(), .alignment = @alignOf(c.Result()) }};
         }
+        @setEvalBranchQuota(5000); // TODO why?
         const E = @Type(.{ .@"enum" = .{
             .tag_type = std.math.IntFittingRange(0, e.len - 1),
             .fields = e,
@@ -466,7 +472,7 @@ pub const Command = struct {
     }
 
     pub fn parse(self: Self, a: Allocator) !self.Result() {
-        var it = try TokenIter.init(a, self._config orelse .{});
+        var it = try TokenIter.init(a, .{});
         defer it.deinit();
         _ = try it.next();
         return self.parseFrom(&it, a);
@@ -484,6 +490,8 @@ pub const Command = struct {
             @field(i, s) = undefined;
             break :blk i;
         } else .{});
+
+        it.reinit(self._config);
 
         while (it.view() catch |e| return self._errCastIter(e)) |t| {
             switch (t) {
@@ -550,7 +558,6 @@ pub const Command = struct {
             inline for (self._cmds) |c| {
                 if (c._match(t)) {
                     _ = it.next() catch unreachable;
-                    it.reinit(c._config);
                     @field(r, s) = @unionInit(self.SubCmdUnion(), c.name, try c.parseFrom(it, a));
                     hit = true;
                     break;
@@ -832,51 +839,123 @@ pub const Command = struct {
         }
 
         test "Parse with custom config" {
-            const _a = Self.new("A")
+            const _d = Self.new("D")
                 .arg(Arg.opt("verbose", u32).short('v').long("verbose"))
                 .arg(Arg.opt("ignore", bool).short('i').long("ignore"))
                 .arg(Arg.optArg("output", String).long("out").short('o'))
                 .arg(Arg.posArg("input", String));
-            const _b = Self.new("B")
-                .arg(Arg.opt("verbose", u32).short('v').long("verbose"))
-                .arg(Arg.opt("ignore", bool).short('i').long("ignore"))
-                .arg(Arg.optArg("output", String).long("out").short('o'));
             const _c = Self.new("C")
                 .arg(Arg.opt("verbose", u32).short('v').long("verbose"))
                 .arg(Arg.opt("ignore", bool).short('i').long("ignore"))
                 .arg(Arg.optArg("output", String).long("out").short('o'));
-            const R = _c.requireSub("sub").sub(
-                _b.requireSub("sub").sub(_a),
+            const _b = Self.new("B")
+                .arg(Arg.opt("verbose", u32).short('v').long("verbose"))
+                .arg(Arg.opt("ignore", bool).short('i').long("ignore"))
+                .arg(Arg.optArg("output", String).long("out").short('o'));
+            const _a = Self.new("A")
+                .arg(Arg.opt("verbose", u32).short('v').long("verbose"))
+                .arg(Arg.opt("ignore", bool).short('i').long("ignore"))
+                .arg(Arg.optArg("output", String).long("out").short('o'));
+            const R = _a.requireSub("sub").sub(
+                _b.requireSub("sub").sub(
+                    _c.requireSub("sub").sub(_d),
+                ),
             ).Result();
             const r = R{ .verbose = 2, .ignore = false, .output = "c", .sub = .{
                 .B = .{ .verbose = 1, .ignore = true, .output = "b", .sub = .{
-                    .A = .{ .verbose = 1, .ignore = false, .output = "a", .input = "in" },
+                    .C = .{ .verbose = 1, .ignore = false, .output = "c", .sub = .{
+                        .D = .{ .verbose = 1, .ignore = true, .output = "dd", .input = "in" },
+                    } },
                 } },
             } };
             {
-                const c = _c.requireSub("sub").sub(
-                    _b.requireSub("sub").sub(_a),
+                const a = _a.requireSub("sub").sub(
+                    _b.requireSub("sub").sub(
+                        _c.requireSub("sub").sub(_d),
+                    ),
                 );
-                var it = try TokenIter.initLine("-vvo=c B -vi --out=b A -vo a -- in", null, .{});
-                const args = try c.parseFrom(&it, testing.allocator);
-                defer c.destroy(&args, testing.allocator);
+                var it = try TokenIter.initLine("-vvo=c B -vi --out=b C -vo c -- D -vio=dd in", null, .{});
+                const args = try a.parseFrom(&it, testing.allocator);
+                defer a.destroy(&args, testing.allocator);
                 try testing.expectEqualDeep(r, args);
             }
             {
-                const c = _c.requireSub("sub").sub(
-                    _b.requireSub("sub").sub(_a.setConfig(.{
-                        .terminator = "**",
-                        .prefix_long = "+++",
-                        .prefix_short = "@",
-                        .connector = "=>",
-                    })).setConfig(.{
+                const a = _a.requireSub("sub").sub(
+                    _b.setConfig(.{
                         .terminator = "##",
                         .connector = ":",
-                    }),
+                    }).requireSub("sub").sub(
+                        _c.setConfig(.{
+                            .terminator = "**",
+                            .prefix_long = "+++",
+                            .prefix_short = "@",
+                            .connector = "=>",
+                        }).requireSub("sub").sub(
+                            _d,
+                        ),
+                    ),
                 );
-                var it = try TokenIter.initLine("-vvo=c B -vi --out:b ## A @v +++out=>a ** in", null, .{});
-                const args = try c.parseFrom(&it, testing.allocator);
-                defer c.destroy(&args, testing.allocator);
+                var it = try TokenIter.initLine("-vvo=c B -vi --out:b ## C @v +++out=>c ** D @vio=>dd in", null, .{});
+                const args = try a.parseFrom(&it, testing.allocator);
+                defer a.destroy(&args, testing.allocator);
+                try testing.expectEqualDeep(r, args);
+            }
+            {
+                const a = _a.requireSub("sub").sub(
+                    _b.setConfig(.{
+                        .terminator = "##",
+                        .connector = ":",
+                    }).requireSub("sub").sub(
+                        _c.requireSub("sub").sub(
+                            _d.setConfig(.{
+                                .terminator = "**",
+                                .prefix_long = "+++",
+                                .prefix_short = "@",
+                                .connector = "=>",
+                            }),
+                        ),
+                    ),
+                );
+                var it = try TokenIter.initLine("-vvo=c B -vi --out:b ## C -v --out:c ## D @vio=>dd in", null, .{});
+                const args = try a.parseFrom(&it, testing.allocator);
+                defer a.destroy(&args, testing.allocator);
+                try testing.expectEqualDeep(r, args);
+            }
+            {
+                const a = _a.requireSub("sub").sub(
+                    _b.setConfig(.{
+                        .terminator = "##",
+                        .connector = ":",
+                    }).requireSub("sub").sub(
+                        _c.requireSub("sub").sub(
+                            _d,
+                        ),
+                    ),
+                );
+                var it = try TokenIter.initLine("-vvo=>c B -vi --out:b ## C -v --out:c ## D -vio:dd in", null, .{ .connector = "=>" });
+                const args = try a.parseFrom(&it, testing.allocator);
+                defer a.destroy(&args, testing.allocator);
+                try testing.expectEqualDeep(r, args);
+            }
+            {
+                const a = _a.setConfig(.{
+                    .terminator = "##",
+                    .connector = ":",
+                }).requireSub("sub").sub(
+                    _b.requireSub("sub").sub(
+                        _c.requireSub("sub").sub(
+                            _d.setConfig(.{
+                                .terminator = "**",
+                                .prefix_long = "+++",
+                                .prefix_short = "@",
+                                .connector = "=>",
+                            }),
+                        ),
+                    ),
+                );
+                var it = try TokenIter.initLine("-vvo:c ## B -vi --out:b ## C -v --out:c ## D @vio=>dd in", null, .{});
+                const args = try a.parseFrom(&it, testing.allocator);
+                defer a.destroy(&args, testing.allocator);
                 try testing.expectEqualDeep(r, args);
             }
         }
