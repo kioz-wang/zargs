@@ -3,9 +3,10 @@ const testing = std.testing;
 const helper = @import("helper.zig");
 const print = helper.Alias.print;
 const String = helper.Alias.String;
+const LiteralString = helper.Alias.LiteralString;
 
 const FormatHelper = struct {
-    pub fn opt(short: ?u8, long: ?[]const u8) []const u8 {
+    pub fn opt(short: ?u8, long: ?String) []const u8 {
         var usage: []const u8 = "";
         if (short) |s| {
             usage = print("-{c}", .{s});
@@ -18,7 +19,7 @@ const FormatHelper = struct {
         }
         return usage;
     }
-    pub fn arg(name: []const u8, T: type) []const u8 {
+    pub fn arg(name: LiteralString, T: type) []const u8 {
         const pre = switch (@typeInfo(T)) {
             .array => |info| print("[{d}]", .{info.len}),
             .pointer => if (T == String) "" else "[]",
@@ -29,20 +30,23 @@ const FormatHelper = struct {
     pub fn optional(has_default: bool, u: []const u8) []const u8 {
         return if (has_default) print("[{s}]", .{u}) else u;
     }
-    test opt {
-        try testing.expectEqualStrings("-o", comptime opt('o', null));
-        try testing.expectEqualStrings("--out", comptime opt(null, "out"));
-        try testing.expectEqualStrings("-o|--out", comptime opt('o', "out"));
-    }
-    test arg {
-        try testing.expectEqualStrings("{OUT}", comptime arg("OUT", u32));
-        try testing.expectEqualStrings("{[2]OUT}", comptime arg("OUT", [2]u32));
-        try testing.expectEqualStrings("{[]OUT}", comptime arg("OUT", []const u32));
-    }
-    test optional {
-        try testing.expectEqualStrings("usage", comptime optional(false, "usage"));
-        try testing.expectEqualStrings("[usage]", comptime optional(true, "usage"));
-    }
+
+    const _test = struct {
+        test opt {
+            try testing.expectEqualStrings("-o", comptime opt('o', null));
+            try testing.expectEqualStrings("--out", comptime opt(null, "out"));
+            try testing.expectEqualStrings("-o|--out", comptime opt('o', "out"));
+        }
+        test arg {
+            try testing.expectEqualStrings("{OUT}", comptime arg("OUT", u32));
+            try testing.expectEqualStrings("{[2]OUT}", comptime arg("OUT", [2]u32));
+            try testing.expectEqualStrings("{[]OUT}", comptime arg("OUT", []const u32));
+        }
+        test optional {
+            try testing.expectEqualStrings("usage", comptime optional(false, "usage"));
+            try testing.expectEqualStrings("[usage]", comptime optional(true, "usage"));
+        }
+    };
 };
 
 pub fn Ranges(T: type) type {
@@ -88,25 +92,23 @@ pub const Meta = struct {
     const isArray = helper.Type.isArray;
     const isMultiple = helper.Type.isMultiple;
     const TryOptional = helper.Type.TryOptional;
-    const TryMultiple = helper.Type.TryMultiple;
-    const NiceFormatter = helper.NiceFormatter;
-    const niceFormatter = helper.niceFormatter;
+    const nice = helper.Formatter.nice;
     const equal = helper.Compare.equal;
     const Self = @This();
 
-    name: [:0]const u8,
+    name: LiteralString,
     T: type,
     class: Class,
     common: Common = .{},
 
     const Common = struct {
-        help: ?[]const u8 = null,
+        help: ?LiteralString = null,
         default: ?*const anyopaque = null,
         parseFn: ?*const anyopaque = null, // optArg, posArg
         callBackFn: ?*const anyopaque = null,
         short: []const u8 = &.{}, // opt, optArg
         long: []const String = &.{}, // opt, optArg
-        argName: ?[]const u8 = null, // optArg, posArg
+        argName: ?LiteralString = null, // optArg, posArg
         ranges: ?*const anyopaque = null, // optArg, posArg
         choices: ?*const anyopaque = null, // optArg, posArg
         raw_choices: ?[]const String = null, // optArg, posArg
@@ -120,7 +122,7 @@ pub const Meta = struct {
         std.debug.print(print("{} {s}\n", .{ self, fmt }), args);
     }
 
-    pub fn opt(name: [:0]const u8, T: type) Self {
+    pub fn opt(name: LiteralString, T: type) Self {
         const meta: Self = .{ .name = name, .T = T, .class = .opt };
         // Check T
         if (T != bool and @typeInfo(T) != .int) {
@@ -129,14 +131,14 @@ pub const Meta = struct {
         // Initialize Meta
         return meta;
     }
-    pub fn optArg(name: [:0]const u8, T: type) Self {
+    pub fn optArg(name: LiteralString, T: type) Self {
         const meta: Self = .{ .name = name, .T = T, .class = .optArg };
         // Check T
         _ = Base(T);
         // Initialize Meta
         return meta;
     }
-    pub fn posArg(name: [:0]const u8, T: type) Self {
+    pub fn posArg(name: LiteralString, T: type) Self {
         const meta: Self = .{ .name = name, .T = T, .class = .posArg };
         // Check T
         _ = Base(T);
@@ -146,7 +148,7 @@ pub const Meta = struct {
         // Initialize Meta
         return meta;
     }
-    pub fn help(self: Self, s: []const u8) Self {
+    pub fn help(self: Self, s: LiteralString) Self {
         var meta = self;
         meta.common.help = s;
         return meta;
@@ -191,7 +193,7 @@ pub const Meta = struct {
         meta.common.long = meta.common.long ++ [_]String{s};
         return meta;
     }
-    pub fn argName(self: Self, s: []const u8) Self {
+    pub fn argName(self: Self, s: LiteralString) Self {
         if (self.class == .opt) {
             @compileError(print("{} not support .argName", .{self}));
         }
@@ -299,12 +301,12 @@ pub const Meta = struct {
             if (comptime self._ranges()) |rs| {
                 const rs_found = rs.contain(value);
                 if (!cs_found and !rs_found) {
-                    self.log("parsed as {} but out of choices{} and ranges{}", .{ niceFormatter(value), niceFormatter(cs.*), niceFormatter(rs.rs) });
+                    self.log("parsed as {} but out of choices{} and ranges{}", .{ nice(value), nice(cs.*), nice(rs.rs) });
                 }
                 return cs_found or rs_found;
             } else {
                 if (!cs_found) {
-                    self.log("parsed as {} but out of choices{}", .{ niceFormatter(value), niceFormatter(cs.*) });
+                    self.log("parsed as {} but out of choices{}", .{ nice(value), nice(cs.*) });
                 }
                 return cs_found;
             }
@@ -312,7 +314,7 @@ pub const Meta = struct {
             if (comptime self._ranges()) |rs| {
                 const rs_found = rs.contain(value);
                 if (!rs_found) {
-                    self.log("parsed as {} but out of ranges{}", .{ niceFormatter(value), niceFormatter(rs.rs) });
+                    self.log("parsed as {} but out of ranges{}", .{ nice(value), nice(rs.rs) });
                 }
                 return rs_found;
             } else {
@@ -326,7 +328,7 @@ pub const Meta = struct {
                 if (equal(rc, s)) break true;
             } else false;
             if (!rcs_found) {
-                self.log("to parse {s} but out of raw_choices{}", .{ s, niceFormatter(rcs) });
+                self.log("to parse {s} but out of raw_choices{}", .{ s, nice(rcs) });
                 return null;
             }
         }
@@ -402,7 +404,7 @@ pub const Meta = struct {
             msg = print("{s}{s}(default={})", .{
                 msg,
                 if (self.common.help) |_| "\n" ++ " " ** space else "",
-                niceFormatter(self._toField().defaultValue().?),
+                nice(self._toField().defaultValue().?),
             });
         }
         if (self.common.ranges) |rs| {
@@ -413,7 +415,7 @@ pub const Meta = struct {
                     "\n" ++ " " ** space
                 else
                     "",
-                niceFormatter(p.rs),
+                nice(p.rs),
             });
         }
         if (self.common.choices) |cs| {
@@ -424,7 +426,7 @@ pub const Meta = struct {
                     "\n" ++ " " ** space
                 else
                     "",
-                niceFormatter(p.*),
+                nice(p.*),
             });
         }
         if (self.common.raw_choices) |cs| {
@@ -434,19 +436,19 @@ pub const Meta = struct {
                     "\n" ++ " " ** space
                 else
                     "",
-                niceFormatter(cs),
+                nice(cs),
             });
         }
         if (self.common.short.len > 1 or self.common.long.len > 1) {
             msg = print("{s}\n(alias ", .{msg});
             if (self.common.short.len > 1) {
-                msg = print("{s}short{c}", .{ msg, NiceFormatter([]u8).value(@constCast(self.common.short[1..])) });
+                msg = print("{s}short{c}", .{ msg, nice(@as([]const u8, self.common.short[1..])) });
             }
             if (self.common.short.len > 1 and self.common.long.len > 1) {
                 msg = print("{s} ", .{msg});
             }
             if (self.common.long.len > 1) {
-                msg = print("{s}long{}", .{ msg, NiceFormatter([]const String).value(self.common.long[1..]) });
+                msg = print("{s}long{s}", .{ msg, nice(@as([]const String, self.common.long[1..])) });
             }
             msg = print("{s})", .{msg});
         }
@@ -568,368 +570,360 @@ pub const Meta = struct {
         }
     }
 
-    test "Compile Errors" {
-        // TODO https://github.com/ziglang/zig/issues/513
-        return error.SkipZigTest;
-    }
-
-    test "Check out" {
-        {
-            const meta = Self.opt("out", bool).short('o')._checkOut();
-            try testing.expectEqual(false, meta._toField().defaultValue());
+    const _test = struct {
+        test "Compile Errors" {
+            // TODO https://github.com/ziglang/zig/issues/513
+            return error.SkipZigTest;
         }
-        {
-            const meta = Self.opt("out", u32).short('o')._checkOut();
-            try testing.expectEqual(0, meta._toField().defaultValue());
-        }
-        {
-            const meta = Self.optArg("out", u32).short('o')._checkOut();
-            try testing.expectEqualStrings("OUT", meta.common.argName.?);
-        }
-        {
-            const meta = Self.posArg("out", u32)._checkOut();
-            try testing.expectEqualStrings("OUT", meta.common.argName.?);
-        }
-    }
-
-    test "Match prefix" {
-        {
-            const meta = Self.opt("out", bool).short('o').long("out")._checkOut();
-            try testing.expect(meta._match(.{ .opt = .{ .short = 'o' } }));
-            try testing.expect(!meta._match(.{ .opt = .{ .short = 'i' } }));
-            try testing.expect(meta._match(.{ .opt = .{ .long = "out" } }));
-            try testing.expect(!meta._match(.{ .opt = .{ .long = "input" } }));
-        }
-        {
-            const meta = Self.optArg("out", bool).short('o').long("out").long("output")._checkOut();
-            try testing.expect(meta._match(.{ .opt = .{ .short = 'o' } }));
-            try testing.expect(!meta._match(.{ .opt = .{ .short = 'i' } }));
-            try testing.expect(meta._match(.{ .opt = .{ .long = "out" } }));
-            try testing.expect(meta._match(.{ .opt = .{ .long = "output" } }));
-            try testing.expect(!meta._match(.{ .opt = .{ .long = "input" } }));
-        }
-    }
-
-    test "Format usage" {
-        {
-            try testing.expectEqualStrings("[-o]", comptime Self.opt("out", bool).short('o')._usage());
-            try testing.expectEqualStrings("[-o]...", comptime Self.opt("out", u32).short('o')._usage());
-        }
-        {
-            try testing.expectEqualStrings(
-                "-o {OUT}",
-                comptime Self.optArg("out", bool).short('o')._checkOut()._usage(),
-            );
-            try testing.expectEqualStrings(
-                "[-o {OUT}]",
-                comptime Self.optArg("out", bool).short('o').default(false)._checkOut()._usage(),
-            );
-            try testing.expectEqualStrings(
-                "[-o {OUT}]",
-                comptime Self.optArg("out", ?bool).short('o')._checkOut()._usage(),
-            );
-            try testing.expectEqualStrings(
-                "-o {[2]OUT}",
-                comptime Self.optArg("out", [2]u32).short('o')._checkOut()._usage(),
-            );
-            try testing.expectEqualStrings(
-                "-o {[]OUT}...",
-                comptime Self.optArg("out", []const u32).short('o')._checkOut()._usage(),
-            );
-        }
-        {
-            try testing.expectEqualStrings("{[2]OUT}", comptime Self.posArg("out", [2]u32)._checkOut()._usage());
-            try testing.expectEqualStrings("[{OUT}]", comptime Self.posArg("out", u32).default(1)._checkOut()._usage());
-        }
-    }
-
-    test "Format help" {
-        {
-            try testing.expectEqualStrings(
-                \\[-o|--out]              Help of out
-                \\                        (default=false)
-                \\(alias short{u, t} long{output})
-            ,
-                comptime Self.opt("out", bool)
-                    .short('o').short('u').short('t')
-                    .long("out").long("output").help("Help of out")
-                    ._checkOut()._help(),
-            );
-        }
-        {
-            try testing.expectEqualStrings(
-                \\-o {OUT}                Help of out
-            ,
-                comptime Self.optArg("out", String)
-                    .short('o').help("Help of out")
-                    ._checkOut()._help(),
-            );
-        }
-        {
-            try testing.expectEqualStrings(
-                \\[-o|--out {OUT}]        Help of out
-                \\                        (default=a.out)
-                \\(alias long{output})
-            ,
-                comptime Self.optArg("out", String)
-                    .short('o').long("out").long("output")
-                    .default("a.out")
-                    .help("Help of out")
-                    ._checkOut()._help(),
-            );
-        }
-        {
-            const Color = enum { Red, Green, Blue };
-            try testing.expectEqualStrings(
-                \\[-c|--color {[3]COLORS}]    Help of colors
-                \\                            (default={Red, Green, Blue})
-            ,
-                comptime Self.optArg("colors", [3]Color)
-                    .short('c').long("color")
-                    .default([_]Color{ .Red, .Green, .Blue })
-                    .help("Help of colors")
-                    ._checkOut()._help(),
-            );
-        }
-        {
-            try testing.expectEqualStrings(
-                \\[{U32}]                 (default=3)
-                \\                        (ranges{[5,10), [32,∞)})
-                \\                        (choices{15, 29})
-            ,
-                comptime Self.posArg("u32", u32)
-                    .default(3)
-                    .ranges(Ranges(u32).new().u(5, 10).u(32, null))
-                    .choices(&.{ 15, 29 })
-                    ._checkOut()._help(),
-            );
-        }
-        {
-            try testing.expectEqualStrings(
-                \\{CC}                    (choices{gcc, clang})
-            ,
-                comptime Self.posArg("cc", String)
-                    .choices(&.{ "gcc", "clang" })
-                    ._checkOut()._help(),
-            );
-        }
-        {
-            try testing.expectEqualStrings(
-                \\{CC}                    (raw_choices{gcc, clang})
-            ,
-                comptime Self.posArg("cc", String)
-                    .raw_choices(&.{ "gcc", "clang" })
-                    ._checkOut()._help(),
-            );
-        }
-    }
-
-    test "Consume opt" {
-        const R = struct { out: bool, verbose: u32 };
-        var r = std.mem.zeroes(R);
-        var it = try token.Iter.initList(&[_]String{ "--out", "-v", "-v", "--out", "-t" }, .{});
-        const meta_out = Self.opt("out", bool).long("out")._checkOut();
-        const meta_verbose = Self.opt("verbose", u32).short('v')._checkOut();
-        try testing.expect(meta_out._consumeOpt(&r, &it));
-        try testing.expect(!meta_out._consumeOpt(&r, &it));
-        try testing.expect(meta_verbose._consumeOpt(&r, &it));
-        try testing.expect(meta_verbose._consumeOpt(&r, &it));
-        try testing.expect(meta_out._consumeOpt(&r, &it));
-        try testing.expectEqual(R{ .out = true, .verbose = 2 }, r);
-    }
-
-    test "Consume optArg" {
-        const R = struct { out: bool, verbose: u32, files: []const String, twins: [2]u32 };
-        var r = std.mem.zeroes(R);
-        const meta_out = Self.optArg("out", bool).long("out")._checkOut();
-        const meta_verbose = Self.optArg("verbose", u32).short('v')._checkOut();
-        const meta_files = Self.optArg("files", []const String).short('f')._checkOut();
-        const meta_twins = Self.optArg("twins", [2]u32).short('t')._checkOut();
-
-        {
-            var it = try token.Iter.initList(&[_]String{"--out"}, .{});
-            try testing.expect(!try meta_verbose._consumeOptArg(&r, &it, null));
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{"--out"}, .{});
-            try testing.expectError(Error.Missing, meta_out._consumeOptArg(&r, &it, null));
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{ "--out", "-v=0xf" }, .{});
-            try testing.expectError(Error.Missing, meta_out._consumeOptArg(&r, &it, null));
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{"-v=a"}, .{});
-            try testing.expectError(Error.Invalid, meta_verbose._consumeOptArg(&r, &it, null));
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{"-f=bin"}, .{});
-            try testing.expectError(Error.Allocator, meta_files._consumeOptArg(&r, &it, null));
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{"-t"}, .{});
-            try testing.expectError(Error.Missing, meta_twins._consumeOptArg(&r, &it, null));
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{"-t=a"}, .{});
-            try testing.expectError(Error.Missing, meta_twins._consumeOptArg(&r, &it, null));
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{ "-t", "a" }, .{});
-            try testing.expectError(Error.Invalid, meta_twins._consumeOptArg(&r, &it, null));
-        }
-        {
-            var res = std.mem.zeroes(R);
-            var it = try token.Iter.initList(
-                &[_]String{ "--out", "n", "-v=1", "-f", "bin0", "-t", "1", "2", "-f=bin1" },
-                .{},
-            );
-            try testing.expect(try meta_out._consumeOptArg(&res, &it, null));
-            try testing.expect(try meta_verbose._consumeOptArg(&res, &it, null));
-            try testing.expect(try meta_files._consumeOptArg(&res, &it, testing.allocator));
-            try testing.expect(try meta_twins._consumeOptArg(&res, &it, null));
-            try testing.expect(try meta_files._consumeOptArg(&res, &it, testing.allocator));
-            defer meta_files._destroy(&res, testing.allocator);
-            try testing.expectEqualDeep(R{
-                .out = false,
-                .verbose = 1,
-                .files = &[_]String{ "bin0", "bin1" },
-                .twins = [2]u32{ 1, 2 },
-            }, res);
-        }
-    }
-
-    test "Consume optArg with both ranges and choices" {
-        const R = struct { int: []i32 };
-        const meta = Self.optArg("int", []i32).short('i');
-        {
-            const meta_int = meta.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
-            var r = std.mem.zeroes(R);
-            var it = try token.Iter.initLine("-i=-1 -i 3 -i 5 -i=23", null, .{});
-            try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
-            try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
-            try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
-            try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
-            try testing.expectEqualDeep(&[_]i32{ -1, 3, 5, 23 }, r.int);
-            meta_int._destroy(r, testing.allocator);
-        }
-        {
-            const meta_int = meta.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
-            var r = std.mem.zeroes(R);
-            var it = try token.Iter.initLine("-i 6", null, .{});
-            try testing.expectError(Error.Invalid, meta_int._consumeOptArg(&r, &it, testing.allocator));
-        }
-        {
-            const meta_int = meta.ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
-            var r = std.mem.zeroes(R);
-            var it = try token.Iter.initLine("-i 6", null, .{});
-            try testing.expectError(Error.Invalid, meta_int._consumeOptArg(&r, &it, testing.allocator));
-        }
-        {
-            const meta_int = meta.choices(&.{ 3, 5, 7 })._checkOut();
-            var r = std.mem.zeroes(R);
-            var it = try token.Iter.initLine("-i 6", null, .{});
-            try testing.expectError(Error.Invalid, meta_int._consumeOptArg(&r, &it, testing.allocator));
-        }
-    }
-
-    test "Consume posArg" {
-        const R = struct { out: bool, twins: [2]u32 };
-        var r = std.mem.zeroes(R);
-        const meta_out = Self.posArg("out", bool)._checkOut();
-        const meta_twins = Self.posArg("twins", [2]u32)._checkOut();
-
-        {
-            var it = try token.Iter.initList(&[_]String{}, .{});
-            try testing.expectError(Error.Missing, meta_out._consumePosArg(&r, &it, null));
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{"a"}, .{});
-            try testing.expectError(Error.Invalid, meta_out._consumePosArg(&r, &it, null));
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{"1"}, .{});
-            try testing.expectError(Error.Missing, meta_twins._consumePosArg(&r, &it, null));
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{ "1", "a" }, .{});
-            try testing.expectError(Error.Invalid, meta_twins._consumePosArg(&r, &it, null));
-        }
-        {
-            var res = std.mem.zeroes(R);
-            var it = try token.Iter.initList(&[_]String{ "n", "1", "2" }, .{});
-            try testing.expect(try meta_out._consumePosArg(&res, &it, null));
-            try testing.expect(try meta_twins._consumePosArg(&res, &it, null));
-            try testing.expectEqualDeep(R{ .out = false, .twins = [2]u32{ 1, 2 } }, res);
-        }
-    }
-
-    test "Consume posArg with ranges or raw_choices" {
-        const Mem = struct {
-            buf: []u8 = undefined,
-            len: usize,
-            pub fn parse(s: String, a: ?Allocator) ?@This() {
-                const allocator = a orelse return null;
-                const len = parser.parseAny(usize, s, null) orelse return null;
-                const buf = allocator.alloc(u8, len) catch return null;
-                return .{ .buf = buf, .len = len };
-            }
-            pub fn destroy(self: @This(), a: Allocator) void {
-                a.free(self.buf);
-            }
-            pub fn compare(self: @This(), v: @This()) helper.Compare.Order {
-                return helper.Compare.compare(self.len, v.len);
-            }
-        };
-        const R = struct { mem: Mem };
-        const meta = Self.posArg("mem", Mem);
-        {
-            const meta_mem = meta.ranges(Ranges(Mem).new().u(null, Mem{ .len = 5 }))._checkOut();
-            var r = std.mem.zeroes(R);
+        test "Check out" {
             {
-                var it = try token.Iter.initList(&[_]String{"3"}, .{});
-                try testing.expect(try meta_mem._consumePosArg(&r, &it, testing.allocator));
-                try testing.expectEqual(3, r.mem.len);
-                try testing.expectEqual(3, r.mem.buf.len);
-                meta_mem._destroy(r, testing.allocator);
+                const meta = Self.opt("out", bool).short('o')._checkOut();
+                try testing.expectEqual(false, meta._toField().defaultValue());
             }
             {
-                var it = try token.Iter.initList(&[_]String{"8"}, .{});
+                const meta = Self.opt("out", u32).short('o')._checkOut();
+                try testing.expectEqual(0, meta._toField().defaultValue());
+            }
+            {
+                const meta = Self.optArg("out", u32).short('o')._checkOut();
+                try testing.expectEqualStrings("OUT", meta.common.argName.?);
+            }
+            {
+                const meta = Self.posArg("out", u32)._checkOut();
+                try testing.expectEqualStrings("OUT", meta.common.argName.?);
+            }
+        }
+        test "Match prefix" {
+            {
+                const meta = Self.opt("out", bool).short('o').long("out")._checkOut();
+                try testing.expect(meta._match(.{ .opt = .{ .short = 'o' } }));
+                try testing.expect(!meta._match(.{ .opt = .{ .short = 'i' } }));
+                try testing.expect(meta._match(.{ .opt = .{ .long = "out" } }));
+                try testing.expect(!meta._match(.{ .opt = .{ .long = "input" } }));
+            }
+            {
+                const meta = Self.optArg("out", bool).short('o').long("out").long("output")._checkOut();
+                try testing.expect(meta._match(.{ .opt = .{ .short = 'o' } }));
+                try testing.expect(!meta._match(.{ .opt = .{ .short = 'i' } }));
+                try testing.expect(meta._match(.{ .opt = .{ .long = "out" } }));
+                try testing.expect(meta._match(.{ .opt = .{ .long = "output" } }));
+                try testing.expect(!meta._match(.{ .opt = .{ .long = "input" } }));
+            }
+        }
+        test "Format usage" {
+            {
+                try testing.expectEqualStrings("[-o]", comptime Self.opt("out", bool).short('o')._usage());
+                try testing.expectEqualStrings("[-o]...", comptime Self.opt("out", u32).short('o')._usage());
+            }
+            {
+                try testing.expectEqualStrings(
+                    "-o {OUT}",
+                    comptime Self.optArg("out", bool).short('o')._checkOut()._usage(),
+                );
+                try testing.expectEqualStrings(
+                    "[-o {OUT}]",
+                    comptime Self.optArg("out", bool).short('o').default(false)._checkOut()._usage(),
+                );
+                try testing.expectEqualStrings(
+                    "[-o {OUT}]",
+                    comptime Self.optArg("out", ?bool).short('o')._checkOut()._usage(),
+                );
+                try testing.expectEqualStrings(
+                    "-o {[2]OUT}",
+                    comptime Self.optArg("out", [2]u32).short('o')._checkOut()._usage(),
+                );
+                try testing.expectEqualStrings(
+                    "-o {[]OUT}...",
+                    comptime Self.optArg("out", []const u32).short('o')._checkOut()._usage(),
+                );
+            }
+            {
+                try testing.expectEqualStrings("{[2]OUT}", comptime Self.posArg("out", [2]u32)._checkOut()._usage());
+                try testing.expectEqualStrings("[{OUT}]", comptime Self.posArg("out", u32).default(1)._checkOut()._usage());
+            }
+        }
+        test "Format help" {
+            {
+                try testing.expectEqualStrings(
+                    \\[-o|--out]              Help of out
+                    \\                        (default=false)
+                    \\(alias short{ u, t } long{ output })
+                ,
+                    comptime Self.opt("out", bool)
+                        .short('o').short('u').short('t')
+                        .long("out").long("output").help("Help of out")
+                        ._checkOut()._help(),
+                );
+            }
+            {
+                try testing.expectEqualStrings(
+                    \\-o {OUT}                Help of out
+                ,
+                    comptime Self.optArg("out", String)
+                        .short('o').help("Help of out")
+                        ._checkOut()._help(),
+                );
+            }
+            {
+                try testing.expectEqualStrings(
+                    \\[-o|--out {OUT}]        Help of out
+                    \\                        (default=a.out)
+                    \\(alias long{ output })
+                ,
+                    comptime Self.optArg("out", String)
+                        .short('o').long("out").long("output")
+                        .default("a.out")
+                        .help("Help of out")
+                        ._checkOut()._help(),
+                );
+            }
+            {
+                const Color = enum { Red, Green, Blue };
+                try testing.expectEqualStrings(
+                    \\[-c|--color {[3]COLORS}]    Help of colors
+                    \\                            (default={ Red, Green, Blue })
+                ,
+                    comptime Self.optArg("colors", [3]Color)
+                        .short('c').long("color")
+                        .default([_]Color{ .Red, .Green, .Blue })
+                        .help("Help of colors")
+                        ._checkOut()._help(),
+                );
+            }
+            {
+                try testing.expectEqualStrings(
+                    \\[{U32}]                 (default=3)
+                    \\                        (ranges{ [5,10), [32,∞) })
+                    \\                        (choices{ 15, 29 })
+                ,
+                    comptime Self.posArg("u32", u32)
+                        .default(3)
+                        .ranges(Ranges(u32).new().u(5, 10).u(32, null))
+                        .choices(&.{ 15, 29 })
+                        ._checkOut()._help(),
+                );
+            }
+            {
+                try testing.expectEqualStrings(
+                    \\{CC}                    (choices{ gcc, clang })
+                ,
+                    comptime Self.posArg("cc", String)
+                        .choices(&.{ "gcc", "clang" })
+                        ._checkOut()._help(),
+                );
+            }
+            {
+                try testing.expectEqualStrings(
+                    \\{CC}                    (raw_choices{ gcc, clang })
+                ,
+                    comptime Self.posArg("cc", String)
+                        .raw_choices(&.{ "gcc", "clang" })
+                        ._checkOut()._help(),
+                );
+            }
+        }
+        test "Consume opt" {
+            const R = struct { out: bool, verbose: u32 };
+            var r = std.mem.zeroes(R);
+            var it = try token.Iter.initList(&[_]String{ "--out", "-v", "-v", "--out", "-t" }, .{});
+            const meta_out = Self.opt("out", bool).long("out")._checkOut();
+            const meta_verbose = Self.opt("verbose", u32).short('v')._checkOut();
+            try testing.expect(meta_out._consumeOpt(&r, &it));
+            try testing.expect(!meta_out._consumeOpt(&r, &it));
+            try testing.expect(meta_verbose._consumeOpt(&r, &it));
+            try testing.expect(meta_verbose._consumeOpt(&r, &it));
+            try testing.expect(meta_out._consumeOpt(&r, &it));
+            try testing.expectEqual(R{ .out = true, .verbose = 2 }, r);
+        }
+        test "Consume optArg" {
+            const R = struct { out: bool, verbose: u32, files: []const String, twins: [2]u32 };
+            var r = std.mem.zeroes(R);
+            const meta_out = Self.optArg("out", bool).long("out")._checkOut();
+            const meta_verbose = Self.optArg("verbose", u32).short('v')._checkOut();
+            const meta_files = Self.optArg("files", []const String).short('f')._checkOut();
+            const meta_twins = Self.optArg("twins", [2]u32).short('t')._checkOut();
+
+            {
+                var it = try token.Iter.initList(&[_]String{"--out"}, .{});
+                try testing.expect(!try meta_verbose._consumeOptArg(&r, &it, null));
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{"--out"}, .{});
+                try testing.expectError(Error.Missing, meta_out._consumeOptArg(&r, &it, null));
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{ "--out", "-v=0xf" }, .{});
+                try testing.expectError(Error.Missing, meta_out._consumeOptArg(&r, &it, null));
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{"-v=a"}, .{});
+                try testing.expectError(Error.Invalid, meta_verbose._consumeOptArg(&r, &it, null));
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{"-f=bin"}, .{});
+                try testing.expectError(Error.Allocator, meta_files._consumeOptArg(&r, &it, null));
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{"-t"}, .{});
+                try testing.expectError(Error.Missing, meta_twins._consumeOptArg(&r, &it, null));
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{"-t=a"}, .{});
+                try testing.expectError(Error.Missing, meta_twins._consumeOptArg(&r, &it, null));
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{ "-t", "a" }, .{});
+                try testing.expectError(Error.Invalid, meta_twins._consumeOptArg(&r, &it, null));
+            }
+            {
+                var res = std.mem.zeroes(R);
+                var it = try token.Iter.initList(
+                    &[_]String{ "--out", "n", "-v=1", "-f", "bin0", "-t", "1", "2", "-f=bin1" },
+                    .{},
+                );
+                try testing.expect(try meta_out._consumeOptArg(&res, &it, null));
+                try testing.expect(try meta_verbose._consumeOptArg(&res, &it, null));
+                try testing.expect(try meta_files._consumeOptArg(&res, &it, testing.allocator));
+                try testing.expect(try meta_twins._consumeOptArg(&res, &it, null));
+                try testing.expect(try meta_files._consumeOptArg(&res, &it, testing.allocator));
+                defer meta_files._destroy(&res, testing.allocator);
+                try testing.expectEqualDeep(R{
+                    .out = false,
+                    .verbose = 1,
+                    .files = &[_]String{ "bin0", "bin1" },
+                    .twins = [2]u32{ 1, 2 },
+                }, res);
+            }
+        }
+        test "Consume optArg with both ranges and choices" {
+            const R = struct { int: []i32 };
+            const meta = Self.optArg("int", []i32).short('i');
+            {
+                const meta_int = meta.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
+                var r = std.mem.zeroes(R);
+                var it = try token.Iter.initLine("-i=-1 -i 3 -i 5 -i=23", null, .{});
+                try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
+                try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
+                try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
+                try testing.expect(try meta_int._consumeOptArg(&r, &it, testing.allocator));
+                try testing.expectEqualDeep(&[_]i32{ -1, 3, 5, 23 }, r.int);
+                meta_int._destroy(r, testing.allocator);
+            }
+            {
+                const meta_int = meta.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
+                var r = std.mem.zeroes(R);
+                var it = try token.Iter.initLine("-i 6", null, .{});
+                try testing.expectError(Error.Invalid, meta_int._consumeOptArg(&r, &it, testing.allocator));
+            }
+            {
+                const meta_int = meta.ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
+                var r = std.mem.zeroes(R);
+                var it = try token.Iter.initLine("-i 6", null, .{});
+                try testing.expectError(Error.Invalid, meta_int._consumeOptArg(&r, &it, testing.allocator));
+            }
+            {
+                const meta_int = meta.choices(&.{ 3, 5, 7 })._checkOut();
+                var r = std.mem.zeroes(R);
+                var it = try token.Iter.initLine("-i 6", null, .{});
+                try testing.expectError(Error.Invalid, meta_int._consumeOptArg(&r, &it, testing.allocator));
+            }
+        }
+        test "Consume posArg" {
+            const R = struct { out: bool, twins: [2]u32 };
+            var r = std.mem.zeroes(R);
+            const meta_out = Self.posArg("out", bool)._checkOut();
+            const meta_twins = Self.posArg("twins", [2]u32)._checkOut();
+
+            {
+                var it = try token.Iter.initList(&[_]String{}, .{});
+                try testing.expectError(Error.Missing, meta_out._consumePosArg(&r, &it, null));
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{"a"}, .{});
+                try testing.expectError(Error.Invalid, meta_out._consumePosArg(&r, &it, null));
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{"1"}, .{});
+                try testing.expectError(Error.Missing, meta_twins._consumePosArg(&r, &it, null));
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{ "1", "a" }, .{});
+                try testing.expectError(Error.Invalid, meta_twins._consumePosArg(&r, &it, null));
+            }
+            {
+                var res = std.mem.zeroes(R);
+                var it = try token.Iter.initList(&[_]String{ "n", "1", "2" }, .{});
+                try testing.expect(try meta_out._consumePosArg(&res, &it, null));
+                try testing.expect(try meta_twins._consumePosArg(&res, &it, null));
+                try testing.expectEqualDeep(R{ .out = false, .twins = [2]u32{ 1, 2 } }, res);
+            }
+        }
+        test "Consume posArg with ranges or raw_choices" {
+            const Mem = struct {
+                buf: []u8 = undefined,
+                len: usize,
+                pub fn parse(s: String, a: ?Allocator) ?@This() {
+                    const allocator = a orelse return null;
+                    const len = parser.parseAny(usize, s, null) orelse return null;
+                    const buf = allocator.alloc(u8, len) catch return null;
+                    return .{ .buf = buf, .len = len };
+                }
+                pub fn destroy(self: @This(), a: Allocator) void {
+                    a.free(self.buf);
+                }
+                pub fn compare(self: @This(), v: @This()) helper.Compare.Order {
+                    return helper.Compare.compare(self.len, v.len);
+                }
+            };
+            const R = struct { mem: Mem };
+            const meta = Self.posArg("mem", Mem);
+            {
+                const meta_mem = meta.ranges(Ranges(Mem).new().u(null, Mem{ .len = 5 }))._checkOut();
+                var r = std.mem.zeroes(R);
+                {
+                    var it = try token.Iter.initList(&[_]String{"3"}, .{});
+                    try testing.expect(try meta_mem._consumePosArg(&r, &it, testing.allocator));
+                    try testing.expectEqual(3, r.mem.len);
+                    try testing.expectEqual(3, r.mem.buf.len);
+                    meta_mem._destroy(r, testing.allocator);
+                }
+                {
+                    var it = try token.Iter.initList(&[_]String{"8"}, .{});
+                    try testing.expectError(
+                        Error.Invalid,
+                        meta_mem._consumePosArg(&r, &it, testing.allocator),
+                    );
+                }
+            }
+            {
+                const meta_mem = meta.raw_choices(&.{ "1", "2", "3", "16" })._checkOut();
+                var r = std.mem.zeroes(R);
+                var it = try token.Iter.initList(&[_]String{"32"}, .{});
                 try testing.expectError(
                     Error.Invalid,
                     meta_mem._consumePosArg(&r, &it, testing.allocator),
                 );
             }
         }
-        {
-            const meta_mem = meta.raw_choices(&.{ "1", "2", "3", "16" })._checkOut();
+        test "Consume posArg with choices" {
+            const R = struct { out: String };
             var r = std.mem.zeroes(R);
-            var it = try token.Iter.initList(&[_]String{"32"}, .{});
-            try testing.expectError(
-                Error.Invalid,
-                meta_mem._consumePosArg(&r, &it, testing.allocator),
-            );
+            const meta_out = Self.posArg("out", String).choices(&.{ "install", "remove" })._checkOut();
+            {
+                var it = try token.Iter.initList(&[_]String{"remove"}, .{});
+                try testing.expect(try meta_out._consumePosArg(&r, &it, testing.allocator));
+                try testing.expectEqualStrings("remove", r.out);
+                meta_out._destroy(r, testing.allocator);
+            }
+            {
+                var it = try token.Iter.initList(&[_]String{"update"}, .{});
+                try testing.expectError(Error.Invalid, meta_out._consumePosArg(&r, &it, testing.allocator));
+            }
         }
-    }
-
-    test "Consume posArg with choices" {
-        const R = struct { out: String };
-        var r = std.mem.zeroes(R);
-        const meta_out = Self.posArg("out", String).choices(&.{ "install", "remove" })._checkOut();
-        {
-            var it = try token.Iter.initList(&[_]String{"remove"}, .{});
-            try testing.expect(try meta_out._consumePosArg(&r, &it, testing.allocator));
-            try testing.expectEqualStrings("remove", r.out);
-            meta_out._destroy(r, testing.allocator);
-        }
-        {
-            var it = try token.Iter.initList(&[_]String{"update"}, .{});
-            try testing.expectError(Error.Invalid, meta_out._consumePosArg(&r, &it, testing.allocator));
-        }
-    }
+    };
 };
 
 test {
-    _ = FormatHelper;
-    _ = Meta;
+    _ = FormatHelper._test;
+    _ = Meta._test;
 }
