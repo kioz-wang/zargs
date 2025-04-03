@@ -393,67 +393,39 @@ pub const Meta = struct {
     }
     pub fn _help(self: Self, prefix: Prefix) []const u8 {
         var msg: []const u8 = self._usage(prefix);
-        if (self.common.help == null and self.common.default == null and self.common.ranges == null and self.common.choices == null and self.common.raw_choices == null) {
-            return msg;
-        }
         const space: usize = @max(24, helper.alignIntUp(usize, msg.len, 4) + 4);
-        msg = print("{s}{s}", .{ msg, " " ** (space - msg.len) });
+
+        const newline: []const u8 = "\n" ++ " " ** space;
+        var gap: []const u8 = " " ** (space - msg.len);
+
         if (self.common.help) |s| {
-            msg = print("{s}{s}", .{ msg, s });
+            msg = print("{s}{s}{s}", .{ msg, gap, s });
+            gap = newline;
         }
         if (self.common.default) |_| {
-            msg = print("{s}{s}(default={})", .{
-                msg,
-                if (self.common.help) |_| "\n" ++ " " ** space else "",
-                nice(self._toField().defaultValue().?),
-            });
+            msg = print("{s}{s}(default={})", .{ msg, gap, nice(self._toField().defaultValue().?) });
+            gap = newline;
         }
         if (self.common.ranges) |rs| {
             const p: *const Ranges(Base(self.T)) = @ptrCast(@alignCast(rs));
-            msg = print("{s}{s}(ranges{})", .{
-                msg,
-                if (self.common.help != null or self.common.default != null)
-                    "\n" ++ " " ** space
-                else
-                    "",
-                nice(p.rs),
-            });
+            msg = print("{s}{s}(ranges{})", .{ msg, gap, nice(p.rs) });
+            gap = newline;
         }
         if (self.common.choices) |cs| {
             const p: *const []const Base(self.T) = @ptrCast(@alignCast(cs));
-            msg = print("{s}{s}(choices{})", .{
-                msg,
-                if (self.common.help != null or self.common.default != null or self.common.ranges != null)
-                    "\n" ++ " " ** space
-                else
-                    "",
-                nice(p.*),
-            });
+            msg = print("{s}{s}(choices{})", .{ msg, gap, nice(p.*) });
+            gap = newline;
         }
         if (self.common.raw_choices) |cs| {
-            msg = print("{s}{s}(raw_choices{})", .{
-                msg,
-                if (self.common.help != null or self.common.default != null)
-                    "\n" ++ " " ** space
-                else
-                    "",
-                nice(cs),
-            });
+            msg = print("{s}{s}(raw_choices{})", .{ msg, gap, nice(cs) });
+            gap = newline;
         }
         if (self.common.ranges == null and self.common.choices == null and self.common.raw_choices == null) {
-            if (@typeInfo(Base(self.T)) == .@"enum") {
-                if (self.common.parseFn == null and !std.meta.hasMethod(Base(self.T), "parse")) {
-                    msg = print("{s}{s}(enum{any})", .{
-                        msg,
-                        if (self.common.help != null or self.common.default != null)
-                            "\n" ++ " " ** space
-                        else
-                            "",
-                        nice(helper.EnumUtil.names(Base(self.T))),
-                    });
-                }
+            if (@typeInfo(Base(self.T)) == .@"enum" and self.common.parseFn == null and !std.meta.hasMethod(Base(self.T), "parse")) {
+                msg = print("{s}{s}(enum{any})", .{ msg, gap, nice(helper.EnumUtil.names(Base(self.T))) });
             }
         }
+
         if (self.common.short.len > 1 or self.common.long.len > 1) {
             msg = print("{s}\n(alias ", .{msg});
             if (self.common.short.len > 1) {
