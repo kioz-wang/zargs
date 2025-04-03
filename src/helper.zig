@@ -732,6 +732,21 @@ pub const Config = struct {
     };
 };
 
+pub const EnumUtil = struct {
+    pub fn len(T: type) comptime_int {
+        std.debug.assert(@typeInfo(T) == .@"enum");
+        const info = @typeInfo(T).@"enum";
+        return info.fields.len;
+    }
+    pub fn names(T: type) [len(T)]LiteralString {
+        var ss: [len(T)]LiteralString = undefined;
+        for (@typeInfo(T).@"enum".fields, 0..) |field, i| {
+            ss[i] = field.name;
+        }
+        return ss;
+    }
+};
+
 test {
     _ = Collection._test;
     _ = Compare._test;
