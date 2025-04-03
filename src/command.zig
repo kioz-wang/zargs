@@ -16,6 +16,7 @@ pub const parseAny = parser.parseAny;
 const Meta = @import("meta.zig").Meta;
 pub const Arg = Meta;
 pub const Ranges = @import("meta.zig").Ranges;
+const Prefix = @import("meta.zig").Prefix;
 
 /// Command builder
 pub const Command = struct {
@@ -272,30 +273,31 @@ pub const Command = struct {
     }
 
     fn _usage(self: Self) []const u8 {
+        const prefix: Prefix = .{ .short = self._config.prefix_short, .long = self._config.prefix_long };
         var s: []const u8 = self.name;
         if (self._builtin_help) |m| {
-            s = print("{s} {s}", .{ s, m._usage() });
+            s = print("{s} {s}", .{ s, m._usage(prefix) });
         }
         for (self._args) |m| {
             if (m.class != .opt) continue;
-            s = print("{s} {s}", .{ s, m._usage() });
+            s = print("{s} {s}", .{ s, m._usage(prefix) });
         }
         for (self._args) |m| {
             if (m.class != .optArg) continue;
-            s = print("{s} {s}", .{ s, m._usage() });
+            s = print("{s} {s}", .{ s, m._usage(prefix) });
         }
         if (self._stat.posArg != 0 or self._stat.cmd != 0) {
-            s = s ++ " [--]";
+            s = print("{s} [{s}]", .{ s, self._config.terminator });
         }
         for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default == null)
-                s = print("{s} {s}", .{ s, m._usage() });
+                s = print("{s} {s}", .{ s, m._usage(prefix) });
         }
         for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default != null)
-                s = print("{s} {s}", .{ s, m._usage() });
+                s = print("{s} {s}", .{ s, m._usage(prefix) });
         }
         if (self._stat.cmd != 0) {
             s = s ++ " {";
@@ -313,6 +315,7 @@ pub const Command = struct {
     }
 
     fn _help(self: Self) []const u8 {
+        const prefix: Prefix = .{ .short = self._config.prefix_short, .long = self._config.prefix_long };
         var msg: []const u8 = "Usage: " ++ self.usage();
         const common = self.common;
         if (common.about) |s| {
@@ -336,25 +339,25 @@ pub const Command = struct {
             msg = msg ++ "\n\nOptions:";
         }
         if (self._builtin_help) |m| {
-            msg = msg ++ "\n" ++ m._help();
+            msg = msg ++ "\n" ++ m._help(prefix);
         }
         for (self._args) |m| {
             if (m.class != .opt) continue;
-            msg = msg ++ "\n" ++ m._help();
+            msg = msg ++ "\n" ++ m._help(prefix);
         }
         if (self._stat.optArg != 0) {
             msg = msg ++ "\n\nOptions with arguments:";
         }
         for (self._args) |m| {
             if (m.class != .optArg) continue;
-            msg = msg ++ "\n" ++ m._help();
+            msg = msg ++ "\n" ++ m._help(prefix);
         }
         if (self._stat.posArg != 0) {
             msg = msg ++ "\n\nPositional arguments:";
         }
         for (self._args) |m| {
             if (m.class != .posArg) continue;
-            msg = msg ++ "\n" ++ m._help();
+            msg = msg ++ "\n" ++ m._help(prefix);
         }
         if (self._stat.cmd != 0) {
             msg = msg ++ "\n\nCommands:";

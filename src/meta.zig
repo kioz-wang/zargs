@@ -5,17 +5,19 @@ const print = helper.Alias.print;
 const String = helper.Alias.String;
 const LiteralString = helper.Alias.LiteralString;
 
+pub const Prefix = struct { short: String = "-", long: String = "--" };
+
 const FormatHelper = struct {
-    pub fn opt(short: ?u8, long: ?String) []const u8 {
+    pub fn opt(short: ?u8, long: ?String, prefix: Prefix) []const u8 {
         var usage: []const u8 = "";
         if (short) |s| {
-            usage = print("-{c}", .{s});
+            usage = print("{s}{c}", .{ prefix.short, s });
         }
         if (short != null and long != null) {
             usage = print("{s}|", .{usage});
         }
         if (long) |l| {
-            usage = print("{s}--{s}", .{ usage, l });
+            usage = print("{s}{s}{s}", .{ usage, prefix.long, l });
         }
         return usage;
     }
@@ -33,9 +35,9 @@ const FormatHelper = struct {
 
     const _test = struct {
         test opt {
-            try testing.expectEqualStrings("-o", comptime opt('o', null));
-            try testing.expectEqualStrings("--out", comptime opt(null, "out"));
-            try testing.expectEqualStrings("-o|--out", comptime opt('o', "out"));
+            try testing.expectEqualStrings("-o", comptime opt('o', null, .{}));
+            try testing.expectEqualStrings("--out", comptime opt(null, "out", .{}));
+            try testing.expectEqualStrings("-o|--out", comptime opt('o', "out", .{}));
         }
         test arg {
             try testing.expectEqualStrings("{OUT}", comptime arg("OUT", u32));
@@ -363,7 +365,7 @@ pub const Meta = struct {
         }
         return false;
     }
-    pub fn _usage(self: Self) []const u8 {
+    pub fn _usage(self: Self, prefix: Prefix) []const u8 {
         const FH = FormatHelper;
         const _short = self.common.short;
         const main_short = if (_short.len == 0) null else _short[0];
@@ -371,14 +373,14 @@ pub const Meta = struct {
         const main_long = if (_long.len == 0) null else _long[0];
         return switch (self.class) {
             .opt => print("{s}{s}", .{
-                FH.optional(true, FH.opt(main_short, main_long)),
+                FH.optional(true, FH.opt(main_short, main_long, prefix)),
                 if (self.T == bool) "" else "...",
             }),
             .optArg => print("{s}{s}", .{
                 FH.optional(
                     self.common.default != null,
                     print("{s} {s}", .{
-                        FH.opt(main_short, main_long),
+                        FH.opt(main_short, main_long, prefix),
                         FH.arg(self.common.argName.?, self.T),
                     }),
                 ),
@@ -390,8 +392,8 @@ pub const Meta = struct {
             ),
         };
     }
-    pub fn _help(self: Self) []const u8 {
-        var msg: []const u8 = self._usage();
+    pub fn _help(self: Self, prefix: Prefix) []const u8 {
+        var msg: []const u8 = self._usage(prefix);
         if (self.common.help == null and self.common.default == null and self.common.ranges == null and self.common.choices == null and self.common.raw_choices == null) {
             return msg;
         }
@@ -612,34 +614,34 @@ pub const Meta = struct {
         }
         test "Format usage" {
             {
-                try testing.expectEqualStrings("[-o]", comptime Self.opt("out", bool).short('o')._usage());
-                try testing.expectEqualStrings("[-o]...", comptime Self.opt("out", u32).short('o')._usage());
+                try testing.expectEqualStrings("[-o]", comptime Self.opt("out", bool).short('o')._usage(.{}));
+                try testing.expectEqualStrings("[-o]...", comptime Self.opt("out", u32).short('o')._usage(.{}));
             }
             {
                 try testing.expectEqualStrings(
                     "-o {OUT}",
-                    comptime Self.optArg("out", bool).short('o')._checkOut()._usage(),
+                    comptime Self.optArg("out", bool).short('o')._checkOut()._usage(.{}),
                 );
                 try testing.expectEqualStrings(
                     "[-o {OUT}]",
-                    comptime Self.optArg("out", bool).short('o').default(false)._checkOut()._usage(),
+                    comptime Self.optArg("out", bool).short('o').default(false)._checkOut()._usage(.{}),
                 );
                 try testing.expectEqualStrings(
                     "[-o {OUT}]",
-                    comptime Self.optArg("out", ?bool).short('o')._checkOut()._usage(),
+                    comptime Self.optArg("out", ?bool).short('o')._checkOut()._usage(.{}),
                 );
                 try testing.expectEqualStrings(
                     "-o {[2]OUT}",
-                    comptime Self.optArg("out", [2]u32).short('o')._checkOut()._usage(),
+                    comptime Self.optArg("out", [2]u32).short('o')._checkOut()._usage(.{}),
                 );
                 try testing.expectEqualStrings(
                     "-o {[]OUT}...",
-                    comptime Self.optArg("out", []const u32).short('o')._checkOut()._usage(),
+                    comptime Self.optArg("out", []const u32).short('o')._checkOut()._usage(.{}),
                 );
             }
             {
-                try testing.expectEqualStrings("{[2]OUT}", comptime Self.posArg("out", [2]u32)._checkOut()._usage());
-                try testing.expectEqualStrings("[{OUT}]", comptime Self.posArg("out", u32).default(1)._checkOut()._usage());
+                try testing.expectEqualStrings("{[2]OUT}", comptime Self.posArg("out", [2]u32)._checkOut()._usage(.{}));
+                try testing.expectEqualStrings("[{OUT}]", comptime Self.posArg("out", u32).default(1)._checkOut()._usage(.{}));
             }
         }
         test "Format help" {
@@ -652,7 +654,7 @@ pub const Meta = struct {
                     comptime Self.opt("out", bool)
                         .short('o').short('u').short('t')
                         .long("out").long("output").help("Help of out")
-                        ._checkOut()._help(),
+                        ._checkOut()._help(.{}),
                 );
             }
             {
@@ -661,7 +663,7 @@ pub const Meta = struct {
                 ,
                     comptime Self.optArg("out", String)
                         .short('o').help("Help of out")
-                        ._checkOut()._help(),
+                        ._checkOut()._help(.{}),
                 );
             }
             {
@@ -674,7 +676,7 @@ pub const Meta = struct {
                         .short('o').long("out").long("output")
                         .default("a.out")
                         .help("Help of out")
-                        ._checkOut()._help(),
+                        ._checkOut()._help(.{}),
                 );
             }
             {
@@ -687,7 +689,7 @@ pub const Meta = struct {
                         .short('c').long("color")
                         .default([_]Color{ .Red, .Green, .Blue })
                         .help("Help of colors")
-                        ._checkOut()._help(),
+                        ._checkOut()._help(.{}),
                 );
             }
             {
@@ -700,7 +702,7 @@ pub const Meta = struct {
                         .default(3)
                         .ranges(Ranges(u32).new().u(5, 10).u(32, null))
                         .choices(&.{ 15, 29 })
-                        ._checkOut()._help(),
+                        ._checkOut()._help(.{}),
                 );
             }
             {
@@ -709,7 +711,7 @@ pub const Meta = struct {
                 ,
                     comptime Self.posArg("cc", String)
                         .choices(&.{ "gcc", "clang" })
-                        ._checkOut()._help(),
+                        ._checkOut()._help(.{}),
                 );
             }
             {
@@ -718,7 +720,7 @@ pub const Meta = struct {
                 ,
                     comptime Self.posArg("cc", String)
                         .raw_choices(&.{ "gcc", "clang" })
-                        ._checkOut()._help(),
+                        ._checkOut()._help(.{}),
                 );
             }
         }
