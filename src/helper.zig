@@ -638,10 +638,105 @@ pub const Parser = struct {
     }
 };
 
+/// Used for parsing the original string.
+pub const Config = struct {
+    const Self = @This();
+    pub const Error = error{
+        PrefixLongEmpty,
+        PrefixShortEmpty,
+        ConnectorOptArgEmpty,
+        TerminatorEmpty,
+        PrefixLongShortEqual,
+        PrefixLongHasSpace,
+        PrefixShortHasSpace,
+        ConnectorOptArgHasSpace,
+        TerminatorHasSpace,
+    };
+    pub const Prefix = struct {
+        /// During matching, the `prefix_long` takes precedence over `prefix_short`.
+        short: String = "-",
+        /// During matching, the `prefix_long` takes precedence over `prefix_short`.
+        long: String = "--",
+        pub fn format(self: @This(), comptime _: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+            try writer.writeAll("{ .short = ");
+            try std.fmt.formatBuf(self.short, options, writer);
+            try writer.writeAll(", .long = ");
+            try std.fmt.formatBuf(self.long, options, writer);
+            try writer.writeAll(" }");
+        }
+    };
+
+    prefix: Prefix = .{},
+    /// During matching, the `terminator` takes precedence over `prefix_long`.
+    terminator: String = "--",
+    /// Used as a connector between `singleArgOpt` and its argument.
+    connector: String = "=",
+
+    pub fn format(self: Self, comptime fmt: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        try writer.writeAll("{ .prefix = ");
+        try self.prefix.format(fmt, options, writer);
+        try writer.writeAll(", .terminator = ");
+        try std.fmt.formatBuf(self.terminator, options, writer);
+        try writer.writeAll(", .connector = ");
+        try std.fmt.formatBuf(self.connector, options, writer);
+        try writer.writeAll(" }");
+    }
+    pub fn validate(self: *const Self) Error!void {
+        if (self.prefix.long.len == 0) {
+            return Error.PrefixLongEmpty;
+        }
+        if (self.prefix.short.len == 0) {
+            return Error.PrefixShortEmpty;
+        }
+        if (self.connector.len == 0) {
+            return Error.ConnectorOptArgEmpty;
+        }
+        if (self.terminator.len == 0) {
+            return Error.TerminatorEmpty;
+        }
+        if (std.mem.eql(u8, self.prefix.long, self.prefix.short)) {
+            return Error.PrefixLongShortEqual;
+        }
+        if (std.mem.indexOfAny(u8, self.prefix.long, " ")) |_| {
+            return Error.PrefixLongHasSpace;
+        }
+        if (std.mem.indexOfAny(u8, self.prefix.short, " ")) |_| {
+            return Error.PrefixShortHasSpace;
+        }
+        if (std.mem.indexOfAny(u8, self.connector, " ")) |_| {
+            return Error.ConnectorOptArgHasSpace;
+        }
+        if (std.mem.indexOfAny(u8, self.terminator, " ")) |_| {
+            return Error.TerminatorHasSpace;
+        }
+    }
+
+    const _test = struct {
+        test "Validate Config" {
+            try testing.expectError(Error.PrefixLongEmpty, (Self{ .prefix = .{ .long = "" } }).validate());
+            try testing.expectError(Error.PrefixShortEmpty, (Self{ .prefix = .{ .short = "" } }).validate());
+            try testing.expectError(Error.ConnectorOptArgEmpty, (Self{ .connector = "" }).validate());
+            try testing.expectError(Error.TerminatorEmpty, (Self{ .terminator = "" }).validate());
+            try testing.expectError(Error.PrefixLongShortEqual, (Self{ .prefix = .{ .long = "-", .short = "-" } }).validate());
+            try testing.expectError(Error.PrefixLongHasSpace, (Self{ .prefix = .{ .long = "a b" } }).validate());
+            try testing.expectError(Error.PrefixShortHasSpace, (Self{ .prefix = .{ .short = "a b" } }).validate());
+            try testing.expectError(Error.ConnectorOptArgHasSpace, (Self{ .connector = "a b" }).validate());
+            try testing.expectError(Error.TerminatorHasSpace, (Self{ .terminator = "a b" }).validate());
+        }
+        test "Format Config" {
+            try testing.expectEqualStrings(
+                "{ .prefix = { .short = -, .long = -- }, .terminator = --, .connector = = }",
+                print("{}", .{Config{}}),
+            );
+        }
+    };
+};
+
 test {
     _ = Collection._test;
     _ = Compare._test;
     _ = Type._test;
     _ = Formatter._test;
     _ = Parser;
+    _ = Config._test;
 }

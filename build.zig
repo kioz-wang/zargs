@@ -34,7 +34,6 @@ pub fn build(b: *std.Build) void {
                 .root_source_file = b.path(ex_dirname).path(b, e.name),
                 .target = target,
                 .optimize = optimize,
-                .strip = true,
             });
             ex_exe.root_module.addImport("zargs", mod);
             const ex_install = b.addInstallArtifact(ex_exe, .{});
