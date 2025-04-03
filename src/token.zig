@@ -36,9 +36,9 @@ const BaseIter = union(enum) {
 pub const Type = union(enum) {
     const FormatOptions = std.fmt.FormatOptions;
     pub const Opt = union(enum) {
-        /// Short option that follows the prefix.short
+        /// Short option that follows the prefix_short
         short: u8,
-        /// Long option that follows the prefix.long
+        /// Long option that follows the prefix_long
         long: String,
         pub fn format(self: @This(), comptime _: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
             try writer.writeAll(@tagName(self));

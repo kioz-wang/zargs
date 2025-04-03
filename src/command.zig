@@ -8,8 +8,7 @@ const String = helper.Alias.String;
 const LiteralString = helper.Alias.LiteralString;
 const Config = helper.Config;
 
-const token = @import("token.zig");
-pub const TokenIter = token.Iter;
+pub const TokenIter = @import("token.zig").Iter;
 
 const parser = @import("parser.zig");
 pub const parseAny = parser.parseAny;
