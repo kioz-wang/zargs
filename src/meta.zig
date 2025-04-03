@@ -440,6 +440,20 @@ pub const Meta = struct {
                 nice(cs),
             });
         }
+        if (self.common.ranges == null and self.common.choices == null and self.common.raw_choices == null) {
+            if (@typeInfo(Base(self.T)) == .@"enum") {
+                if (self.common.parseFn == null and !std.meta.hasMethod(Base(self.T), "parse")) {
+                    msg = print("{s}{s}(enum{any})", .{
+                        msg,
+                        if (self.common.help != null or self.common.default != null)
+                            "\n" ++ " " ** space
+                        else
+                            "",
+                        nice(helper.EnumUtil.names(Base(self.T))),
+                    });
+                }
+            }
+        }
         if (self.common.short.len > 1 or self.common.long.len > 1) {
             msg = print("{s}\n(alias ", .{msg});
             if (self.common.short.len > 1) {
@@ -683,6 +697,7 @@ pub const Meta = struct {
                 try testing.expectEqualStrings(
                     \\[-c|--color {[3]COLORS}]    Help of colors
                     \\                            (default={ Red, Green, Blue })
+                    \\                            (enum{ Red, Green, Blue })
                 ,
                     comptime Self.optArg("colors", [3]Color)
                         .short('c').long("color")
