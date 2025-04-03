@@ -24,14 +24,15 @@ const _a = Command.new("A")
     .arg(Arg.optArg("output", ?String).long("out").short('o'));
 const a = _a.requireSub("sub").sub(
     _b.setConfig(.{
+        .prefix = .{
+            .long = "==",
+        },
         .terminator = "##",
-        .prefix_long = "==",
         .connector = ":",
     }).requireSub("sub").sub(
         _c.requireSub("sub").sub(_d).setConfig(.{
+            .prefix = .{ .long = "+++", .short = "@" },
             .terminator = "**",
-            .prefix_long = "+++",
-            .prefix_short = "@",
             .connector = "=>",
         }),
     ),

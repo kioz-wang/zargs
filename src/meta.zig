@@ -4,8 +4,7 @@ const helper = @import("helper.zig");
 const print = helper.Alias.print;
 const String = helper.Alias.String;
 const LiteralString = helper.Alias.LiteralString;
-
-pub const Prefix = struct { short: String = "-", long: String = "--" };
+const Prefix = helper.Config.Prefix;
 
 const FormatHelper = struct {
     pub fn opt(short: ?u8, long: ?String, prefix: Prefix) []const u8 {

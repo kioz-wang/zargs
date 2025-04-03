@@ -6,6 +6,7 @@ const helper = @import("helper.zig");
 const print = helper.Alias.print;
 const String = helper.Alias.String;
 const LiteralString = helper.Alias.LiteralString;
+const Config = helper.Config;
 
 const token = @import("token.zig");
 pub const TokenIter = token.Iter;
@@ -16,7 +17,6 @@ pub const parseAny = parser.parseAny;
 const Meta = @import("meta.zig").Meta;
 pub const Arg = Meta;
 pub const Ranges = @import("meta.zig").Ranges;
-const Prefix = @import("meta.zig").Prefix;
 
 /// Command builder
 pub const Command = struct {
@@ -46,7 +46,7 @@ pub const Command = struct {
     /// It is enabled by default, but if a `opt` or `arg` named "help" is added, it will automatically be disabled.
     _builtin_help: ?Meta = Meta.opt("help", bool)
         .help("Show this help then exit").short('h').long("help"),
-    _config: token.Config = .{},
+    _config: Config = .{},
 
     const Common = struct {
         version: ?LiteralString = null,
@@ -185,9 +185,9 @@ pub const Command = struct {
         }
         return self.arg(meta);
     }
-    pub fn setConfig(self: Self, config: token.Config) Self {
+    pub fn setConfig(self: Self, config: Config) Self {
         config.validate() catch |err| {
-            @compileError(print("command({s}) invalid config {any}: {any}", .{ self.name, config, err }));
+            @compileError(print("command({s}) invalid config {}: {any}", .{ self.name, config, err }));
         };
         var cmd = self;
         var cmds: []const Self = &.{};
@@ -276,18 +276,17 @@ pub const Command = struct {
     }
 
     fn _usage(self: Self) []const u8 {
-        const prefix: Prefix = .{ .short = self._config.prefix_short, .long = self._config.prefix_long };
         var s: []const u8 = self.name;
         if (self._builtin_help) |m| {
-            s = print("{s} {s}", .{ s, m._usage(prefix) });
+            s = print("{s} {s}", .{ s, m._usage(self._config.prefix) });
         }
         for (self._args) |m| {
             if (m.class != .opt) continue;
-            s = print("{s} {s}", .{ s, m._usage(prefix) });
+            s = print("{s} {s}", .{ s, m._usage(self._config.prefix) });
         }
         for (self._args) |m| {
             if (m.class != .optArg) continue;
-            s = print("{s} {s}", .{ s, m._usage(prefix) });
+            s = print("{s} {s}", .{ s, m._usage(self._config.prefix) });
         }
         if (self._stat.posArg != 0 or self._stat.cmd != 0) {
             s = print("{s} [{s}]", .{ s, self._config.terminator });
@@ -295,12 +294,12 @@ pub const Command = struct {
         for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default == null)
-                s = print("{s} {s}", .{ s, m._usage(prefix) });
+                s = print("{s} {s}", .{ s, m._usage(self._config.prefix) });
         }
         for (self._args) |m| {
             if (m.class != .posArg) continue;
             if (m.common.default != null)
-                s = print("{s} {s}", .{ s, m._usage(prefix) });
+                s = print("{s} {s}", .{ s, m._usage(self._config.prefix) });
         }
         if (self._stat.cmd != 0) {
             s = s ++ " {";
@@ -318,7 +317,6 @@ pub const Command = struct {
     }
 
     fn _help(self: Self) []const u8 {
-        const prefix: Prefix = .{ .short = self._config.prefix_short, .long = self._config.prefix_long };
         var msg: []const u8 = "Usage: " ++ self.usage();
         const common = self.common;
         if (common.about) |s| {
@@ -342,25 +340,25 @@ pub const Command = struct {
             msg = msg ++ "\n\nOptions:";
         }
         if (self._builtin_help) |m| {
-            msg = msg ++ "\n" ++ m._help(prefix);
+            msg = msg ++ "\n" ++ m._help(self._config.prefix);
         }
         for (self._args) |m| {
             if (m.class != .opt) continue;
-            msg = msg ++ "\n" ++ m._help(prefix);
+            msg = msg ++ "\n" ++ m._help(self._config.prefix);
         }
         if (self._stat.optArg != 0) {
             msg = msg ++ "\n\nOptions with arguments:";
         }
         for (self._args) |m| {
             if (m.class != .optArg) continue;
-            msg = msg ++ "\n" ++ m._help(prefix);
+            msg = msg ++ "\n" ++ m._help(self._config.prefix);
         }
         if (self._stat.posArg != 0) {
             msg = msg ++ "\n\nPositional arguments:";
         }
         for (self._args) |m| {
             if (m.class != .posArg) continue;
-            msg = msg ++ "\n" ++ m._help(prefix);
+            msg = msg ++ "\n" ++ m._help(.{});
         }
         if (self._stat.cmd != 0) {
             msg = msg ++ "\n\nCommands:";
@@ -874,6 +872,7 @@ pub const Command = struct {
                     } },
                 } },
             } };
+            const complex_config: Config = .{ .prefix = .{ .long = "+++", .short = "@" }, .terminator = "**", .connector = "=>" };
             {
                 const a = _a.requireSub("sub").sub(
                     _b.requireSub("sub").sub(
@@ -891,14 +890,7 @@ pub const Command = struct {
                         .terminator = "##",
                         .connector = ":",
                     }).requireSub("sub").sub(
-                        _c.setConfig(.{
-                            .terminator = "**",
-                            .prefix_long = "+++",
-                            .prefix_short = "@",
-                            .connector = "=>",
-                        }).requireSub("sub").sub(
-                            _d,
-                        ),
+                        _c.setConfig(complex_config).requireSub("sub").sub(_d),
                     ),
                 );
                 var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C @v +++out=>cc ** D -vio=dd in", null, .{});
@@ -913,12 +905,7 @@ pub const Command = struct {
                         .connector = ":",
                     }).requireSub("sub").sub(
                         _c.requireSub("sub").sub(
-                            _d.setConfig(.{
-                                .terminator = "**",
-                                .prefix_long = "+++",
-                                .prefix_short = "@",
-                                .connector = "=>",
-                            }),
+                            _d.setConfig(complex_config),
                         ),
                     ),
                 );
@@ -950,12 +937,7 @@ pub const Command = struct {
                 }).requireSub("sub").sub(
                     _b.requireSub("sub").sub(
                         _c.requireSub("sub").sub(
-                            _d.setConfig(.{
-                                .terminator = "**",
-                                .prefix_long = "+++",
-                                .prefix_short = "@",
-                                .connector = "=>",
-                            }),
+                            _d.setConfig(complex_config),
                         ),
                     ),
                 );
@@ -970,12 +952,7 @@ pub const Command = struct {
                         .terminator = "##",
                         .connector = ":",
                     }).requireSub("sub").sub(
-                        _c.requireSub("sub").sub(_d).setConfig(.{
-                            .terminator = "**",
-                            .prefix_long = "+++",
-                            .prefix_short = "@",
-                            .connector = "=>",
-                        }),
+                        _c.requireSub("sub").sub(_d).setConfig(complex_config),
                     ),
                 );
                 var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C @v +++out=>cc ** D @vio=>dd in", null, .{});
