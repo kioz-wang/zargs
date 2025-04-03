@@ -186,6 +186,9 @@ pub const Command = struct {
         return self.arg(meta);
     }
     pub fn setConfig(self: Self, config: token.Config) Self {
+        config.validate() catch |err| {
+            @compileError(print("command({s}) invalid config {any}: {any}", .{ self.name, config, err }));
+        };
         var cmd = self;
         var cmds: []const Self = &.{};
         cmd._config = config;
