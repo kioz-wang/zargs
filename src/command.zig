@@ -45,7 +45,7 @@ pub const Command = struct {
     /// It is enabled by default, but if a `opt` or `arg` named "help" is added, it will automatically be disabled.
     _builtin_help: ?Meta = Meta.opt("help", bool)
         .help("Show this help then exit").short('h').long("help"),
-    _config: ?token.Config = null,
+    _config: token.Config = .{},
 
     const Common = struct {
         version: ?LiteralString = null,
@@ -112,12 +112,7 @@ pub const Command = struct {
         for (cmd.common.alias) |s| {
             c._checkInCmdName(s);
         }
-        c._cmds = c._cmds ++ [_]Self{
-            if (cmd._config == null and self._config != null)
-                cmd.setConfig(self._config.?)
-            else
-                cmd,
-        };
+        c._cmds = c._cmds ++ [_]Self{cmd};
         c._stat.cmd += 1;
         return c;
     }
@@ -191,7 +186,12 @@ pub const Command = struct {
     }
     pub fn setConfig(self: Self, config: token.Config) Self {
         var cmd = self;
+        var cmds: []const Self = &.{};
         cmd._config = config;
+        for (cmd._cmds) |c| {
+            cmds = cmds ++ [_]Self{c.setConfig(config)};
+        }
+        cmd._cmds = cmds;
         return cmd;
     }
 
@@ -861,9 +861,9 @@ pub const Command = struct {
                     _c.requireSub("sub").sub(_d),
                 ),
             ).Result();
-            const r = R{ .verbose = 2, .ignore = false, .output = "c", .sub = .{
-                .B = .{ .verbose = 1, .ignore = true, .output = "b", .sub = .{
-                    .C = .{ .verbose = 1, .ignore = false, .output = "c", .sub = .{
+            const r = R{ .verbose = 2, .ignore = false, .output = "aa", .sub = .{
+                .B = .{ .verbose = 1, .ignore = true, .output = "bb", .sub = .{
+                    .C = .{ .verbose = 1, .ignore = false, .output = "cc", .sub = .{
                         .D = .{ .verbose = 1, .ignore = true, .output = "dd", .input = "in" },
                     } },
                 } },
@@ -874,7 +874,7 @@ pub const Command = struct {
                         _c.requireSub("sub").sub(_d),
                     ),
                 );
-                var it = try TokenIter.initLine("-vvo=c B -vi --out=b C -vo c -- D -vio=dd in", null, .{});
+                var it = try TokenIter.initLine("-vvo=aa B -vi --out=bb C -vo cc -- D -vio=dd in", null, .{});
                 const args = try a.parseFrom(&it, testing.allocator);
                 defer a.destroy(&args, testing.allocator);
                 try testing.expectEqualDeep(r, args);
@@ -895,7 +895,7 @@ pub const Command = struct {
                         ),
                     ),
                 );
-                var it = try TokenIter.initLine("-vvo=c B -vi --out:b ## C @v +++out=>c ** D @vio=>dd in", null, .{});
+                var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C @v +++out=>cc ** D -vio=dd in", null, .{});
                 const args = try a.parseFrom(&it, testing.allocator);
                 defer a.destroy(&args, testing.allocator);
                 try testing.expectEqualDeep(r, args);
@@ -916,7 +916,7 @@ pub const Command = struct {
                         ),
                     ),
                 );
-                var it = try TokenIter.initLine("-vvo=c B -vi --out:b ## C -v --out:c ## D @vio=>dd in", null, .{});
+                var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C -vo=cc -- D @vio=>dd in", null, .{});
                 const args = try a.parseFrom(&it, testing.allocator);
                 defer a.destroy(&args, testing.allocator);
                 try testing.expectEqualDeep(r, args);
@@ -932,7 +932,7 @@ pub const Command = struct {
                         ),
                     ),
                 );
-                var it = try TokenIter.initLine("-vvo=>c B -vi --out:b ## C -v --out:c ## D -vio:dd in", null, .{ .connector = "=>" });
+                var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C -v --out=cc -- D -vio=dd in", null, .{ .connector = "=>" });
                 const args = try a.parseFrom(&it, testing.allocator);
                 defer a.destroy(&args, testing.allocator);
                 try testing.expectEqualDeep(r, args);
@@ -953,7 +953,26 @@ pub const Command = struct {
                         ),
                     ),
                 );
-                var it = try TokenIter.initLine("-vvo:c ## B -vi --out:b ## C -v --out:c ## D @vio=>dd in", null, .{});
+                var it = try TokenIter.initLine("-vvo:aa ## B -vi --out=bb -- C -v --out=cc -- D @vio=>dd in", null, .{});
+                const args = try a.parseFrom(&it, testing.allocator);
+                defer a.destroy(&args, testing.allocator);
+                try testing.expectEqualDeep(r, args);
+            }
+            {
+                const a = _a.requireSub("sub").sub(
+                    _b.setConfig(.{
+                        .terminator = "##",
+                        .connector = ":",
+                    }).requireSub("sub").sub(
+                        _c.requireSub("sub").sub(_d).setConfig(.{
+                            .terminator = "**",
+                            .prefix_long = "+++",
+                            .prefix_short = "@",
+                            .connector = "=>",
+                        }),
+                    ),
+                );
+                var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C @v +++out=>cc ** D @vio=>dd in", null, .{});
                 const args = try a.parseFrom(&it, testing.allocator);
                 defer a.destroy(&args, testing.allocator);
                 try testing.expectEqualDeep(r, args);
