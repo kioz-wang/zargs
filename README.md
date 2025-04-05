@@ -4,7 +4,7 @@
 
 Another Comptime-argparse for Zig! Let's start to build your command line!
 
-![run](examples/run.ex-02.gif)
+[![asciicast](https://asciinema.org/a/HVAkQ4gnNpjwjmz3ZEkUNohez.svg)](https://asciinema.org/a/HVAkQ4gnNpjwjmz3ZEkUNohez)
 
 ```zig
 const std = @import("std");
