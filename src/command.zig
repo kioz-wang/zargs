@@ -684,35 +684,35 @@ pub const Command = struct {
                 .arg(Meta.optArg("files", []const String).short('f').long("file").help("Multiple files"))
                 .arg(Meta.posArg("pos", u32).help("Required position argument"));
             {
-                var it = try TokenIter.initList(&[_]String{"-"}, .{});
+                var it = try TokenIter.initList(&.{"-"}, .{});
                 try testing.expectError(Error.TokenIter, cmd.parseFrom(&it, null));
             }
             {
-                var it = try TokenIter.initList(&[_]String{"--int="}, .{});
+                var it = try TokenIter.initList(&.{"--int="}, .{});
                 try testing.expectError(Error.MissingOptArg, cmd.parseFrom(&it, null));
             }
             {
-                var it = try TokenIter.initList(&[_]String{"--int=a"}, .{});
+                var it = try TokenIter.initList(&.{"--int=a"}, .{});
                 try testing.expectError(Error.InvalidOptArg, cmd.parseFrom(&it, null));
             }
             {
-                var it = try TokenIter.initList(&[_]String{ "--int=1", "--int", "2" }, .{});
+                var it = try TokenIter.initList(&.{ "--int=1", "--int", "2" }, .{});
                 try testing.expectError(Error.RepeatOpt, cmd.parseFrom(&it, null));
             }
             {
-                var it = try TokenIter.initList(&[_]String{"-t"}, .{});
+                var it = try TokenIter.initList(&.{"-t"}, .{});
                 try testing.expectError(Error.UnknownOpt, cmd.parseFrom(&it, null));
             }
             {
-                var it = try TokenIter.initList(&[_]String{"--"}, .{});
+                var it = try TokenIter.initList(&.{"--"}, .{});
                 try testing.expectError(Error.MissingOptArg, cmd.parseFrom(&it, null));
             }
             {
-                var it = try TokenIter.initList(&[_]String{ "--int=1", "--" }, .{});
+                var it = try TokenIter.initList(&.{ "--int=1", "--" }, .{});
                 try testing.expectError(Error.MissingPosArg, cmd.parseFrom(&it, null));
             }
             {
-                var it = try TokenIter.initList(&[_]String{ "--int=1", "--", "a" }, .{});
+                var it = try TokenIter.initList(&.{ "--int=1", "--", "a" }, .{});
                 try testing.expectError(Error.InvalidPosArg, cmd.parseFrom(&it, null));
             }
         }
@@ -723,15 +723,15 @@ pub const Command = struct {
                 .sub(Self.new("subcmd0"))
                 .sub(Self.new("subcmd1").alias("alias0"));
             {
-                var it = try TokenIter.initList(&[_]String{"-v"}, .{});
+                var it = try TokenIter.initList(&.{"-v"}, .{});
                 try testing.expectError(Error.MissingSubCmd, cmd.parseFrom(&it, null));
             }
             {
-                var it = try TokenIter.initList(&[_]String{"subcmd2"}, .{});
+                var it = try TokenIter.initList(&.{"subcmd2"}, .{});
                 try testing.expectError(Error.UnknownSubCmd, cmd.parseFrom(&it, null));
             }
             {
-                var it = try TokenIter.initList(&[_]String{"alias0"}, .{});
+                var it = try TokenIter.initList(&.{"alias0"}, .{});
                 try testing.expectEqual(
                     cmd.Result(){ .sub = .{ .subcmd1 = .{} } },
                     try cmd.parseFrom(&it, null),
