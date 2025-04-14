@@ -962,11 +962,10 @@ pub const Command = struct {
         }
 
         test "Bug, destroy default String" {
-            return error.SkipZigTest;
-            // const cmd = Command.new("cmd").arg(Arg.posArg("pos", String).default("hello"));
-            // var it = try TokenIter.initList(&.{}, .{});
-            // const args = try cmd.parseFrom(&it, testing.allocator);
-            // cmd.destroy(&args, testing.allocator);
+            const cmd = Command.new("cmd").arg(Arg.posArg("pos", String).default("hello"));
+            var it = try TokenIter.initList(&.{}, .{});
+            const args = try cmd.parseFrom(&it, testing.allocator);
+            cmd.destroy(&args, testing.allocator);
         }
     };
 };
