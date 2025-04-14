@@ -64,7 +64,7 @@ pub fn Ranges(T: type) type {
                 @compileError(print("mustn't union range {}", .{r}));
             }
             var ranges = self;
-            ranges.rs = ranges.rs ++ [_]Range{range};
+            ranges.rs = ranges.rs ++ .{range};
             return ranges;
         }
         pub fn _checkOut(self: Self) Self {
@@ -183,7 +183,7 @@ pub const Meta = struct {
             @compileError(print("{} not support .short", .{self}));
         }
         var meta = self;
-        meta.common.short = meta.common.short ++ [_]u8{c};
+        meta.common.short = meta.common.short ++ .{c};
         return meta;
     }
     pub fn long(self: Self, s: String) Self {
@@ -191,7 +191,7 @@ pub const Meta = struct {
             @compileError(print("{} not support .long", .{self}));
         }
         var meta = self;
-        meta.common.long = meta.common.long ++ [_]String{s};
+        meta.common.long = meta.common.long ++ .{s};
         return meta;
     }
     pub fn argName(self: Self, s: LiteralString) Self {
@@ -679,7 +679,7 @@ pub const Meta = struct {
                 ,
                     comptime Self.optArg("colors", [3]Color)
                         .short('c').long("color")
-                        .default([_]Color{ .Red, .Green, .Blue })
+                        .default(.{ .Red, .Green, .Blue })
                         .help("Help of colors")
                         ._checkOut()._help(.{}),
                 );
@@ -784,7 +784,7 @@ pub const Meta = struct {
                 try testing.expectEqualDeep(R{
                     .out = false,
                     .verbose = 1,
-                    .files = &[_]String{ "bin0", "bin1" },
+                    .files = &.{ "bin0", "bin1" },
                     .twins = [2]u32{ 1, 2 },
                 }, res);
             }

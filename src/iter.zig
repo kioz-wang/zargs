@@ -89,7 +89,7 @@ test "Wrap Compile, E!T" {
 }
 
 test "Wrap, normal" {
-    var it = Wrapper(ListIter(u32), ?u32, "?").init(.{ .list = &[_]u32{ 1, 2, 3, 4 } });
+    var it = Wrapper(ListIter(u32), ?u32, "?").init(.{ .list = &.{ 1, 2, 3, 4 } });
     it.debug = true;
     defer it.deinit();
     try testing.expectEqual(1, it.view().?);
@@ -104,13 +104,13 @@ test "Wrap, normal" {
 }
 
 test "Wrap, nextAll" {
-    var it = Wrapper(ListIter(u32), ?u32, "?").init(.{ .list = &[_]u32{ 1, 2, 3, 4 } });
+    var it = Wrapper(ListIter(u32), ?u32, "?").init(.{ .list = &.{ 1, 2, 3, 4 } });
     it.debug = true;
     defer it.deinit();
     try testing.expectEqual(1, it.view().?);
     const remain = try it.nextAll(testing.allocator);
     defer testing.allocator.free(remain);
-    try testing.expectEqualSlices(u32, &[_]u32{ 1, 2, 3, 4 }, remain);
+    try testing.expectEqualSlices(u32, &.{ 1, 2, 3, 4 }, remain);
     try testing.expectEqual(null, it.next());
 }
 

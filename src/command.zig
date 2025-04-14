@@ -83,7 +83,7 @@ pub const Command = struct {
     }
     pub fn alias(self: Self, s: LiteralString) Self {
         var cmd = self;
-        cmd.common.alias = cmd.common.alias ++ [_]LiteralString{s};
+        cmd.common.alias = cmd.common.alias ++ .{s};
         return cmd;
     }
     pub fn requireSub(self: Self, s: LiteralString) Self {
@@ -95,7 +95,7 @@ pub const Command = struct {
         var cmd = self;
         const m = meta._checkOut();
         cmd._checkIn(m);
-        cmd._args = cmd._args ++ [_]Meta{m};
+        cmd._args = cmd._args ++ .{m};
         switch (meta.class) {
             .opt => cmd._stat.opt += 1,
             .optArg => cmd._stat.optArg += 1,
@@ -112,7 +112,7 @@ pub const Command = struct {
         for (cmd.common.alias) |s| {
             c._checkInCmdName(s);
         }
-        c._cmds = c._cmds ++ [_]Self{cmd};
+        c._cmds = c._cmds ++ .{cmd};
         c._stat.cmd += 1;
         return c;
     }
@@ -125,10 +125,10 @@ pub const Command = struct {
         var meta = Meta.opt(name, T);
         meta.common.help = common.help;
         if (common.short) |c| {
-            meta.common.short = &[_]u8{c};
+            meta.common.short = &.{c};
         }
         if (common.long) |s| {
-            meta.common.long = &[_]String{s};
+            meta.common.long = &.{s};
         }
         if (common.default) |v| {
             meta.common.default = @ptrCast(&v);
@@ -147,10 +147,10 @@ pub const Command = struct {
         var meta = Meta.optArg(name, T);
         meta.common.help = common.help;
         if (common.short) |c| {
-            meta.common.short = &[_]u8{c};
+            meta.common.short = &.{c};
         }
         if (common.long) |s| {
-            meta.common.long = &[_]String{s};
+            meta.common.long = &.{s};
         }
         meta.common.argName = common.argName;
         if (common.default) |v| {
@@ -192,7 +192,7 @@ pub const Command = struct {
         var cmds: []const Self = &.{};
         cmd._config = config;
         for (cmd._cmds) |c| {
-            cmds = cmds ++ [_]Self{c.setConfig(config)};
+            cmds = cmds ++ .{c.setConfig(config)};
         }
         cmd._cmds = cmds;
         return cmd;
@@ -378,7 +378,6 @@ pub const Command = struct {
         return print("{s}", .{comptime self._help()});
     }
 
-    const StructField = std.builtin.Type.StructField;
     const EnumField = std.builtin.Type.EnumField;
     const UnionField = std.builtin.Type.UnionField;
 
@@ -386,8 +385,8 @@ pub const Command = struct {
         var e: []const EnumField = &.{};
         var u: []const UnionField = &.{};
         for (self._cmds, 0..) |c, i| {
-            e = e ++ [_]EnumField{.{ .name = c.name, .value = i }};
-            u = u ++ [_]UnionField{.{ .name = c.name, .type = c.Result(), .alignment = @alignOf(c.Result()) }};
+            e = e ++ .{EnumField{ .name = c.name, .value = i }};
+            u = u ++ .{UnionField{ .name = c.name, .type = c.Result(), .alignment = @alignOf(c.Result()) }};
         }
         @setEvalBranchQuota(5000); // TODO why?
         const E = @Type(.{ .@"enum" = .{
@@ -405,7 +404,7 @@ pub const Command = struct {
         return U;
     }
 
-    fn subCmdField(self: Self) StructField {
+    fn subCmdField(self: Self) std.builtin.Type.StructField {
         const U = self.SubCmdUnion();
         return .{
             .alignment = @alignOf(U),
@@ -419,13 +418,13 @@ pub const Command = struct {
     pub fn Result(self: Self) type {
         var r = @typeInfo(struct {}).@"struct";
         for (self._args) |m| {
-            r.fields = r.fields ++ [_]StructField{m._toField()};
+            r.fields = r.fields ++ .{m._toField()};
         }
         if (self.common.subName) |s| {
             if (self._stat.cmd == 0) {
                 @compileError(print("please call .sub(cmd) to add subcommands because subName({s}) is given", .{s}));
             }
-            r.fields = r.fields ++ [_]StructField{self.subCmdField()};
+            r.fields = r.fields ++ .{self.subCmdField()};
         }
         return @Type(.{ .@"struct" = r });
     }
@@ -487,7 +486,7 @@ pub const Command = struct {
 
         var r = std.mem.zeroInit(self.Result(), if (self.common.subName) |s| blk: {
             comptime var info = @typeInfo(struct {}).@"struct";
-            info.fields = info.fields ++ [_]StructField{self.subCmdField()};
+            info.fields = info.fields ++ .{self.subCmdField()};
             const I = @Type(.{ .@"struct" = info });
             var i: I = undefined;
             @field(i, s) = undefined;
