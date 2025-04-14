@@ -330,7 +330,7 @@ pub const Type = struct {
         };
     }
     pub fn TryBase(T: type) type {
-        return if (isBase(T)) T else @compileError(print("illegal base type {s}, expect .int, .float, .bool, .@\"enum\", .@\"struct\" or []cosnt u8", .{@typeName(T)}));
+        return if (isBase(T)) T else @compileError(print("Expected .int, .float, .bool, .@\"enum\", .@\"struct\" or []cosnt u8 type, found '{s}'", .{@typeName(T)}));
     }
     pub fn isArray(T: type) bool {
         return @typeInfo(T) == .array;
@@ -730,21 +730,6 @@ pub const Config = struct {
             );
         }
     };
-};
-
-pub const EnumUtil = struct {
-    pub fn len(T: type) comptime_int {
-        std.debug.assert(@typeInfo(T) == .@"enum");
-        const info = @typeInfo(T).@"enum";
-        return info.fields.len;
-    }
-    pub fn names(T: type) [len(T)]LiteralString {
-        var ss: [len(T)]LiteralString = undefined;
-        for (@typeInfo(T).@"enum".fields, 0..) |field, i| {
-            ss[i] = field.name;
-        }
-        return ss;
-    }
 };
 
 test {

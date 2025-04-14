@@ -127,7 +127,7 @@ pub const Meta = struct {
         const meta: Self = .{ .name = name, .T = T, .class = .opt };
         // Check T
         if (T != bool and @typeInfo(T) != .int) {
-            @compileError(print("{} illegal type, expect .bool or .int", .{meta}));
+            @compileError(print("{} expect .bool or .int type, found '{s}'", .{ meta, @typeName(T) }));
         }
         // Initialize Meta
         return meta;
@@ -422,7 +422,7 @@ pub const Meta = struct {
         }
         if (self.common.ranges == null and self.common.choices == null and self.common.raw_choices == null) {
             if (@typeInfo(Base(self.T)) == .@"enum" and self.common.parseFn == null and !std.meta.hasMethod(Base(self.T), "parse")) {
-                msg = print("{s}{s}(enum{any})", .{ msg, gap, nice(helper.EnumUtil.names(Base(self.T))) });
+                msg = print("{s}{s}(enum{any})", .{ msg, gap, nice(std.meta.fieldNames(Base(self.T)).*) });
             }
         }
 
@@ -553,11 +553,8 @@ pub const Meta = struct {
                 parser.destroyAny(v, a);
             }
         } else {
-            if (comptime self.common.default) |_ptr| {
-                const ptr: *const self.T = @ptrCast(@alignCast(_ptr));
-                if (std.meta.eql(@field(r, self.name), ptr.*)) {
-                    return;
-                }
+            if (std.meta.eql(self._toField().defaultValue(), @field(r, self.name))) {
+                return;
             }
             parser.destroyAny(@field(r, self.name), a);
         }
