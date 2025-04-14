@@ -127,7 +127,7 @@ pub const Meta = struct {
         const meta: Self = .{ .name = name, .T = T, .class = .opt };
         // Check T
         if (T != bool and @typeInfo(T) != .int) {
-            @compileError(print("{} illegal type, expect .bool or .int", .{meta}));
+            @compileError(print("{} expect .bool or .int type, found '{s}'", .{ meta, @typeName(T) }));
         }
         // Initialize Meta
         return meta;

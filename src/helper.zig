@@ -330,7 +330,7 @@ pub const Type = struct {
         };
     }
     pub fn TryBase(T: type) type {
-        return if (isBase(T)) T else @compileError(print("illegal base type {s}, expect .int, .float, .bool, .@\"enum\", .@\"struct\" or []cosnt u8", .{@typeName(T)}));
+        return if (isBase(T)) T else @compileError(print("Expected .int, .float, .bool, .@\"enum\", .@\"struct\" or []cosnt u8 type, found '{s}'", .{@typeName(T)}));
     }
     pub fn isArray(T: type) bool {
         return @typeInfo(T) == .array;
