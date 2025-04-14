@@ -414,7 +414,7 @@ const FSM = struct {
         }
         const _test = struct {
             test "FSM, Token, normal" {
-                const it_: BaseIter = .{ .list = .{ .list = &[_]String{
+                const it_: BaseIter = .{ .list = .{ .list = &.{
                     "-a",
                     "--word=hello",
                     "--verbose",
@@ -441,7 +441,7 @@ const FSM = struct {
                 try testing.expectEqual(null, try it.go());
             }
             test "FSM, Token, MissingOptionArgument" {
-                const it_: BaseIter = .{ .list = .{ .list = &[_]String{
+                const it_: BaseIter = .{ .list = .{ .list = &.{
                     "-a",
                     "--word=",
                     "--verbose",
@@ -460,7 +460,7 @@ const FSM = struct {
             }
             test "FSM, Token, MissingShortOption" {
                 {
-                    const it_: BaseIter = .{ .list = .{ .list = &[_]String{ "-", "--verbose" } } };
+                    const it_: BaseIter = .{ .list = .{ .list = &.{ "-", "--verbose" } } };
                     var it = try Self.init(it_, .{});
                     it.it.debug = true;
                     defer it.deinit();
@@ -472,7 +472,7 @@ const FSM = struct {
                     try testing.expectEqual(null, it.it.next());
                 }
                 {
-                    const it_: BaseIter = .{ .list = .{ .list = &[_]String{"-="} } };
+                    const it_: BaseIter = .{ .list = .{ .list = &.{"-="} } };
                     var it = try Self.init(it_, .{});
                     it.it.debug = true;
                     defer it.deinit();
@@ -484,7 +484,7 @@ const FSM = struct {
             }
             test "FSM, Token, MissingLongOption" {
                 {
-                    const it_: BaseIter = .{ .list = .{ .list = &[_]String{ "-a", "--=", "--verbose" } } };
+                    const it_: BaseIter = .{ .list = .{ .list = &.{ "-a", "--=", "--verbose" } } };
                     var it = try Self.init(it_, .{});
                     it.it.debug = true;
                     defer it.deinit();
@@ -497,7 +497,7 @@ const FSM = struct {
                     try testing.expectEqual(null, it.it.next());
                 }
                 {
-                    const it_: BaseIter = .{ .list = .{ .list = &[_]String{ "-a", "--" } } };
+                    const it_: BaseIter = .{ .list = .{ .list = &.{ "-a", "--" } } };
                     var it = try Self.init(it_, .{ .terminator = "**" });
                     it.it.debug = true;
                     defer it.deinit();
@@ -510,7 +510,7 @@ const FSM = struct {
                 }
             }
             test "FSM, Token, argument with space" {
-                const it_: BaseIter = .{ .list = .{ .list = &[_]String{
+                const it_: BaseIter = .{ .list = .{ .list = &.{
                     "hell o ",
                     " \"world \" ",
                 } } };
@@ -523,7 +523,7 @@ const FSM = struct {
                 try testing.expectEqual(null, try it.go());
             }
             test "FSM, Token, position with space" {
-                const it_: BaseIter = .{ .list = .{ .list = &[_]String{
+                const it_: BaseIter = .{ .list = .{ .list = &.{
                     "-a",
                     "--",
                     " \"world \" ",

@@ -64,7 +64,7 @@ pub fn Ranges(T: type) type {
                 @compileError(print("mustn't union range {}", .{r}));
             }
             var ranges = self;
-            ranges.rs = ranges.rs ++ [_]Range{range};
+            ranges.rs = ranges.rs ++ .{range};
             return ranges;
         }
         pub fn _checkOut(self: Self) Self {
@@ -183,7 +183,7 @@ pub const Meta = struct {
             @compileError(print("{} not support .short", .{self}));
         }
         var meta = self;
-        meta.common.short = meta.common.short ++ [_]u8{c};
+        meta.common.short = meta.common.short ++ .{c};
         return meta;
     }
     pub fn long(self: Self, s: String) Self {
@@ -191,7 +191,7 @@ pub const Meta = struct {
             @compileError(print("{} not support .long", .{self}));
         }
         var meta = self;
-        meta.common.long = meta.common.long ++ [_]String{s};
+        meta.common.long = meta.common.long ++ .{s};
         return meta;
     }
     pub fn argName(self: Self, s: LiteralString) Self {
@@ -553,6 +553,12 @@ pub const Meta = struct {
                 parser.destroyAny(v, a);
             }
         } else {
+            if (comptime self.common.default) |_ptr| {
+                const ptr: *const self.T = @ptrCast(@alignCast(_ptr));
+                if (std.meta.eql(@field(r, self.name), ptr.*)) {
+                    return;
+                }
+            }
             parser.destroyAny(@field(r, self.name), a);
         }
     }
@@ -673,7 +679,7 @@ pub const Meta = struct {
                 ,
                     comptime Self.optArg("colors", [3]Color)
                         .short('c').long("color")
-                        .default([_]Color{ .Red, .Green, .Blue })
+                        .default(.{ .Red, .Green, .Blue })
                         .help("Help of colors")
                         ._checkOut()._help(.{}),
                 );
@@ -713,7 +719,7 @@ pub const Meta = struct {
         test "Consume opt" {
             const R = struct { out: bool, verbose: u32 };
             var r = std.mem.zeroes(R);
-            var it = try token.Iter.initList(&[_]String{ "--out", "-v", "-v", "--out", "-t" }, .{});
+            var it = try token.Iter.initList(&.{ "--out", "-v", "-v", "--out", "-t" }, .{});
             const meta_out = Self.opt("out", bool).long("out")._checkOut();
             const meta_verbose = Self.opt("verbose", u32).short('v')._checkOut();
             try testing.expect(meta_out._consumeOpt(&r, &it));
@@ -732,41 +738,41 @@ pub const Meta = struct {
             const meta_twins = Self.optArg("twins", [2]u32).short('t')._checkOut();
 
             {
-                var it = try token.Iter.initList(&[_]String{"--out"}, .{});
+                var it = try token.Iter.initList(&.{"--out"}, .{});
                 try testing.expect(!try meta_verbose._consumeOptArg(&r, &it, null));
             }
             {
-                var it = try token.Iter.initList(&[_]String{"--out"}, .{});
+                var it = try token.Iter.initList(&.{"--out"}, .{});
                 try testing.expectError(Error.Missing, meta_out._consumeOptArg(&r, &it, null));
             }
             {
-                var it = try token.Iter.initList(&[_]String{ "--out", "-v=0xf" }, .{});
+                var it = try token.Iter.initList(&.{ "--out", "-v=0xf" }, .{});
                 try testing.expectError(Error.Missing, meta_out._consumeOptArg(&r, &it, null));
             }
             {
-                var it = try token.Iter.initList(&[_]String{"-v=a"}, .{});
+                var it = try token.Iter.initList(&.{"-v=a"}, .{});
                 try testing.expectError(Error.Invalid, meta_verbose._consumeOptArg(&r, &it, null));
             }
             {
-                var it = try token.Iter.initList(&[_]String{"-f=bin"}, .{});
+                var it = try token.Iter.initList(&.{"-f=bin"}, .{});
                 try testing.expectError(Error.Allocator, meta_files._consumeOptArg(&r, &it, null));
             }
             {
-                var it = try token.Iter.initList(&[_]String{"-t"}, .{});
+                var it = try token.Iter.initList(&.{"-t"}, .{});
                 try testing.expectError(Error.Missing, meta_twins._consumeOptArg(&r, &it, null));
             }
             {
-                var it = try token.Iter.initList(&[_]String{"-t=a"}, .{});
+                var it = try token.Iter.initList(&.{"-t=a"}, .{});
                 try testing.expectError(Error.Missing, meta_twins._consumeOptArg(&r, &it, null));
             }
             {
-                var it = try token.Iter.initList(&[_]String{ "-t", "a" }, .{});
+                var it = try token.Iter.initList(&.{ "-t", "a" }, .{});
                 try testing.expectError(Error.Invalid, meta_twins._consumeOptArg(&r, &it, null));
             }
             {
                 var res = std.mem.zeroes(R);
                 var it = try token.Iter.initList(
-                    &[_]String{ "--out", "n", "-v=1", "-f", "bin0", "-t", "1", "2", "-f=bin1" },
+                    &.{ "--out", "n", "-v=1", "-f", "bin0", "-t", "1", "2", "-f=bin1" },
                     .{},
                 );
                 try testing.expect(try meta_out._consumeOptArg(&res, &it, null));
@@ -778,7 +784,7 @@ pub const Meta = struct {
                 try testing.expectEqualDeep(R{
                     .out = false,
                     .verbose = 1,
-                    .files = &[_]String{ "bin0", "bin1" },
+                    .files = &.{ "bin0", "bin1" },
                     .twins = [2]u32{ 1, 2 },
                 }, res);
             }
@@ -823,24 +829,24 @@ pub const Meta = struct {
             const meta_twins = Self.posArg("twins", [2]u32)._checkOut();
 
             {
-                var it = try token.Iter.initList(&[_]String{}, .{});
+                var it = try token.Iter.initList(&.{}, .{});
                 try testing.expectError(Error.Missing, meta_out._consumePosArg(&r, &it, null));
             }
             {
-                var it = try token.Iter.initList(&[_]String{"a"}, .{});
+                var it = try token.Iter.initList(&.{"a"}, .{});
                 try testing.expectError(Error.Invalid, meta_out._consumePosArg(&r, &it, null));
             }
             {
-                var it = try token.Iter.initList(&[_]String{"1"}, .{});
+                var it = try token.Iter.initList(&.{"1"}, .{});
                 try testing.expectError(Error.Missing, meta_twins._consumePosArg(&r, &it, null));
             }
             {
-                var it = try token.Iter.initList(&[_]String{ "1", "a" }, .{});
+                var it = try token.Iter.initList(&.{ "1", "a" }, .{});
                 try testing.expectError(Error.Invalid, meta_twins._consumePosArg(&r, &it, null));
             }
             {
                 var res = std.mem.zeroes(R);
-                var it = try token.Iter.initList(&[_]String{ "n", "1", "2" }, .{});
+                var it = try token.Iter.initList(&.{ "n", "1", "2" }, .{});
                 try testing.expect(try meta_out._consumePosArg(&res, &it, null));
                 try testing.expect(try meta_twins._consumePosArg(&res, &it, null));
                 try testing.expectEqualDeep(R{ .out = false, .twins = [2]u32{ 1, 2 } }, res);
@@ -869,14 +875,14 @@ pub const Meta = struct {
                 const meta_mem = meta.ranges(Ranges(Mem).new().u(null, Mem{ .len = 5 }))._checkOut();
                 var r = std.mem.zeroes(R);
                 {
-                    var it = try token.Iter.initList(&[_]String{"3"}, .{});
+                    var it = try token.Iter.initList(&.{"3"}, .{});
                     try testing.expect(try meta_mem._consumePosArg(&r, &it, testing.allocator));
                     try testing.expectEqual(3, r.mem.len);
                     try testing.expectEqual(3, r.mem.buf.len);
                     meta_mem._destroy(r, testing.allocator);
                 }
                 {
-                    var it = try token.Iter.initList(&[_]String{"8"}, .{});
+                    var it = try token.Iter.initList(&.{"8"}, .{});
                     try testing.expectError(
                         Error.Invalid,
                         meta_mem._consumePosArg(&r, &it, testing.allocator),
@@ -886,7 +892,7 @@ pub const Meta = struct {
             {
                 const meta_mem = meta.raw_choices(&.{ "1", "2", "3", "16" })._checkOut();
                 var r = std.mem.zeroes(R);
-                var it = try token.Iter.initList(&[_]String{"32"}, .{});
+                var it = try token.Iter.initList(&.{"32"}, .{});
                 try testing.expectError(
                     Error.Invalid,
                     meta_mem._consumePosArg(&r, &it, testing.allocator),
@@ -898,13 +904,13 @@ pub const Meta = struct {
             var r = std.mem.zeroes(R);
             const meta_out = Self.posArg("out", String).choices(&.{ "install", "remove" })._checkOut();
             {
-                var it = try token.Iter.initList(&[_]String{"remove"}, .{});
+                var it = try token.Iter.initList(&.{"remove"}, .{});
                 try testing.expect(try meta_out._consumePosArg(&r, &it, testing.allocator));
                 try testing.expectEqualStrings("remove", r.out);
                 meta_out._destroy(r, testing.allocator);
             }
             {
-                var it = try token.Iter.initList(&[_]String{"update"}, .{});
+                var it = try token.Iter.initList(&.{"update"}, .{});
                 try testing.expectError(Error.Invalid, meta_out._consumePosArg(&r, &it, testing.allocator));
             }
         }
