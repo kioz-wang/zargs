@@ -553,11 +553,8 @@ pub const Meta = struct {
                 parser.destroyAny(v, a);
             }
         } else {
-            if (comptime self.common.default) |_ptr| {
-                const ptr: *const self.T = @ptrCast(@alignCast(_ptr));
-                if (std.meta.eql(@field(r, self.name), ptr.*)) {
-                    return;
-                }
+            if (std.meta.eql(self._toField().defaultValue(), @field(r, self.name))) {
+                return;
             }
             parser.destroyAny(@field(r, self.name), a);
         }
