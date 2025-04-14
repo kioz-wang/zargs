@@ -422,7 +422,7 @@ pub const Meta = struct {
         }
         if (self.common.ranges == null and self.common.choices == null and self.common.raw_choices == null) {
             if (@typeInfo(Base(self.T)) == .@"enum" and self.common.parseFn == null and !std.meta.hasMethod(Base(self.T), "parse")) {
-                msg = print("{s}{s}(enum{any})", .{ msg, gap, nice(helper.EnumUtil.names(Base(self.T))) });
+                msg = print("{s}{s}(enum{any})", .{ msg, gap, nice(std.meta.fieldNames(Base(self.T)).*) });
             }
         }
 
