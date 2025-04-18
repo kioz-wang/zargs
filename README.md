@@ -338,6 +338,7 @@ zig build ex-01.add -- -h
 More real-world examples are coming!
 
 - [filepacker](https://github.com/kioz-wang/filepacker/blob/master/src/main.zig)
+- [zterm_cli](https://github.com/kioz-wang/zterm_cli)
 
 ## License
 

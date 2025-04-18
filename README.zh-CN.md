@@ -336,6 +336,7 @@ zig build ex-01.add -- -h
 更多真实案例：
 
 - [filepacker](https://github.com/kioz-wang/filepacker/blob/master/src/main.zig)
+- [zterm_cli](https://github.com/kioz-wang/zterm_cli)
 
 ## License
 
