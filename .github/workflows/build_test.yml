@@ -56,3 +56,22 @@ jobs:
 
       - name: Test
         run: zig build test -Dtarget=${{ matrix.target }}
+
+      - name: Generate filename
+        shell: bash
+        run: |
+          REPO_NAME=$(echo "${{ github.repository }}" | awk -F/ '{print $2}')
+          echo "FILENAME=ci-badge.$REPO_NAME.${{ matrix.target }}.svg" >> $GITHUB_ENV
+          COLOR=$([ ${{ job.status }} = "success" ] && echo "brightgreen" || echo "red")
+          echo "COLOR=$COLOR" >> $GITHUB_ENV
+
+      - name: Update badge
+        if: always()
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: ${{ vars.GIST_ID }}
+          filename: ${{ env.FILENAME }}
+          label: ${{ matrix.target }}
+          message: test
+          color: ${{ env.COLOR }}
