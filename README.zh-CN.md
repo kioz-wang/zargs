@@ -4,6 +4,12 @@
 
 另一个 Zig 编译时参数解析器！开始构建你的命令行吧！
 
+![badge x86_64-linux](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.x86_64-linux.svg)
+![badge aarch64-linux](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.aarch64-linux.svg)
+![badge x86_64-windows](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.x86_64-windows.svg)
+![badge x86_64-macos](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.x86_64-macos.svg)
+![badge aarch64-macos](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.aarch64-macos.svg)
+
 [![asciicast](https://asciinema.org/a/HVAkQ4gnNpjwjmz3ZEkUNohez.svg)](https://asciinema.org/a/HVAkQ4gnNpjwjmz3ZEkUNohez)
 
 ```zig
@@ -336,6 +342,7 @@ zig build ex-01.add -- -h
 更多真实案例：
 
 - [filepacker](https://github.com/kioz-wang/filepacker/blob/master/src/main.zig)
+- [zterm_cli](https://github.com/kioz-wang/zterm_cli)
 
 ## License
 

@@ -6,25 +6,72 @@ on:
 
   push:
     branches:
-    - ci-test/*
+      - ci-test/*
 
   workflow_dispatch:
-    
+
 permissions:
   contents: read
 
+env:
+  GIST_ID: ${{ vars.GIST_ID }}
+  GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+  GITHUB_API_VERSION: 2022-11-28
+
 jobs:
   build-test:
-    # runs-on: self-hosted
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          [
+            x86_64-linux,
+            aarch64-linux,
+            x86_64-macos,
+            aarch64-macos,
+            x86_64-windows,
+          ]
+        include:
+          - target: x86_64-linux
+            runs-on: ubuntu-latest
+          - target: aarch64-linux
+            runs-on: ubuntu-24.04-arm
+          - target: x86_64-macos
+            runs-on: macos-13
+          - target: aarch64-macos
+            runs-on: macos-latest
+          - target: x86_64-windows
+            runs-on: windows-latest
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Setup Zig
         uses: mlugg/setup-zig@v1
         with:
           version: 0.14.0
+
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Build examples
-        run: zig build examples
+        run: zig build examples -Dtarget=${{ matrix.target }}
+
       - name: Test
-        run: zig build test
+        run: zig build test -Dtarget=${{ matrix.target }}
+
+      - name: Generate filename
+        shell: bash
+        run: |
+          REPO_NAME=$(echo "${{ github.repository }}" | awk -F/ '{print $2}')
+          echo "FILENAME=ci-badge.$REPO_NAME.${{ matrix.target }}.svg" >> $GITHUB_ENV
+          COLOR=$([ ${{ job.status }} = "success" ] && echo "brightgreen" || echo "red")
+          echo "COLOR=$COLOR" >> $GITHUB_ENV
+
+      - name: Update badge
+        if: always()
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: ${{ vars.GIST_ID }}
+          filename: ${{ env.FILENAME }}
+          label: ${{ matrix.target }}
+          message: test
+          color: ${{ env.COLOR }}
