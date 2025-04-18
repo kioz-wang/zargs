@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const mod = b.addModule("zargs", .{
+    const lib_mod = b.addModule("zargs", .{
         .root_source_file = b.path("src/command.zig"),
         .target = target,
         .optimize = optimize,
@@ -35,7 +35,7 @@ pub fn build(b: *std.Build) void {
                 .target = target,
                 .optimize = optimize,
             });
-            ex_exe.root_module.addImport("zargs", mod);
+            ex_exe.root_module.addImport("zargs", lib_mod);
             const ex_install = b.addInstallArtifact(ex_exe, .{});
             ex_install.step.dependOn(&ex_exe.step);
 
@@ -53,18 +53,14 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     const run_ut = b.addRunArtifact(b.addTest(.{
-        .root_source_file = b.path("src/command.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = lib_mod,
     }));
     run_ut.skip_foreign_checks = true;
     test_step.dependOn(&run_ut.step);
 
     const doc = b.addObject(.{
         .name = "doc",
-        .root_source_file = b.path("src/command.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = lib_mod,
     });
     const docs_install = b.addInstallDirectory(.{
         .source_dir = doc.getEmittedDocs(),
