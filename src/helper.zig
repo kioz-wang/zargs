@@ -153,30 +153,6 @@ pub const Collection = struct {
     };
 };
 
-pub fn upper(comptime str: LiteralString) [str.len:0]u8 {
-    var s = std.mem.zeroes([str.len:0]u8);
-    _ = std.ascii.upperString(s[0..], str);
-    return s;
-}
-
-test upper {
-    try testing.expectEqualStrings("UPPER", &upper("upPer"));
-}
-
-pub fn alignIntUp(I: type, i: I, a: I) I {
-    return @divTrunc(i, a) * a + if (@rem(i, a) == 0) 0 else a;
-}
-
-test alignIntUp {
-    try testing.expectEqual(0x100, alignIntUp(u32, 0x9, 0x100));
-    try testing.expectEqual(0x100, alignIntUp(u32, 0x100, 0x100));
-    try testing.expectEqual(0x1300, alignIntUp(u32, 0x1234, 0x100));
-    try testing.expectEqual(20, alignIntUp(u8, 11, 10));
-    try testing.expectEqual(20, alignIntUp(u8, 15, 10));
-    try testing.expectEqual(21, alignIntUp(u8, 16, 7));
-    try testing.expectEqual(21, alignIntUp(u8, 21, 7));
-}
-
 pub const Compare = struct {
     pub const Order = enum { Less, Equal, Greater };
 
@@ -731,6 +707,44 @@ pub const Config = struct {
         }
     };
 };
+
+pub fn upper(comptime str: LiteralString) [str.len:0]u8 {
+    var s = std.mem.zeroes([str.len:0]u8);
+    _ = std.ascii.upperString(s[0..], str);
+    return s;
+}
+
+test upper {
+    try testing.expectEqualStrings("UPPER", &upper("upPer"));
+}
+
+pub fn alignIntUp(I: type, i: I, a: I) I {
+    return @divTrunc(i, a) * a + if (@rem(i, a) == 0) 0 else a;
+}
+
+test alignIntUp {
+    try testing.expectEqual(0x100, alignIntUp(u32, 0x9, 0x100));
+    try testing.expectEqual(0x100, alignIntUp(u32, 0x100, 0x100));
+    try testing.expectEqual(0x1300, alignIntUp(u32, 0x1234, 0x100));
+    try testing.expectEqual(20, alignIntUp(u8, 11, 10));
+    try testing.expectEqual(20, alignIntUp(u8, 15, 10));
+    try testing.expectEqual(21, alignIntUp(u8, 16, 7));
+    try testing.expectEqual(21, alignIntUp(u8, 21, 7));
+}
+
+pub fn exit(catched: anyerror, status: u8) noreturn {
+    const stderr = std.io.getStdErr().writer();
+    stderr.print("catch: {any}\n", .{catched}) catch unreachable;
+    std.process.exit(status);
+}
+
+pub fn exitf(catched: ?anyerror, status: u8, comptime fmt: String, args: anytype) noreturn {
+    const stderr = std.io.getStdErr().writer();
+    if (catched) |e|
+        stderr.print("catch: {any}\n", .{e}) catch unreachable;
+    stderr.print(fmt ++ "\n", args) catch unreachable;
+    std.process.exit(status);
+}
 
 test {
     _ = Collection._test;
