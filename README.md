@@ -10,7 +10,7 @@ Another Comptime-argparse for Zig! Let's start to build your command line!
 ![badge x86_64-macos](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.x86_64-macos.svg)
 ![badge aarch64-macos](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.aarch64-macos.svg)
 
-[![asciicast](https://asciinema.org/a/HVAkQ4gnNpjwjmz3ZEkUNohez.svg)](https://asciinema.org/a/HVAkQ4gnNpjwjmz3ZEkUNohez)
+![asciicast](.asset/demo.gif)
 
 ```zig
 const std = @import("std");
@@ -311,7 +311,7 @@ _ = cmd.help();
 
 ## APIs
 
-See https://kioz-wang.github.io/zargs/#doc.command.Command
+See https://kioz-wang.github.io/zargs/#doc
 
 ## Examples
 
@@ -344,7 +344,7 @@ zig build ex-01.add -- -h
 More real-world examples are coming!
 
 - [filepacker](https://github.com/kioz-wang/filepacker/blob/master/src/main.zig)
-- [zterm_cli](https://github.com/kioz-wang/zterm_cli)
+- [zterm](https://github.com/kioz-wang/zterm/blob/master/cli/main.zig)
 
 ## License
 
