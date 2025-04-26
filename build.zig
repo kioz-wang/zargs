@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const lib_mod = b.addModule("zargs", .{
-        .root_source_file = b.path("src/command.zig"),
+        .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -53,7 +53,7 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     const run_ut = b.addRunArtifact(b.addTest(.{
-        .root_module = lib_mod,
+        .root_source_file = b.path("src/Command.zig"),
     }));
     run_ut.skip_foreign_checks = true;
     test_step.dependOn(&run_ut.step);
