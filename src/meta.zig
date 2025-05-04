@@ -668,6 +668,15 @@ pub const Meta = struct {
                 );
             }
             {
+                try testing.expectEqualStrings(
+                    \\[-p|--point {POINT}]    (default={ 1, 1 })
+                ,
+                    comptime Self.optArg("point", @Vector(2, i32))
+                        .short('p').long("point").default(.{ 1, 1 })
+                        ._checkOut()._help(.{}),
+                );
+            }
+            {
                 const Color = enum { Red, Green, Blue };
                 try testing.expectEqualStrings(
                     \\[-c|--color {[3]COLORS}]    Help of colors
@@ -727,12 +736,13 @@ pub const Meta = struct {
             try testing.expectEqual(R{ .out = true, .verbose = 2 }, r);
         }
         test "Consume optArg" {
-            const R = struct { out: bool, verbose: u32, files: []const String, twins: [2]u32 };
+            const R = struct { out: bool, verbose: u32, files: []const String, twins: [2]u32, point: @Vector(2, i32) };
             var r = std.mem.zeroes(R);
             const meta_out = Self.optArg("out", bool).long("out")._checkOut();
             const meta_verbose = Self.optArg("verbose", u32).short('v')._checkOut();
             const meta_files = Self.optArg("files", []const String).short('f')._checkOut();
             const meta_twins = Self.optArg("twins", [2]u32).short('t')._checkOut();
+            const meta_point = Self.optArg("point", @Vector(2, i32)).short('p')._checkOut();
 
             {
                 var it = try token.Iter.initList(&.{"--out"}, .{});
@@ -769,7 +779,7 @@ pub const Meta = struct {
             {
                 var res = std.mem.zeroes(R);
                 var it = try token.Iter.initList(
-                    &.{ "--out", "n", "-v=1", "-f", "bin0", "-t", "1", "2", "-f=bin1" },
+                    &.{ "--out", "n", "-v=1", "-f", "bin0", "-t", "1", "2", "-f=bin1", "-p", "[1;2]" },
                     .{},
                 );
                 try testing.expect(try meta_out._consumeOptArg(&res, &it, null));
@@ -777,12 +787,14 @@ pub const Meta = struct {
                 try testing.expect(try meta_files._consumeOptArg(&res, &it, testing.allocator));
                 try testing.expect(try meta_twins._consumeOptArg(&res, &it, null));
                 try testing.expect(try meta_files._consumeOptArg(&res, &it, testing.allocator));
+                try testing.expect(try meta_point._consumeOptArg(&res, &it, null));
                 defer meta_files._destroy(&res, testing.allocator);
                 try testing.expectEqualDeep(R{
                     .out = false,
                     .verbose = 1,
                     .files = &.{ "bin0", "bin1" },
                     .twins = [2]u32{ 1, 2 },
+                    .point = .{ 1, 2 },
                 }, res);
             }
         }
