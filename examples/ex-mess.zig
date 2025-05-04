@@ -98,11 +98,8 @@ pub fn main() !void {
     defer it.deinit();
     // it.debug(true);
 
-    const args = cmd.parseFrom(&it, allocator) catch |e| {
-        std.debug.print("\nError => {}\n", .{e});
-        std.debug.print("{s}\n", .{cmd.usage()});
-        std.process.exit(1);
-    };
+    const args = cmd.parseFrom(&it, allocator) catch |e|
+        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usage()});
     defer cmd.destroy(&args, allocator);
     // it.debug(false);
     std.debug.print("{}\n\n", .{args});

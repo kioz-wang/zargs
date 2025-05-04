@@ -33,11 +33,8 @@ pub fn main() !void {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
 
-    const args = cmd.parse(allocator) catch |err| {
-        std.debug.print("Fail to parse because of {any}\n", .{err});
-        std.debug.print("\n{s}\n", .{cmd.usage()});
-        std.process.exit(1);
-    };
+    const args = cmd.parse(allocator) catch |e|
+        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usage()});
     defer cmd.destroy(&args, allocator);
     if (args.logfile) |logfile| {
         std.debug.print("Store log into {s}\n", .{logfile});
