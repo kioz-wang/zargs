@@ -35,28 +35,22 @@ pub fn main() !void {
         .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
         .arg(Arg.optArg("logfile", ?[]const u8).long("log").help("Store log into a file"))
         .sub(Command.new("install")
-            .arg(Arg.optArg("count", u32)
+            .arg(Arg.optArg("count", u32).default(10)
                 .short('c').short('n').short('t')
                 .long("count").long("cnt")
-                .default(10)
-                .ranges(Ranges(u32).new().u(5, 7).u(13, null))
-                .choices(&.{ 10, 11 }))
+                .ranges(Ranges(u32).new().u(5, 7).u(13, null)).choices(&.{ 10, 11 }))
             .arg(Arg.posArg("name", []const u8).raw_choices(&.{ "gcc", "clang" }))
-            .arg(Arg.optArg("output", []const u8).short('o').long("out")))
+            .arg(Arg.optArg("output", []const u8).short('o').long("out"))
+            .arg(Arg.optArg("vector", ?@Vector(3, i32)).long("vec")))
         .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
 
-    const args = cmd.parse(allocator) catch |err| {
-        std.debug.print("Fail to parse because of {any}\n", .{err});
-        std.debug.print("\n{s}\n", .{cmd.usage()});
-        std.process.exit(1);
-    };
+    const args = cmd.parse(allocator) catch |e|
+        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usage()});
     defer cmd.destroy(&args, allocator);
-    if (args.logfile) |logfile| {
-        std.debug.print("Store log into {s}\n", .{logfile});
-    }
+    if (args.logfile) |logfile| std.debug.print("Store log into {s}\n", .{logfile});
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});
@@ -163,10 +157,16 @@ For arguments, T must be the smallest parsable unit: `[]const u8` -> T
 - `.int`
 - `.float`
 - `.bool`
-- `.enum`: By default, `std.meta.stringToEnum` is used, but the parse method takes precedence.
-- `.struct`: A struct with a parse method.
+    - `true`: 'y', 't', "yes", "true" (case insensitive)
+    - `false`: 'n', 'f', "no", "false" (case insensitive)
+- `.enum`: Uses `std.meta.stringToEnum` by default, but `parse` method takes priority
+- `.struct`: Struct with `parse` method
+- `.vector`
+    - Only supports base types of `.int`, `.float`, and `.bool`
+    - `@Vector{1,1}`: `[\(\[\{][ ]*1[ ]*[;:,][ ]*1[ ]*[\)\]\}]`
+    - `@Vector{true,false}`: `[\(\[\{][ ]*y[ ]*[;:,][ ]*no[ ]*[\)\]\}]`
 
-If T is not parsable, a custom parser (`.parseFn`) can be defined for the argument. Obviously, a parser cannot be configured for a single option, as it would be meaningless.
+If type T has no associated default parser or `parse` method, you can specify a custom parser (`.parseFn`) for the parameter. Obviously, single-option parameters cannot have parsers as it would be meaningless.
 
 #### Default Values and Optionality
 
