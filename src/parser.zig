@@ -24,6 +24,19 @@ pub fn parseAny(T: type, s: String, a: ?Allocator) ?T {
         .bool => helper.Parser.boolean(s),
         .@"enum" => if (std.meta.hasMethod(T, "parse")) T.parse(s, a) else std.meta.stringToEnum(T, s),
         .@"struct" => if (std.meta.hasMethod(T, "parse")) T.parse(s, a) else @compileError(print("No parse method implemented for {s}", .{@typeName(T)})),
+        .vector => |vec| blk: {
+            if (@typeInfo(vec.child) == .pointer) unreachable;
+            const ss = std.mem.trim(u8, s, "(){}[] ");
+            var it = std.mem.splitAny(u8, ss, ";:,");
+            var v = std.mem.zeroes(T);
+            inline for (0..vec.len) |i| {
+                var token = it.next() orelse return null;
+                token = std.mem.trim(u8, token, " ");
+                v[i] = parseAny(vec.child, token, null) orelse return null;
+            }
+            if (it.next() != null) return null;
+            break :blk v;
+        },
         else => @compileError(print("No parse method implemented for {s}", .{@typeName(T)})),
     };
 }
@@ -50,4 +63,50 @@ pub fn Fn(T: type) type {
 
 test "Compile Errors" {
     return error.SkipZigTest;
+}
+
+test "Parse anytype" {
+    try testing.expectEqual(null, parseAny(u32, "-2", null));
+    try testing.expectEqual(2, parseAny(u32, "2", null));
+
+    try testing.expectEqual(null, parseAny(f32, "1.a", null));
+    try testing.expectEqual(1.0, parseAny(f32, "1.0", null));
+
+    try testing.expectEqual(null, parseAny(bool, "tru", null));
+    try testing.expectEqual(true, parseAny(bool, "true", null));
+
+    {
+        const Color = enum { green, red, blue };
+        try testing.expectEqual(null, parseAny(Color, "gree", null));
+        try testing.expectEqual(.green, parseAny(Color, "green", null));
+    }
+
+    {
+        const Color = enum {
+            green,
+            red,
+            blue,
+            pub fn parse(s: []const u8, _: ?std.mem.Allocator) ?@This() {
+                const max = @tagName(@This().green).len;
+                if (s.len > max) return null;
+                var buffer: [max]u8 = undefined;
+                const ss = std.ascii.lowerString(&buffer, s);
+                return std.meta.stringToEnum(@This(), ss);
+            }
+        };
+        try testing.expectEqual(null, parseAny(Color, "greenn", null));
+        try testing.expectEqual(.green, parseAny(Color, "gREen", null));
+    }
+
+    try testing.expectEqual(null, parseAny(@Vector(2, u32), "(1)", null));
+    try testing.expectEqual(null, parseAny(@Vector(2, u32), "(1,)", null));
+    try testing.expectEqual(null, parseAny(@Vector(2, u32), "(1,1,)", null));
+    try testing.expectEqual(null, parseAny(@Vector(2, u32), "(1,1,1)", null));
+    try testing.expectEqual(.{ 1, 1 }, parseAny(@Vector(2, u32), "(1,1)", null));
+    try testing.expectEqual(.{ 1, 1 }, parseAny(@Vector(2, u32), "(1;1)", null));
+    try testing.expectEqual(.{ 1, 1 }, parseAny(@Vector(2, u32), "(1:1)", null));
+    try testing.expectEqual(.{ 1, 1 }, parseAny(@Vector(2, u32), "{ 1, 1 }", null));
+    try testing.expectEqual(.{ 1, 1 }, parseAny(@Vector(2, u32), "[1; 1]", null));
+    try testing.expectEqual(.{ true, false }, parseAny(@Vector(2, bool), "(y,n)", null));
+    try testing.expectEqual(.{ 1.0, 2.0 }, parseAny(@Vector(2, f32), "(1.0,2.0)", null));
 }

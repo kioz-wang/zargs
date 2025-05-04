@@ -302,11 +302,12 @@ pub const Type = struct {
         if (T == String) return true;
         return switch (@typeInfo(T)) {
             .int, .float, .bool, .@"enum", .@"struct" => true,
+            .vector => |vec| @typeInfo(vec.child) != .pointer,
             else => false,
         };
     }
     pub fn TryBase(T: type) type {
-        return if (isBase(T)) T else @compileError(print("Expected .int, .float, .bool, .@\"enum\", .@\"struct\" or []cosnt u8 type, found '{s}'", .{@typeName(T)}));
+        return if (isBase(T)) T else @compileError(print("Expected .int, .float, .bool, .@\"enum\", .@\"struct\", .vector (exclude Pointers) or []cosnt u8 type, found '{s}'", .{@typeName(T)}));
     }
     pub fn isArray(T: type) bool {
         return @typeInfo(T) == .array;
