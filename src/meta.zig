@@ -86,6 +86,7 @@ pub fn Ranges(T: type) type {
 pub const Meta = struct {
     const token = @import("token.zig");
     const parser = @import("parser.zig");
+    const formatter = @import("formatter.zig");
     const Allocator = std.mem.Allocator;
     const Base = helper.Type.Base;
     const isSlice = helper.Type.isSlice;

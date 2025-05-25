@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    lib_mod.addImport("attr", b.dependency("zterm", .{}).module("attr"));
 
     const ex_dirname = "examples";
     const examples_step = b.step("examples", "Build examples");

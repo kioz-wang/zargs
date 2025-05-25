@@ -2,6 +2,12 @@
     .name = .zargs,
     .fingerprint = 0x421ffecd6ed6acb6,
     .version = "0.14.7",
+    .dependencies = .{
+        .zterm = .{
+            .url = "git+https://github.com/kioz-wang/zterm#fca6df9a4809a638b42a0811475ad282ae4cea7f",
+            .hash = "zterm-0.14.3-buNfZ-jYBgDUUdcBNmtUy1m-_seiN93XNpmtZSGZV2j4",
+        },
+    },
     .minimum_zig_version = "0.14.0",
 
     .paths = .{
