@@ -20,7 +20,7 @@ pub const MetaFormatter = struct {
     pub fn new(m: Meta, prefix: Prefix, sep: ?String) Self {
         return .{ .m = m, .prefix = prefix, .sep = sep };
     }
-    pub fn formatShortLong(self: Self, w: anytype) !usize {
+    pub fn short_long(self: Self, w: anytype) !usize {
         var n: usize = 0;
         for (self.m.common.short) |short| {
             n += try w.write(self.prefix.short);
@@ -35,23 +35,23 @@ pub const MetaFormatter = struct {
         }
         return n;
     }
-    pub fn formatUsage(self: Self, w: anytype) !usize {
+    pub fn usage(self: Self, w: anytype) !usize {
         var n: usize = 0;
-        n += try self.formatShortLong(w);
+        n += try self.short_long(w);
         if (self.m.common.argName) |s| {
             if (n != 0) n += try w.write(" ");
             n += try w.write(comptimePrint("{{{s}}}", .{s}));
         }
         return n;
     }
-    pub fn formatAlignSpace(self: Self, w: anytype, is_first: bool) !usize {
-        const usage_length = try self.formatUsage(&std.io.null_writer);
+    pub fn alignSpace(self: Self, w: anytype, is_first: bool) !usize {
+        const usage_length = try self.usage(&std.io.null_writer);
         const align_n: usize = @max(24, helper.alignIntUp(usize, usage_length, 4) + 4);
         const n: usize = if (is_first) align_n - usage_length else align_n;
         try w.writer().writeByteNTimes(' ', n);
         return n;
     }
-    pub fn formatAlias(self: Self, w: anytype) !usize {
+    pub fn alias(self: Self, w: anytype) !usize {
         var n: usize = 0;
         const shorts = if (self.m.common.short.len > 1) self.m.common.short[1..] else &.{};
         const longs = if (self.m.common.long.len > 1) self.m.common.long[1..] else &.{};
@@ -78,27 +78,27 @@ pub const MetaFormatter = struct {
             var fbs = std.io.fixedBufferStream(&buffer);
             {
                 defer fbs.reset();
-                const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help")._checkOut(), .{}, ", ").formatShortLong(&fbs);
+                const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help")._checkOut(), .{}, ", ").short_long(&fbs);
                 try testing.expectEqualStrings("-h, --help", buffer[0..n]);
             }
             {
                 defer fbs.reset();
-                const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help").long("hel").short('e')._checkOut(), .{}, "|").formatShortLong(&fbs);
+                const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help").long("hel").short('e')._checkOut(), .{}, "|").short_long(&fbs);
                 try testing.expectEqualStrings("-h|--help", buffer[0..n]);
             }
             {
                 defer fbs.reset();
-                const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').short('e')._checkOut(), .{ .short = "@" }, "").formatShortLong(&fbs);
+                const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').short('e')._checkOut(), .{ .short = "@" }, "").short_long(&fbs);
                 try testing.expectEqualStrings("@h", buffer[0..n]);
             }
             {
                 defer fbs.reset();
-                const n = try MetaFormatter.new(Meta.optArg("help", bool).long("help").long("hel")._checkOut(), .{}, "").formatShortLong(&fbs);
+                const n = try MetaFormatter.new(Meta.optArg("help", bool).long("help").long("hel")._checkOut(), .{}, "").short_long(&fbs);
                 try testing.expectEqualStrings("--help", buffer[0..n]);
             }
             {
                 defer fbs.reset();
-                try testing.expectEqual(0, MetaFormatter.new(Meta.posArg("help", bool)._checkOut(), .{}, "").formatShortLong(&fbs));
+                try testing.expectEqual(0, MetaFormatter.new(Meta.posArg("help", bool)._checkOut(), .{}, "").short_long(&fbs));
             }
         }
         test "format usage" {
@@ -106,17 +106,17 @@ pub const MetaFormatter = struct {
             var fbs = std.io.fixedBufferStream(&buffer);
             {
                 defer fbs.reset();
-                const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help")._checkOut(), .{}, ", ").formatUsage(&fbs);
+                const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help")._checkOut(), .{}, ", ").usage(&fbs);
                 try testing.expectEqualStrings("-h, --help", buffer[0..n]);
             }
             {
                 defer fbs.reset();
-                const n = try MetaFormatter.new(Meta.optArg("help", bool).short('h').long("help")._checkOut(), .{}, "|").formatUsage(&fbs);
+                const n = try MetaFormatter.new(Meta.optArg("help", bool).short('h').long("help")._checkOut(), .{}, "|").usage(&fbs);
                 try testing.expectEqualStrings("-h|--help {HELP}", buffer[0..n]);
             }
             {
                 defer fbs.reset();
-                const n = try MetaFormatter.new(Meta.posArg("help", bool)._checkOut(), .{}, null).formatUsage(&fbs);
+                const n = try MetaFormatter.new(Meta.posArg("help", bool)._checkOut(), .{}, null).usage(&fbs);
                 try testing.expectEqualStrings("{HELP}", buffer[0..n]);
             }
         }
@@ -126,8 +126,8 @@ pub const MetaFormatter = struct {
             {
                 defer fbs.reset();
                 const f = MetaFormatter.new(Meta.opt("help", bool).short('h').long("help")._checkOut(), .{}, ", ");
-                try testing.expectEqual(14, try f.formatAlignSpace(&fbs, true));
-                try testing.expectEqual(24, try f.formatAlignSpace(&fbs, false));
+                try testing.expectEqual(14, try f.alignSpace(&fbs, true));
+                try testing.expectEqual(24, try f.alignSpace(&fbs, false));
             }
         }
         test "format alias" {
@@ -135,11 +135,11 @@ pub const MetaFormatter = struct {
             var fbs = std.io.fixedBufferStream(&buffer);
             {
                 defer fbs.reset();
-                try testing.expectEqual(0, try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help")._checkOut(), .{}, null).formatAlias(&fbs));
+                try testing.expectEqual(0, try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help")._checkOut(), .{}, null).alias(&fbs));
             }
             {
                 defer fbs.reset();
-                const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help").long("hel").short('e')._checkOut(), .{}, null).formatAlias(&fbs);
+                const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help").long("hel").short('e')._checkOut(), .{}, null).alias(&fbs);
                 try testing.expectEqualStrings("(alias -e, --hel)", buffer[0..n]);
             }
         }
