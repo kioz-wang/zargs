@@ -7,7 +7,49 @@ const attr = @import("attr");
 const helper = @import("helper.zig");
 const Alias = helper.Alias;
 const String = Alias.String;
+const LiteralString = Alias.LiteralString;
 const Prefix = helper.Config.Prefix;
+
+pub fn Any(V: type) type {
+    const Type = helper.Type;
+    const Options = struct {
+        l: ?String = "{ ",
+        s: ?String = ", ",
+        r: ?String = " }",
+        show_null: bool = true,
+    };
+    return struct {
+        value: V,
+        options: Options,
+        const Self = @This();
+
+        pub fn new(value: V, options: Options) Self {
+            return .{ .value = value, .options = options };
+        }
+        pub fn fformat(self: Self, w: anytype, comptime fmt: []const u8, options: std.fmt.FormatOptions) !usize {
+            if (comptime Type.isOptional(V)) {
+                if (self.value) |v| {
+                    return try new(v, self.options).fformat(w, fmt, options);
+                } else {
+                    return if (self.options.show_null) try w.write("null") else 0;
+                }
+            }
+            if (comptime Type.isMultiple(V)) {
+                var n: usize = 0;
+                n += try new(self.options.l, .{ .show_null = false }).fformat(w, fmt, options);
+                for (self.value, 0..) |v, i| {
+                    if (i != 0) n += try new(self.options.s, .{ .show_null = false }).fformat(w, fmt, options);
+                    n += try new(v, self.options).fformat(w, fmt, options);
+                }
+                n += try new(self.options.r, .{ .show_null = false }).fformat(w, fmt, options);
+                return n;
+            }
+            if (T == LiteralString or T == String) {
+                // todo
+            }
+        }
+    };
+}
 
 pub const MetaFormatter = struct {
     m: Meta,
@@ -69,6 +111,20 @@ pub const MetaFormatter = struct {
             n += try w.write(long);
         }
         n += try w.write(")");
+        return n;
+    }
+    pub fn help(self: Self, w: anytype) !usize {
+        var n: usize = 0;
+        if (self.m.common.help) |s| {
+            n += try w.write(s);
+        }
+        return n;
+    }
+    pub fn default(self: Self, w: anytype) !usize {
+        var n: usize = 0;
+        if (self.m.common.default) |_| {
+            // todo: rewrite helper.Formatter.Nice
+        }
         return n;
     }
 
@@ -141,6 +197,10 @@ pub const MetaFormatter = struct {
                 defer fbs.reset();
                 const n = try MetaFormatter.new(Meta.opt("help", bool).short('h').long("help").long("hel").short('e')._checkOut(), .{}, null).alias(&fbs);
                 try testing.expectEqualStrings("(alias -e, --hel)", buffer[0..n]);
+            }
+            {
+                defer fbs.reset();
+                try testing.expectEqual(0, MetaFormatter.new(Meta.posArg("help", bool)._checkOut(), .{}, "").alias(&fbs));
             }
         }
     };
