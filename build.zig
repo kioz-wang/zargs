@@ -4,11 +4,60 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib_mod = b.addModule("zargs", .{
+    const mod_type = b.createModule(.{
+        .root_source_file = b.path("src/type.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const mod_fmt = b.createModule(.{
+        .root_source_file = b.path("src/io/fmt.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    mod_fmt.addImport("ztype", mod_type);
+
+    const mod_par = b.createModule(.{
+        .root_source_file = b.path("src/io/par.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    mod_par.addImport("ztype", mod_type);
+
+    const mod_helper = b.createModule(.{
+        .root_source_file = b.path("src/helper.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    mod_helper.addImport("fmt", mod_fmt);
+    mod_helper.addImport("ztype", mod_type);
+
+    const mod_iter = b.createModule(.{
+        .root_source_file = b.path("src/iter.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const mod_command = b.createModule(.{
+        .root_source_file = b.path("src/command/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    mod_command.addImport("ztype", mod_type);
+    mod_command.addImport("fmt", mod_fmt);
+    mod_command.addImport("par", mod_par);
+    mod_command.addImport("helper", mod_helper);
+    mod_command.addImport("iter", mod_iter);
+
+    const mod_zargs = b.addModule("zargs", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
+    mod_zargs.addImport("fmt", mod_fmt);
+    mod_zargs.addImport("par", mod_par);
+    mod_zargs.addImport("helper", mod_helper);
+    mod_zargs.addImport("command", mod_command);
 
     const ex_dirname = "examples";
     const examples_step = b.step("examples", "Build examples");
@@ -35,7 +84,7 @@ pub fn build(b: *std.Build) void {
                 .target = target,
                 .optimize = optimize,
             });
-            ex_exe.root_module.addImport("zargs", lib_mod);
+            ex_exe.root_module.addImport("zargs", mod_zargs);
             const ex_install = b.addInstallArtifact(ex_exe, .{});
             ex_install.step.dependOn(&ex_exe.step);
 
@@ -52,15 +101,24 @@ pub fn build(b: *std.Build) void {
     }
 
     const test_step = b.step("test", "Run unit tests");
-    const run_ut = b.addRunArtifact(b.addTest(.{
-        .root_source_file = b.path("src/Command.zig"),
-    }));
-    run_ut.skip_foreign_checks = true;
-    test_step.dependOn(&run_ut.step);
+    const test_filters: []const []const u8 = b.option(
+        []const []const u8,
+        "test_filter",
+        "Skip tests that do not match any of the specified filters",
+    ) orelse &.{};
+    const mods_utest = [_]*std.Build.Module{ mod_type, mod_fmt, mod_par, mod_helper, mod_iter, mod_command };
+    for (mods_utest) |unit| {
+        test_step.dependOn(&b.addRunArtifact(
+            b.addTest(.{
+                .root_module = unit,
+                .filters = test_filters,
+            }),
+        ).step);
+    }
 
     const doc = b.addObject(.{
         .name = "doc",
-        .root_module = lib_mod,
+        .root_module = mod_zargs,
     });
     const docs_install = b.addInstallDirectory(.{
         .source_dir = doc.getEmittedDocs(),

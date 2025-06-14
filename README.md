@@ -39,7 +39,7 @@ pub fn main() !void {
                 .short('c').short('n').short('t')
                 .long("count").long("cnt")
                 .ranges(Ranges(u32).new().u(5, 7).u(13, null)).choices(&.{ 10, 11 }))
-            .arg(Arg.posArg("name", []const u8).raw_choices(&.{ "gcc", "clang" }))
+            .arg(Arg.posArg("name", []const u8).rawChoices(&.{ "gcc", "clang" }))
             .arg(Arg.optArg("output", []const u8).short('o').long("out"))
             .arg(Arg.optArg("vector", ?@Vector(3, i32)).long("vec")))
         .sub(remove);
@@ -48,7 +48,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const args = cmd.parse(allocator) catch |e|
-        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usage()});
+        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     if (args.logfile) |logfile| std.debug.print("Store log into {s}\n", .{logfile});
     switch (args.action) {
@@ -93,7 +93,8 @@ zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.14.3.ta
 The version number follows the format `vx.y.z`:
 - **x**: Currently fixed at 0. It will increment to 1 when the project stabilizes. Afterward, it will increment by 1 for any breaking changes.
 - **y**: Represents the supported Zig version. For example, `vx.14.z` supports [Zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0).
-- **z**: Iteration version, where even numbers indicate releases with new features or significant changes (see [milestones](https://github.com/kioz-wang/zargs/milestones)), and odd numbers indicate releases with fixes or minor changes.
+- **z**: Iteration version, indicating releases with new features or significant changes (see [milestones](https://github.com/kioz-wang/zargs/milestones)).
+- **n**: Minor version, indicating releases with fixes or minor updates.
 
 ### import
 
@@ -183,7 +184,7 @@ Value ranges (`.ranges`, `.choices`) can be configured for arguments, which are 
 
 > Default values are not validated (intentional feature? 😄)
 
-If constructing value ranges is cumbersome, `.raw_choices` can be used to filter values before parsing.
+If constructing value ranges is cumbersome, `.rawChoices` can be used to filter values before parsing.
 Ranges
 
 ##### Ranges
@@ -197,7 +198,7 @@ When `T` implements equal, value `.choices` can be configured for the argument.
 
 #### Callbacks
 
-A callback (`.callBackFn`) can be configured, which will be executed after matching and parsing.
+A callback (`.callbackFn`) can be configured, which will be executed after matching and parsing.
 
 #### Subcommands
 

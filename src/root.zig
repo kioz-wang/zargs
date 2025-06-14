@@ -1,15 +1,18 @@
 const std = @import("std");
 
-pub const TokenIter = @import("token.zig").Iter;
+const command = @import("command");
+pub const Command = command.Command;
+pub const Arg = command.Arg;
+pub const TokenIter = command.TokenIter;
 
-pub const parseAny = @import("parser.zig").parseAny;
+pub const parseAny = @import("par").any;
 
-const meta = @import("meta.zig");
-pub const Arg = meta.Meta;
-pub const Ranges = meta.Ranges;
+const h = @import("helper");
+pub const exit = h.exit;
+pub const exitf = h.exitf;
 
-const helper = @import("helper.zig");
-pub const exit = helper.exit;
-pub const exitf = helper.exitf;
+pub const Ranges = h.Ranges;
 
-pub const Command = @import("Command.zig");
+test {
+    std.testing.refAllDecls(@This());
+}

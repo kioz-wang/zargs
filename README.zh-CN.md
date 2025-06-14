@@ -39,7 +39,7 @@ pub fn main() !void {
                 .short('c').short('n').short('t')
                 .long("count").long("cnt")
                 .ranges(Ranges(u32).new().u(5, 7).u(13, null)).choices(&.{ 10, 11 }))
-            .arg(Arg.posArg("name", []const u8).raw_choices(&.{ "gcc", "clang" }))
+            .arg(Arg.posArg("name", []const u8).rawChoices(&.{ "gcc", "clang" }))
             .arg(Arg.optArg("output", []const u8).short('o').long("out"))
             .arg(Arg.optArg("vector", ?@Vector(3, i32)).long("vec")))
         .sub(remove);
@@ -48,7 +48,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const args = cmd.parse(allocator) catch |e|
-        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usage()});
+        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     if (args.logfile) |logfile| std.debug.print("Store log into {s}\n", .{logfile});
     switch (args.action) {
@@ -90,10 +90,11 @@ zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.14.3.ta
 
 > 见 https://github.com/kioz-wang/zargs/releases
 
-版本号格式为 `vx.y.z`：
+版本号格式为 `vx.y.z[-alpha.n]`：
 - x：目前固定为 0，当项目稳定时，将升为 1；之后，当出现不兼容改动时，将增加 1
 - y：代表支持的 zig 版本，如`vx.14.z`支持 [zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0)
-- z：迭代版本，其中偶数为包含新特性或其他重要改动的版本（见 [milestones](https://github.com/kioz-wang/zargs/milestones)），奇数为包含修复或其他小改动的版本
+- z：迭代版本，包含新特性或其他重要改动的版本（见 [milestones](https://github.com/kioz-wang/zargs/milestones)）
+- n: 小版本，包含修复或其他小改动的版本
 
 ### 导入
 
@@ -183,7 +184,7 @@ const zargs = @import("zargs");
 
 > 不会对默认值执行有效性检查（这是一个特性？😄）
 
-如果为参数构造值取值范围太麻烦，那么可以为参数配置`raw_choices`，这会在解析前进行过滤。
+如果为参数构造值取值范围太麻烦，那么可以为参数配置`rawChoices`，这会在解析前进行过滤。
 
 ##### 范围
 
@@ -195,7 +196,7 @@ const zargs = @import("zargs");
 
 #### 回调
 
-可配置回调（`.callBackFn`），这将在匹配和解析后执行。
+可配置回调（`.callbackFn`），这将在匹配和解析后执行。
 
 #### 子命令
 

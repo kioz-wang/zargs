@@ -46,7 +46,7 @@ const allocator = gpa.allocator();
 pub fn main() !void {
     const cmd = Command.new("config")
         .arg(Arg.posArg("sub", Sub)
-        .callBackFn(struct {
+        .callbackFn(struct {
         fn f(v: *Sub) void {
             const line = switch (v.*) {
                 .A => "-h",
