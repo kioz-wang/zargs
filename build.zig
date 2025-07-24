@@ -10,14 +10,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const mod_fmt = b.createModule(.{
+    const mod_fmt = b.addModule("fmt", .{
         .root_source_file = b.path("src/io/fmt.zig"),
         .target = target,
         .optimize = optimize,
     });
     mod_fmt.addImport("ztype", mod_type);
 
-    const mod_par = b.createModule(.{
+    const mod_par = b.addModule("par", .{
         .root_source_file = b.path("src/io/par.zig"),
         .target = target,
         .optimize = optimize,
