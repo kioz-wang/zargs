@@ -2,8 +2,8 @@ const std = @import("std");
 
 const Command = @import("Command.zig");
 
-const ArgFormatter = @import("ArgFormatter.zig");
-const Options = ArgFormatter.Options;
+const AFormatter = @import("AFormatter.zig");
+const Options = AFormatter.Options;
 
 const ztype = @import("ztype");
 const String = ztype.String;
@@ -32,17 +32,17 @@ pub fn usage(self: Self, w: anytype) !void {
     try w.writeAll(self.c.name[0]);
     if (self.c._builtin_help) |m| {
         try w.writeByte(' ');
-        try ArgFormatter.init(m, self.options).usage(w);
+        try AFormatter.init(m, self.options).usage(w);
     }
     inline for (self.c._args) |m| {
         if (m.class != .opt) continue;
         try w.writeByte(' ');
-        try ArgFormatter.init(m, self.options).usage(w);
+        try AFormatter.init(m, self.options).usage(w);
     }
     inline for (self.c._args) |m| {
         if (m.class != .optArg) continue;
         try w.writeByte(' ');
-        try ArgFormatter.init(m, self.options).usage(w);
+        try AFormatter.init(m, self.options).usage(w);
     }
     if (self.c._stat.posArg != 0 or self.c._stat.cmd != 0) {
         try w.print(" [{s}]", .{self.c._config.terminator});
@@ -51,14 +51,14 @@ pub fn usage(self: Self, w: anytype) !void {
         if (m.class != .posArg) continue;
         if (m.common.default == null) {
             try w.writeByte(' ');
-            try ArgFormatter.init(m, self.options).usage(w);
+            try AFormatter.init(m, self.options).usage(w);
         }
     }
     inline for (self.c._args) |m| {
         if (m.class != .posArg) continue;
         if (m.common.default != null) {
             try w.writeByte(' ');
-            try ArgFormatter.init(m, self.options).usage(w);
+            try AFormatter.init(m, self.options).usage(w);
         }
     }
     if (self.c._stat.cmd != 0) {
@@ -125,11 +125,11 @@ pub fn help(self: Self, w: anytype) !void {
     if (self.c._stat.opt != 0 or self.c._builtin_help != null) {
         try w.writeAll("\nOption:\n");
         if (self.c._builtin_help) |m| {
-            try ArgFormatter.init(m, self.options).help(w);
+            try AFormatter.init(m, self.options).help(w);
         }
         inline for (self.c._args) |m| {
             if (m.class != .opt) continue;
-            try ArgFormatter.init(m, self.options).help(w);
+            try AFormatter.init(m, self.options).help(w);
         }
     }
 
@@ -137,7 +137,7 @@ pub fn help(self: Self, w: anytype) !void {
         try w.writeAll("\nOption with arguments:\n");
         inline for (self.c._args) |m| {
             if (m.class != .optArg) continue;
-            try ArgFormatter.init(m, self.options).help(w);
+            try AFormatter.init(m, self.options).help(w);
         }
     }
 
@@ -145,7 +145,7 @@ pub fn help(self: Self, w: anytype) !void {
         try w.writeAll("\nPositional arguments:\n");
         inline for (self.c._args) |m| {
             if (m.class != .posArg) continue;
-            try ArgFormatter.init(m, self.options).help(w);
+            try AFormatter.init(m, self.options).help(w);
         }
     }
 

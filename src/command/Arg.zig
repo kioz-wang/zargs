@@ -423,24 +423,24 @@ pub fn _destroy(self: Self, r: anytype, a: Allocator) void {
     }
 }
 
-const ArgFormatter = @import("ArgFormatter.zig");
+const AFormatter = @import("AFormatter.zig");
 const StringifyUsage = struct {
-    v: ArgFormatter,
+    v: AFormatter,
     pub fn stringify(self: StringifyUsage, w: anytype) @TypeOf(w).Error!void {
         try self.v.usage(w);
     }
 };
-pub fn usageString(self: Self) *const [stringify(StringifyUsage{ .v = ArgFormatter.init(self, .{}) }).count():0]u8 {
-    return stringify(StringifyUsage{ .v = ArgFormatter.init(self, .{}) }).literal();
+pub fn usageString(self: Self) *const [stringify(StringifyUsage{ .v = AFormatter.init(self, .{}) }).count():0]u8 {
+    return stringify(StringifyUsage{ .v = AFormatter.init(self, .{}) }).literal();
 }
 const StringifyHelp = struct {
-    v: ArgFormatter,
+    v: AFormatter,
     pub fn stringify(self: StringifyHelp, w: anytype) @TypeOf(w).Error!void {
         try self.v.help(w);
     }
 };
-pub fn helpString(self: Self) *const [stringify(StringifyHelp{ .v = ArgFormatter.init(self, .{}) }).count():0]u8 {
-    return stringify(StringifyHelp{ .v = ArgFormatter.init(self, .{}) }).literal();
+pub fn helpString(self: Self) *const [stringify(StringifyHelp{ .v = AFormatter.init(self, .{}) }).count():0]u8 {
+    return stringify(StringifyHelp{ .v = AFormatter.init(self, .{}) }).literal();
 }
 
 test "Compile Errors" {
