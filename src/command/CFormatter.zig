@@ -49,14 +49,14 @@ pub fn usage(self: Self, w: anytype) !void {
     }
     inline for (self.c._args) |m| {
         if (m.class != .posArg) continue;
-        if (m.common.default == null) {
+        if (m.meta.default == null) {
             try w.writeByte(' ');
             try AFormatter.init(m, self.options).usage(w);
         }
     }
     inline for (self.c._args) |m| {
         if (m.class != .posArg) continue;
-        if (m.common.default != null) {
+        if (m.meta.default != null) {
             try w.writeByte(' ');
             try AFormatter.init(m, self.options).usage(w);
         }
@@ -81,7 +81,7 @@ pub fn help1(self: Self, w: anytype) !void {
     try w.writeAll(" " ** self.options.indent);
     try self.usage1(w);
 
-    if (self.c.common.about) |s| {
+    if (self.c.meta.about) |s| {
         if (self.left_length >= self.options.left_max) {
             try w.writeByte('\n');
             try w.writeAll(" " ** (self.options.left_max + self.options.indent));
@@ -99,23 +99,23 @@ pub fn help(self: Self, w: anytype) !void {
     try self.usage(w);
     try w.writeByte('\n');
 
-    if (self.c.common.about) |s| {
+    if (self.c.meta.about) |s| {
         try w.print("\n{s}\n", .{s});
     }
 
-    if (self.c.common.version != null or self.c.common.author != null or self.c.common.homepage != null) {
+    if (self.c.meta.version != null or self.c.meta.author != null or self.c.meta.homepage != null) {
         try w.writeByte('\n');
         var is_first = true;
-        if (self.c.common.version) |s| {
+        if (self.c.meta.version) |s| {
             try w.print("Version {s}", .{s});
             is_first = false;
         }
-        if (self.c.common.author) |s| {
+        if (self.c.meta.author) |s| {
             if (!is_first) try w.writeByte('\t');
             try w.print("Author <{s}>", .{s});
             is_first = false;
         }
-        if (self.c.common.homepage) |s| {
+        if (self.c.meta.homepage) |s| {
             if (!is_first) try w.writeByte('\t');
             try w.print("Homepage {s}", .{s});
         }
@@ -166,7 +166,7 @@ pub fn comptimeHelp(self: Self) *const [stringify(self, "help").count():0]u8 {
 const testing = std.testing;
 
 test "usageString" {
-    const Arg = @import("Arg.zig");
+    const Arg = @import("Argument.zig");
     const subcmd0 = Command.new("subcmd0")
         .arg(Arg.optArg("optional_int", i32).long("oint").default(1).argName("OINT"))
         .arg(Arg.optArg("int", i32).long("int"))
@@ -189,7 +189,7 @@ test "usageString" {
 }
 
 test "helpString" {
-    const Arg = @import("Arg.zig");
+    const Arg = @import("Argument.zig");
     {
         const cmd = Command.new("cmd")
             .arg(Arg.opt("verbose", u8).short('v').help("Set log level"))

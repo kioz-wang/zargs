@@ -2,7 +2,7 @@ const std = @import("std");
 const comptimePrint = std.fmt.comptimePrint;
 const bufPrint = std.fmt.bufPrint;
 
-const Arg = @import("Arg.zig");
+const Arg = @import("Argument.zig");
 const Ranges = @import("helper").Ranges;
 
 const Prefix = @import("token.zig").Prefix;
@@ -21,13 +21,13 @@ pub const Options = struct {
 
 const Self = @This();
 
-m: Arg,
+arg: Arg,
 options: Options,
 left_length: usize = undefined,
 
-pub fn init(m: Arg, options: Options) Self {
+pub fn init(arg: Arg, options: Options) Self {
     var self = Self{
-        .m = m,
+        .arg = arg,
         .options = options,
     };
     var counting = std.io.countingWriter(std.io.null_writer);
@@ -37,60 +37,60 @@ pub fn init(m: Arg, options: Options) Self {
 }
 pub fn usage(self: Self, w: anytype) !void {
     var is_first = true;
-    if (self.m.common.default != null) {
+    if (self.arg.meta.default != null) {
         try w.writeByte('[');
     }
-    if (self.m.common.short.len > 0) {
+    if (self.arg.meta.short.len > 0) {
         try w.writeAll(self.options.prefix.short);
-        try w.writeByte(self.m.common.short[0]);
+        try w.writeByte(self.arg.meta.short[0]);
         is_first = false;
     }
-    if (self.m.common.long.len > 0) {
+    if (self.arg.meta.long.len > 0) {
         if (!is_first) try w.writeByte('|');
         try w.writeAll(self.options.prefix.long);
-        try w.writeAll(self.m.common.long[0]);
+        try w.writeAll(self.arg.meta.long[0]);
         is_first = false;
     }
-    if (self.m.common.argName) |s| {
+    if (self.arg.meta.argName) |s| {
         if (!is_first) try w.writeByte(' ');
-        if (!is_first or self.m.common.default == null) {
+        if (!is_first or self.arg.meta.default == null) {
             try w.writeByte('{');
         }
-        switch (@typeInfo(self.m.T)) {
+        switch (@typeInfo(self.arg.T)) {
             .array => |info| try w.print("[{d}]", .{info.len}),
-            .pointer => if (self.m.T != String) try w.writeAll("[]"),
+            .pointer => if (self.arg.T != String) try w.writeAll("[]"),
             else => {},
         }
         try w.writeAll(s);
-        if (!is_first or self.m.common.default == null) {
+        if (!is_first or self.arg.meta.default == null) {
             try w.writeByte('}');
         }
     }
-    if (self.m.common.default != null) {
+    if (self.arg.meta.default != null) {
         try w.writeByte(']');
     }
-    if (self.m.class == .opt and self.m.T != bool or self.m.class == .optArg and ztype.Type.isSlice(self.m.T)) {
+    if (self.arg.class == .opt and self.arg.T != bool or self.arg.class == .optArg and ztype.Type.isSlice(self.arg.T)) {
         try w.writeAll("...");
     }
 }
 fn usage1(self: Self, w: anytype) !void {
     var is_first = true;
-    for (self.m.common.short) |short| {
+    for (self.arg.meta.short) |short| {
         if (is_first) is_first = false else try w.writeAll(", ");
         try w.writeAll(self.options.prefix.short);
         try w.writeByte(short);
     }
-    for (self.m.common.long) |long| {
+    for (self.arg.meta.long) |long| {
         if (is_first) is_first = false else try w.writeAll(", ");
         try w.writeAll(self.options.prefix.long);
         try w.writeAll(long);
     }
-    if (self.m.common.argName) |s| {
+    if (self.arg.meta.argName) |s| {
         if (!is_first) try w.writeByte(' ');
         try w.writeByte('{');
-        switch (@typeInfo(self.m.T)) {
+        switch (@typeInfo(self.arg.T)) {
             .array => |info| try w.print("[{d}]", .{info.len}),
-            .pointer => if (self.m.T != String) try w.writeAll("[]"),
+            .pointer => if (self.arg.T != String) try w.writeAll("[]"),
             else => {},
         }
         try w.writeAll(s);
@@ -113,45 +113,45 @@ fn indent(self: Self, w: anytype, is_firstline: *bool) !void {
 }
 pub fn help(self: Self, w: anytype) !void {
     const Base = ztype.Type.Base;
-    const common = self.m.common;
+    const meta = self.arg.meta;
 
     var is_firstline = true;
 
     try w.writeAll(" " ** self.options.indent);
     try self.usage1(w);
 
-    if (common.help != null or common.default != null) {
+    if (meta.help != null or meta.default != null) {
         try self.indent(w, &is_firstline);
-        if (common.help) |s| {
+        if (meta.help) |s| {
             try w.writeAll(s);
         }
-        if (common.default) |_| {
-            if (common.help != null) try w.writeByte(' ');
-            try w.print("(default is {})", .{any(self.m._toField().defaultValue().?, .{})});
+        if (meta.default) |_| {
+            if (meta.help != null) try w.writeByte(' ');
+            try w.print("(default is {})", .{any(self.arg._toField().defaultValue().?, .{})});
         }
     }
 
-    if (common.ranges != null or common.choices != null) {
+    if (meta.ranges != null or meta.choices != null) {
         try self.indent(w, &is_firstline);
         try w.writeAll("possible values: ");
-        if (common.ranges) |_| {
-            try w.print("{}", .{any(self.m.getRanges().?.rs, .{ .multiple = .dump(" or ", 1) })});
+        if (meta.ranges) |_| {
+            try w.print("{}", .{any(self.arg.getRanges().?.rs, .{ .multiple = .dump(" or ", 1) })});
         }
-        if (common.choices) |_| {
-            if (common.ranges != null) try w.writeAll(" or ");
-            try w.print("{}", .{any(self.m.getChoices().?.*, .{})});
+        if (meta.choices) |_| {
+            if (meta.ranges != null) try w.writeAll(" or ");
+            try w.print("{}", .{any(self.arg.getChoices().?.*, .{})});
         }
     }
 
-    if (common.rawChoices) |cs| {
+    if (meta.rawChoices) |cs| {
         try self.indent(w, &is_firstline);
         try w.print("possible inputs: {}", .{any(cs, .{})});
     }
 
-    if (common.ranges == null and common.choices == null and common.rawChoices == null) {
-        if (@typeInfo(Base(self.m.T)) == .@"enum" and self.m.getParseFn() == null and !std.meta.hasMethod(Base(self.m.T), "parse")) {
+    if (meta.ranges == null and meta.choices == null and meta.rawChoices == null) {
+        if (@typeInfo(Base(self.arg.T)) == .@"enum" and self.arg.getParseFn() == null and !std.meta.hasMethod(Base(self.arg.T), "parse")) {
             try self.indent(w, &is_firstline);
-            try w.print("Enum: {}", .{any(std.meta.fieldNames(Base(self.m.T)).*, .{})});
+            try w.print("Enum: {}", .{any(std.meta.fieldNames(Base(self.arg.T)).*, .{})});
             is_firstline = false;
         }
     }

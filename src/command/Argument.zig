@@ -31,9 +31,9 @@ const Self = @This();
 name: LiteralString,
 T: type,
 class: Class,
-common: Common = .{},
+meta: Meta = .{},
 
-const Common = struct {
+const Meta = struct {
     help: ?LiteralString = null,
     default: ?*const anyopaque = null,
     parseFn: ?*const anyopaque = null, // optArg, posArg
@@ -57,35 +57,35 @@ fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
 }
 
 pub fn opt(name: LiteralString, T: type) Self {
-    const meta: Self = .{ .name = name, .T = T, .class = .opt };
+    const arg: Self = .{ .name = name, .T = T, .class = .opt };
     // Check T
     if (T != bool and @typeInfo(T) != .int) {
-        @compileError(comptimePrint("{} expect .bool or .int type, found '{s}'", .{ meta, @typeName(T) }));
+        @compileError(comptimePrint("{} expect .bool or .int type, found '{s}'", .{ arg, @typeName(T) }));
     }
     // Initialize Arg
-    return meta;
+    return arg;
 }
 pub fn optArg(name: LiteralString, T: type) Self {
-    const meta: Self = .{ .name = name, .T = T, .class = .optArg };
+    const arg: Self = .{ .name = name, .T = T, .class = .optArg };
     // Check T
     _ = Base(T);
     // Initialize Arg
-    return meta;
+    return arg;
 }
 pub fn posArg(name: LiteralString, T: type) Self {
-    const meta: Self = .{ .name = name, .T = T, .class = .posArg };
+    const arg: Self = .{ .name = name, .T = T, .class = .posArg };
     // Check T
     _ = Base(T);
     if (isSlice(T)) {
-        @compileError(comptimePrint("{} illegal type, consider to use .nextAllBase of TokenIter", .{meta}));
+        @compileError(comptimePrint("{} illegal type, consider to use .nextAllBase of TokenIter", .{arg}));
     }
     // Initialize Arg
-    return meta;
+    return arg;
 }
 pub fn help(self: Self, s: LiteralString) Self {
-    var meta = self;
-    meta.common.help = s;
-    return meta;
+    var arg = self;
+    arg.meta.help = s;
+    return arg;
 }
 pub fn default(self: Self, v: self.T) Self {
     if (isOptional(self.T)) {
@@ -94,142 +94,142 @@ pub fn default(self: Self, v: self.T) Self {
     if (isSlice(self.T)) {
         @compileError(comptimePrint("{} not support .default, it's forced to be empty slice", .{self}));
     }
-    var meta = self;
-    meta.common.default = @ptrCast(&v);
-    return meta;
+    var arg = self;
+    arg.meta.default = @ptrCast(&v);
+    return arg;
 }
 pub fn parseFn(self: Self, f: par.Fn(self.T)) Self {
     if (self.class == .opt) {
         @compileError(comptimePrint("{} not support .parseFn", .{self}));
     }
-    var meta = self;
-    meta.common.parseFn = @ptrCast(&f);
-    return meta;
+    var arg = self;
+    arg.meta.parseFn = @ptrCast(&f);
+    return arg;
 }
 pub fn callbackFn(self: Self, f: fn (*TryOptional(self.T)) void) Self {
-    var meta = self;
-    meta.common.callbackFn = @ptrCast(&f);
-    return meta;
+    var arg = self;
+    arg.meta.callbackFn = @ptrCast(&f);
+    return arg;
 }
 pub fn short(self: Self, c: u8) Self {
     if (self.class == .posArg) {
         @compileError(comptimePrint("{} not support .short", .{self}));
     }
-    var meta = self;
-    meta.common.short = meta.common.short ++ .{c};
-    return meta;
+    var arg = self;
+    arg.meta.short = arg.meta.short ++ .{c};
+    return arg;
 }
 pub fn long(self: Self, s: String) Self {
     if (self.class == .posArg) {
         @compileError(comptimePrint("{} not support .long", .{self}));
     }
-    var meta = self;
-    meta.common.long = meta.common.long ++ .{s};
-    return meta;
+    var arg = self;
+    arg.meta.long = arg.meta.long ++ .{s};
+    return arg;
 }
 pub fn argName(self: Self, s: LiteralString) Self {
     if (self.class == .opt) {
         @compileError(comptimePrint("{} not support .argName", .{self}));
     }
-    var meta = self;
-    meta.common.argName = s;
-    return meta;
+    var arg = self;
+    arg.meta.argName = s;
+    return arg;
 }
 pub fn ranges(self: Self, rs: Ranges(Base(self.T))) Self {
     if (self.class == .opt) {
         @compileError(comptimePrint("{} not support .ranges", .{self}));
     }
-    if (self.common.rawChoices) |_| {
+    if (self.meta.rawChoices) |_| {
         @compileError(comptimePrint("{} .ranges conflicts with .rawChoices", .{self}));
     }
-    var meta = self;
-    meta.common.ranges = @ptrCast(&rs._checkOut());
-    return meta;
+    var arg = self;
+    arg.meta.ranges = @ptrCast(&rs._checkOut());
+    return arg;
 }
 pub fn choices(self: Self, cs: []const Base(self.T)) Self {
     if (self.class == .opt) {
         @compileError(comptimePrint("{} not support .choices", .{self}));
     }
-    if (self.common.rawChoices) |_| {
+    if (self.meta.rawChoices) |_| {
         @compileError(comptimePrint("{} .choices conflicts with .rawChoices", .{self}));
     }
     if (cs.len == 0) {
         @compileError(comptimePrint("requires at least one choice", .{}));
     }
-    var meta = self;
-    meta.common.choices = @ptrCast(&cs);
-    return meta;
+    var arg = self;
+    arg.meta.choices = @ptrCast(&cs);
+    return arg;
 }
 pub fn rawChoices(self: Self, cs: []const String) Self {
     if (self.class == .opt) {
         @compileError(comptimePrint("{} not support .rawChoices", .{self}));
     }
-    if (self.common.ranges != null or self.common.choices != null) {
+    if (self.meta.ranges != null or self.meta.choices != null) {
         @compileError(comptimePrint("{} .rawChoices conflicts with .ranges or .choices", .{self}));
     }
     if (cs.len == 0) {
         @compileError(comptimePrint("requires at least one raw_choice", .{}));
     }
-    var meta = self;
-    meta.common.rawChoices = cs;
-    return meta;
+    var arg = self;
+    arg.meta.rawChoices = cs;
+    return arg;
 }
 
 // TODO move into Command.zig?
 pub fn _checkOut(self: Self) Self {
-    var meta = self;
+    var arg = self;
     if (self.class == .opt) {
         // Set default `default`
-        if (self.common.default == null) {
+        if (self.meta.default == null) {
             if (self.T == bool) {
-                meta.common.default = @ptrCast(&false);
+                arg.meta.default = @ptrCast(&false);
             } else {
-                const zero: meta.T = 0;
-                meta.common.default = @ptrCast(&zero);
+                const zero: arg.T = 0;
+                arg.meta.default = @ptrCast(&zero);
             }
         }
     }
     if (self.class == .optArg or self.class == .posArg) {
         // Set default `default`
-        if (self.common.default == null) {
+        if (self.meta.default == null) {
             if (isOptional(self.T)) {
-                const nul: meta.T = null;
-                meta.common.default = @ptrCast(&nul);
+                const nul: arg.T = null;
+                arg.meta.default = @ptrCast(&nul);
             }
         }
     }
     if (self.class == .opt or self.class == .optArg) {
         // Check short and long
-        if (self.common.short.len == 0 and self.common.long.len == 0) {
+        if (self.meta.short.len == 0 and self.meta.long.len == 0) {
             @compileError(comptimePrint("{} requires short or long", .{self}));
         }
     }
     if (self.class == .optArg or self.class == .posArg) {
         // Set default `argName`
-        if (self.common.argName == null) {
-            meta.common.argName = &comptimeUpperString(self.name);
+        if (self.meta.argName == null) {
+            arg.meta.argName = &comptimeUpperString(self.name);
         }
     }
-    return meta;
+    return arg;
 }
 
 pub fn _toField(self: Self) std.builtin.Type.StructField {
     return .{
         .alignment = @alignOf(self.T),
-        .default_value_ptr = self.common.default,
+        .default_value_ptr = self.meta.default,
         .is_comptime = false,
         .name = self.name,
         .type = self.T,
     };
 }
 pub fn getRanges(self: Self) ?*const Ranges(Base(self.T)) {
-    return @ptrCast(@alignCast(self.common.ranges orelse return null));
+    return @ptrCast(@alignCast(self.meta.ranges orelse return null));
 }
 pub fn getChoices(self: Self) ?*const []const Base(self.T) {
-    return @ptrCast(@alignCast(self.common.choices orelse return null));
+    return @ptrCast(@alignCast(self.meta.choices orelse return null));
 }
 fn checkInput(self: Self, s: String) bool {
-    if (self.common.rawChoices) |rcs| {
+    if (self.meta.rawChoices) |rcs| {
         const rcs_found = for (rcs) |rc| {
             if (equal(rc, s)) break true;
         } else false;
@@ -245,7 +245,7 @@ fn checkValue(self: Self, value: Base(self.T)) bool {
         const cs_found = for (cs.*) |c| {
             if (equal(c, value)) break true;
         } else false;
-        if (comptime self.common.ranges) |_| {
+        if (comptime self.meta.ranges) |_| {
             const rs_found = self.getRanges().?.contain(value);
             if (!cs_found and !rs_found) {
                 self.log("parsed as {} but out of choices{} and ranges{}", .{ any(value, .{}), any(cs.*, .{}), any(self.getRanges().?.rs, .{}) });
@@ -258,7 +258,7 @@ fn checkValue(self: Self, value: Base(self.T)) bool {
             return cs_found;
         }
     } else {
-        if (comptime self.common.ranges) |_| {
+        if (comptime self.meta.ranges) |_| {
             const rs_found = self.getRanges().?.contain(value);
             if (!rs_found) {
                 self.log("parsed as {} but out of ranges{}", .{ any(value, .{}), any(self.getRanges().?.rs, .{}) });
@@ -270,10 +270,10 @@ fn checkValue(self: Self, value: Base(self.T)) bool {
     }
 }
 pub fn getParseFn(self: Self) ?*const par.Fn(self.T) {
-    return @ptrCast(@alignCast(self.common.parseFn orelse return null));
+    return @ptrCast(@alignCast(self.meta.parseFn orelse return null));
 }
 fn getCallbackFn(self: Self) ?*const fn (*TryOptional(self.T)) void {
-    return @ptrCast(@alignCast(self.common.callbackFn orelse return null));
+    return @ptrCast(@alignCast(self.meta.callbackFn orelse return null));
 }
 fn parseValue(self: Self, s: String, a_maybe: ?Allocator) ?Base(self.T) {
     if (!self.checkInput(s)) return null;
@@ -284,7 +284,7 @@ fn parseValue(self: Self, s: String, a_maybe: ?Allocator) ?Base(self.T) {
         }
         return value;
     } else {
-        self.log("unable to parse {s} to {s}", .{ s, self.common.argName.? });
+        self.log("unable to parse {s} to {s}", .{ s, self.meta.argName.? });
         return null;
     }
 }
@@ -293,12 +293,12 @@ pub fn _match(self: Self, t: token.Type) bool {
     std.debug.assert(self.class != .posArg);
     switch (t.opt) {
         .short => |c| {
-            for (self.common.short) |_c| {
+            for (self.meta.short) |_c| {
                 if (c == _c) return true;
             }
         },
         .long => |s| {
-            for (self.common.long) |_l| {
+            for (self.meta.long) |_l| {
                 if (std.mem.eql(u8, _l, s)) return true;
             }
         },
@@ -330,11 +330,11 @@ fn consumeOptArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!b
         if (comptime isArray(self.T)) {
             for (&@field(r, self.name), 0..) |*item, i| {
                 const t = it.nextMust() catch |err| {
-                    self.log("requires {s}[{d}] after {s} but {any}", .{ self.common.argName.?, i, prefix, err });
+                    self.log("requires {s}[{d}] after {s} but {any}", .{ self.meta.argName.?, i, prefix, err });
                     return Error.Missing;
                 };
                 if (t != .arg) {
-                    self.log("requires {s}[{d}] after {s} but {}", .{ self.common.argName.?, i, prefix, t });
+                    self.log("requires {s}[{d}] after {s} but {}", .{ self.meta.argName.?, i, prefix, t });
                     return Error.Missing;
                 }
                 s = t.arg;
@@ -342,13 +342,13 @@ fn consumeOptArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!b
             }
         } else {
             const t = it.nextMust() catch |err| {
-                self.log("requires {s} after {s} but {any}", .{ self.common.argName.?, prefix, err });
+                self.log("requires {s} after {s} but {any}", .{ self.meta.argName.?, prefix, err });
                 return Error.Missing;
             };
             s = switch (t) {
                 .optArg, .arg => |arg| arg,
                 else => {
-                    self.log("requires {s} after {s} but {}", .{ self.common.argName.?, prefix, t });
+                    self.log("requires {s} after {s} but {}", .{ self.meta.argName.?, prefix, t });
                     return Error.Missing;
                 },
             };
@@ -374,7 +374,7 @@ fn consumePosArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!b
     if (comptime isArray(self.T)) {
         for (&@field(r, self.name), 0..) |*item, i| {
             const t = it.nextMust() catch |err| {
-                self.log("requires {s}[{d}] but {any}", .{ self.common.argName.?, i, err });
+                self.log("requires {s}[{d}] but {any}", .{ self.meta.argName.?, i, err });
                 return Error.Missing;
             };
             s = t.as_posArg().posArg;
@@ -382,7 +382,7 @@ fn consumePosArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!b
         }
     } else {
         const t = it.nextMust() catch |err| {
-            self.log("requires {s} but {any}", .{ self.common.argName.?, err });
+            self.log("requires {s} but {any}", .{ self.meta.argName.?, err });
             return Error.Missing;
         };
         s = t.as_posArg().posArg;
@@ -449,37 +449,37 @@ test "Compile Errors" {
 }
 test "Check out" {
     {
-        const meta = Self.opt("out", bool).short('o')._checkOut();
-        try testing.expectEqual(false, meta._toField().defaultValue());
+        const arg = Self.opt("out", bool).short('o')._checkOut();
+        try testing.expectEqual(false, arg._toField().defaultValue());
     }
     {
-        const meta = Self.opt("out", u32).short('o')._checkOut();
-        try testing.expectEqual(0, meta._toField().defaultValue());
+        const arg = Self.opt("out", u32).short('o')._checkOut();
+        try testing.expectEqual(0, arg._toField().defaultValue());
     }
     {
-        const meta = Self.optArg("out", u32).short('o')._checkOut();
-        try testing.expectEqualStrings("OUT", meta.common.argName.?);
+        const arg = Self.optArg("out", u32).short('o')._checkOut();
+        try testing.expectEqualStrings("OUT", arg.meta.argName.?);
     }
     {
-        const meta = Self.posArg("out", u32)._checkOut();
-        try testing.expectEqualStrings("OUT", meta.common.argName.?);
+        const arg = Self.posArg("out", u32)._checkOut();
+        try testing.expectEqualStrings("OUT", arg.meta.argName.?);
     }
 }
 test "Match prefix" {
     {
-        const meta = Self.opt("out", bool).short('o').long("out")._checkOut();
-        try testing.expect(meta._match(.{ .opt = .{ .short = 'o' } }));
-        try testing.expect(!meta._match(.{ .opt = .{ .short = 'i' } }));
-        try testing.expect(meta._match(.{ .opt = .{ .long = "out" } }));
-        try testing.expect(!meta._match(.{ .opt = .{ .long = "input" } }));
+        const arg = Self.opt("out", bool).short('o').long("out")._checkOut();
+        try testing.expect(arg._match(.{ .opt = .{ .short = 'o' } }));
+        try testing.expect(!arg._match(.{ .opt = .{ .short = 'i' } }));
+        try testing.expect(arg._match(.{ .opt = .{ .long = "out" } }));
+        try testing.expect(!arg._match(.{ .opt = .{ .long = "input" } }));
     }
     {
-        const meta = Self.optArg("out", bool).short('o').long("out").long("output")._checkOut();
-        try testing.expect(meta._match(.{ .opt = .{ .short = 'o' } }));
-        try testing.expect(!meta._match(.{ .opt = .{ .short = 'i' } }));
-        try testing.expect(meta._match(.{ .opt = .{ .long = "out" } }));
-        try testing.expect(meta._match(.{ .opt = .{ .long = "output" } }));
-        try testing.expect(!meta._match(.{ .opt = .{ .long = "input" } }));
+        const arg = Self.optArg("out", bool).short('o').long("out").long("output")._checkOut();
+        try testing.expect(arg._match(.{ .opt = .{ .short = 'o' } }));
+        try testing.expect(!arg._match(.{ .opt = .{ .short = 'i' } }));
+        try testing.expect(arg._match(.{ .opt = .{ .long = "out" } }));
+        try testing.expect(arg._match(.{ .opt = .{ .long = "output" } }));
+        try testing.expect(!arg._match(.{ .opt = .{ .long = "input" } }));
     }
 }
 test "Consume opt" {
@@ -560,9 +560,9 @@ test "Consume optArg" {
 }
 test "Consume optArg with both ranges and choices" {
     const R = struct { int: []i32 };
-    const meta = Self.optArg("int", []i32).short('i');
+    const arg = Self.optArg("int", []i32).short('i');
     {
-        const meta_int = meta.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
+        const meta_int = arg.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
         var r = std.mem.zeroes(R);
         var it = try token.Iter.initLine("-i=-1 -i 3 -i 5 -i=23", null, .{});
         try testing.expect(try meta_int.consumeOptArg(&r, &it, testing.allocator));
@@ -573,19 +573,19 @@ test "Consume optArg with both ranges and choices" {
         meta_int._destroy(r, testing.allocator);
     }
     {
-        const meta_int = meta.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
+        const meta_int = arg.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
         var r = std.mem.zeroes(R);
         var it = try token.Iter.initLine("-i 6", null, .{});
         try testing.expectError(Error.Invalid, meta_int.consumeOptArg(&r, &it, testing.allocator));
     }
     {
-        const meta_int = meta.ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
+        const meta_int = arg.ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
         var r = std.mem.zeroes(R);
         var it = try token.Iter.initLine("-i 6", null, .{});
         try testing.expectError(Error.Invalid, meta_int.consumeOptArg(&r, &it, testing.allocator));
     }
     {
-        const meta_int = meta.choices(&.{ 3, 5, 7 })._checkOut();
+        const meta_int = arg.choices(&.{ 3, 5, 7 })._checkOut();
         var r = std.mem.zeroes(R);
         var it = try token.Iter.initLine("-i 6", null, .{});
         try testing.expectError(Error.Invalid, meta_int.consumeOptArg(&r, &it, testing.allocator));
@@ -639,9 +639,9 @@ test "Consume posArg with ranges or rawChoices" {
         }
     };
     const R = struct { mem: Mem };
-    const meta = Self.posArg("mem", Mem);
+    const arg = Self.posArg("mem", Mem);
     {
-        const meta_mem = meta.ranges(Ranges(Mem).new().u(null, Mem{ .len = 5 }))._checkOut();
+        const meta_mem = arg.ranges(Ranges(Mem).new().u(null, Mem{ .len = 5 }))._checkOut();
         var r = std.mem.zeroes(R);
         {
             var it = try token.Iter.initList(&.{"3"}, .{});
@@ -659,7 +659,7 @@ test "Consume posArg with ranges or rawChoices" {
         }
     }
     {
-        const meta_mem = meta.rawChoices(&.{ "1", "2", "3", "16" })._checkOut();
+        const meta_mem = arg.rawChoices(&.{ "1", "2", "3", "16" })._checkOut();
         var r = std.mem.zeroes(R);
         var it = try token.Iter.initList(&.{"32"}, .{});
         try testing.expectError(
