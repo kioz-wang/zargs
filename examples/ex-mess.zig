@@ -37,11 +37,11 @@ pub fn main() !void {
             .long("int")
             .help("give me a u32")
             .argName("PositiveNumber")
-            .callBackFn(showUint32))
+            .callbackFn(showUint32))
         .arg(Arg.optArg("bool", bool)
             .long("bool")
             .help("give me a bool")
-            .callBackFn(struct {
+            .callbackFn(struct {
             fn f(v: *bool) void {
                 std.debug.print("Found Bool {}\n", .{v.*});
                 v.* = !v.*;
@@ -99,7 +99,7 @@ pub fn main() !void {
     // it.debug(true);
 
     const args = cmd.parseFrom(&it, allocator) catch |e|
-        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usage()});
+        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     // it.debug(false);
     std.debug.print("{}\n\n", .{args});

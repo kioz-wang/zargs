@@ -3,6 +3,7 @@ const zargs = @import("zargs");
 const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
 const Arg = zargs.Arg;
+const par = @import("par");
 
 var sum: i32 = 0;
 pub fn main() !void {
@@ -20,7 +21,7 @@ pub fn main() !void {
         .parseFn(
         struct {
             fn f(s: []const u8, _: ?std.mem.Allocator) ?i32 {
-                const n = zargs.parseAny(i32, s, null) orelse return null;
+                const n = par.any(i32, s, null) orelse return null;
                 std.log.info("add {d}", .{n});
                 sum += n;
                 return n;
@@ -32,7 +33,7 @@ pub fn main() !void {
         Arg.optArg("nums", []const i32)
             .short('n').long("num")
             .help("Give me an integer to add")
-            .callBackFn(struct {
+            .callbackFn(struct {
             fn f(v: *[]const i32) void {
                 if (v.len != 0) {
                     const n = v.*[v.len - 1];
@@ -44,7 +45,7 @@ pub fn main() !void {
     );
 
     const cmd = Command.new("add").requireSub("use")
-        .about("This is a demo showcasing the use of `parseFn` and `callBackFn`.")
+        .about("This is a demo showcasing the use of `parseFn` and `callbackFn`.")
         .sub(add_remain).sub(add_optArgs)
         .sub(add_optArgs_auto_per)
         .sub(add_optArgs_auto_cb);
@@ -74,7 +75,7 @@ pub fn main() !void {
             const nums = try it.nextAllBase(allocator);
             defer allocator.free(nums);
             for (nums) |s| {
-                const n = zargs.parseAny(@TypeOf(sum), s, null) orelse {
+                const n = par.any(@TypeOf(sum), s, null) orelse {
                     std.log.err("Fail to parse {s} to {s}", .{ s, @typeName(@TypeOf(sum)) });
                     std.process.exit(1);
                 };

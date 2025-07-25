@@ -14,7 +14,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const args = cmd.parse(allocator) catch |e|
-        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usage()});
+        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     switch (args.action) {
         .install => |a| {

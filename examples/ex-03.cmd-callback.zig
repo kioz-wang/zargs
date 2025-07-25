@@ -41,5 +41,5 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     _ = cmd.parse(allocator) catch |e|
-        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usage()});
+        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
 }

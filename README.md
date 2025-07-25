@@ -39,7 +39,7 @@ pub fn main() !void {
                 .short('c').short('n').short('t')
                 .long("count").long("cnt")
                 .ranges(Ranges(u32).new().u(5, 7).u(13, null)).choices(&.{ 10, 11 }))
-            .arg(Arg.posArg("name", []const u8).raw_choices(&.{ "gcc", "clang" }))
+            .arg(Arg.posArg("name", []const u8).rawChoices(&.{ "gcc", "clang" }))
             .arg(Arg.optArg("output", []const u8).short('o').long("out"))
             .arg(Arg.optArg("vector", ?@Vector(3, i32)).long("vec")))
         .sub(remove);
@@ -48,7 +48,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const args = cmd.parse(allocator) catch |e|
-        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usage()});
+        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     if (args.logfile) |logfile| std.debug.print("Store log into {s}\n", .{logfile});
     switch (args.action) {
@@ -93,11 +93,12 @@ zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.14.3.ta
 The version number follows the format `vx.y.z`:
 - **x**: Currently fixed at 0. It will increment to 1 when the project stabilizes. Afterward, it will increment by 1 for any breaking changes.
 - **y**: Represents the supported Zig version. For example, `vx.14.z` supports [Zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0).
-- **z**: Iteration version, where even numbers indicate releases with new features or significant changes (see [milestones](https://github.com/kioz-wang/zargs/milestones)), and odd numbers indicate releases with fixes or minor changes.
+- **z**: Iteration version, indicating releases with new features or significant changes (see [milestones](https://github.com/kioz-wang/zargs/milestones)).
+- **n**: Minor version, indicating releases with fixes or minor updates.
 
-### import
+### Importing Core Module
 
-Use `addImport` in your `build.zig` (e.g.):
+In your `build.zig`, use `addImport` (for example):
 
 ```zig
 const exe = b.addExecutable(.{
@@ -119,13 +120,45 @@ const run_step = b.step("run", "Run the app");
 run_step.dependOn(&run_cmd.step);
 ```
 
-After importing the `zargs`, you will obtain the iterator (`TokenIter`), command builder (`Command`), and universal parsing function (`parseAny`):
+After importing in your source code, you will gain access to the following features:
+
+- Command and argument builders: Command, Arg
+- Versatile iterator support: TokenIter
+- Convenient exit functions: exit, exitf
+
+> See the [documentation](#APIs) for details.
 
 ```zig
 const zargs = @import("zargs");
 ```
 
-> For more information and usage details about these three powerful tools, please refer to the [documentation](#APIs).
+### Importing other modules
+
+In addition to the core module `zargs`, I also exported the `fmt` and `par` modules.
+
+#### fmt
+
+`any`, which provides a more flexible and powerful formatting scheme.
+
+`stringify`, if a class contains a method such as `fname(self, writer)`, then you can obtain a compile-time string like this:
+
+```zig
+pub fn getString(self: Self) *const [stringify(self, “fname”).count():0]u8 {
+    return stringify(self, “fname”).literal();
+}
+```
+
+`comptimeUpperString` converts a compile-time string to uppercase.
+
+#### par
+
+`any`, parses the string into any type instance you want.
+
+For `struct`, you need to implement `pub fn parse(s: String, a_maybe: ?Allocator) ?Self`. For `enum`, the default parser is `std.meta.stringToEnum`, but if `parse` is implemented, it will be used instead.
+
+`destroy`, releases the parsed type instance.
+
+Safe release: for instances where no memory allocation occurred during parsing, no actual release action is performed. For `struct` and `enum`, actual release actions are performed only when `pub fn destroy(self: Self, a: Allocator) void` is implemented.
 
 ## Features
 
@@ -183,7 +216,7 @@ Value ranges (`.ranges`, `.choices`) can be configured for arguments, which are 
 
 > Default values are not validated (intentional feature? 😄)
 
-If constructing value ranges is cumbersome, `.raw_choices` can be used to filter values before parsing.
+If constructing value ranges is cumbersome, `.rawChoices` can be used to filter values before parsing.
 Ranges
 
 ##### Ranges
@@ -191,13 +224,17 @@ Ranges
 When `T` implements compare, value `.ranges` can be configured for the argument.
 Choices
 
+> See [helper](src/helper.zig).Compare.compare
+
 ##### Choices
 
 When `T` implements equal, value `.choices` can be configured for the argument.
 
+> See [helper](src/helper.zig).Compare.equal
+
 #### Callbacks
 
-A callback (`.callBackFn`) can be configured, which will be executed after matching and parsing.
+A callback (`.callbackFn`) can be configured, which will be executed after matching and parsing.
 
 #### Subcommands
 
@@ -256,6 +293,8 @@ Double quotes can be used to avoid iterator ambiguity, e.g., to pass a negative 
 ### Compile-Time Command Construction
 
 As shown in the example at the beginning of the article, command construction can be completed in a single line of code through chaining.
+
+Of course, if needed, you can also build it step by step. Simply declare it as `comptime var cmd = Command.new(...)`.
 
 #### CallBackFn for Command
 
@@ -343,7 +382,7 @@ zig build ex-01.add -- -h
 
 More real-world examples are coming!
 
-- [filepacker](https://github.com/kioz-wang/filepacker/blob/master/src/main.zig)
+- [zpacker](https://github.com/kioz-wang/zpacker/blob/master/src/main.zig)
 - [zterm](https://github.com/kioz-wang/zterm/blob/master/cli/main.zig)
 
 ## License

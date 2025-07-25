@@ -24,7 +24,7 @@ pub fn main() !void {
                 .short('c').short('n').short('t')
                 .long("count").long("cnt")
                 .ranges(Ranges(u32).new().u(5, 7).u(13, null)).choices(&.{ 10, 11 }))
-            .arg(Arg.posArg("name", []const u8).raw_choices(&.{ "gcc", "clang" }))
+            .arg(Arg.posArg("name", []const u8).rawChoices(&.{ "gcc", "clang" }))
             .arg(Arg.optArg("output", []const u8).short('o').long("out"))
             .arg(Arg.optArg("vector", ?@Vector(3, i32)).long("vec")))
         .sub(remove);
@@ -33,7 +33,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const args = cmd.parse(allocator) catch |e|
-        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usage()});
+        zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     if (args.logfile) |logfile| std.debug.print("Store log into {s}\n", .{logfile});
     switch (args.action) {

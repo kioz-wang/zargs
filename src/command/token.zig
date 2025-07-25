@@ -1,8 +1,12 @@
 const std = @import("std");
 const testing = std.testing;
-const iter = @import("iter.zig");
-const String = @import("helper.zig").Alias.String;
-const Config = @import("helper.zig").Config;
+
+const iter = @import("iter");
+
+const ztype = @import("ztype");
+const String = ztype.String;
+
+const Config = @import("Config.zig").Token;
 
 /// The original iterator that iterates over the raw string.
 const BaseIter = union(enum) {
@@ -34,13 +38,12 @@ const BaseIter = union(enum) {
 };
 
 pub const Type = union(enum) {
-    const FormatOptions = std.fmt.FormatOptions;
     pub const Opt = union(enum) {
         /// Short option that follows the prefix_short
         short: u8,
         /// Long option that follows the prefix_long
         long: String,
-        pub fn format(self: @This(), comptime _: []const u8, options: FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        pub fn format(self: @This(), comptime _: []const u8, options: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
             try writer.writeAll(@tagName(self));
             try writer.writeAll("<");
             switch (self) {
@@ -72,12 +75,7 @@ pub const Type = union(enum) {
         };
         return .{ .posArg = arg };
     }
-    pub fn format(
-        self: Self,
-        comptime fmt: []const u8,
-        options: FormatOptions,
-        writer: anytype,
-    ) @TypeOf(writer).Error!void {
+    pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
         try writer.writeAll(@tagName(self));
         try writer.writeAll("<");
         switch (self) {
