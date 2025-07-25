@@ -26,6 +26,8 @@ const any = @import("fmt").any;
 const stringify = @import("fmt").stringify;
 const comptimeUpperString = @import("fmt").comptimeUpperString;
 
+const AFormatter = @import("AFormatter.zig");
+
 const Self = @This();
 
 name: LiteralString,
@@ -422,25 +424,14 @@ pub fn _destroy(self: Self, r: anytype, a: Allocator) void {
         par.destroy(@field(r, self.name), a);
     }
 }
-
-const AFormatter = @import("AFormatter.zig");
-const StringifyUsage = struct {
-    v: AFormatter,
-    pub fn stringify(self: StringifyUsage, w: anytype) @TypeOf(w).Error!void {
-        try self.v.usage(w);
-    }
-};
-pub fn usageString(self: Self) *const [stringify(StringifyUsage{ .v = AFormatter.init(self, .{}) }).count():0]u8 {
-    return stringify(StringifyUsage{ .v = AFormatter.init(self, .{}) }).literal();
+fn formatter(self: Self, options: AFormatter.Options) AFormatter {
+    return .init(self, options);
 }
-const StringifyHelp = struct {
-    v: AFormatter,
-    pub fn stringify(self: StringifyHelp, w: anytype) @TypeOf(w).Error!void {
-        try self.v.help(w);
-    }
-};
-pub fn helpString(self: Self) *const [stringify(StringifyHelp{ .v = AFormatter.init(self, .{}) }).count():0]u8 {
-    return stringify(StringifyHelp{ .v = AFormatter.init(self, .{}) }).literal();
+pub fn usageString(self: Self) *const [stringify(self.formatter(.{}), "usage").count():0]u8 {
+    return stringify(self.formatter(.{}), "usage").literal();
+}
+pub fn helpString(self: Self) *const [stringify(self.formatter(.{}), "help").count():0]u8 {
+    return stringify(self.formatter(.{}), "help").literal();
 }
 
 test "Compile Errors" {

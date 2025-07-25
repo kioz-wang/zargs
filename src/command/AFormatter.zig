@@ -1,6 +1,4 @@
 const std = @import("std");
-const comptimePrint = std.fmt.comptimePrint;
-const bufPrint = std.fmt.bufPrint;
 
 const Arg = @import("Argument.zig");
 const Ranges = @import("helper").Ranges;
@@ -9,7 +7,6 @@ const Prefix = @import("token.zig").Prefix;
 
 const ztype = @import("ztype");
 const String = ztype.String;
-const LiteralString = ztype.LiteralString;
 
 const any = @import("fmt").any;
 

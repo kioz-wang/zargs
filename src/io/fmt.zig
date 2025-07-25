@@ -82,22 +82,23 @@ pub fn any(value: anytype, options: Options) Any(@TypeOf(value)) {
     return .init(value, options);
 }
 
-pub fn Stringify(V: type) type {
+pub fn Stringify(V: type, method: LiteralString) type {
     return struct {
         v: V,
-        const Self = @This();
-        pub fn count(self: Self) usize {
+        pub fn count(self: @This()) usize {
             var writer = std.io.countingWriter(std.io.null_writer);
             @setEvalBranchQuota(100000); // TODO why?
-            self.v.stringify(writer.writer()) catch unreachable;
+            // or use `@field(Cls, fname)(obj, args...)` directly
+            @call(.auto, @field(V, method), .{ self.v, writer.writer() }) catch unreachable;
             return writer.bytes_written;
         }
-        pub inline fn literal(self: Self) *const [self.count():0]u8 {
+        pub inline fn literal(self: @This()) *const [self.count():0]u8 {
             comptime {
                 var buf: [self.count():0]u8 = undefined;
                 var fbs = std.io.fixedBufferStream(&buf);
                 @setEvalBranchQuota(100000); // TODO why?
-                self.v.stringify(fbs.writer()) catch unreachable;
+                // @call(.auto, @field(V, method), .{ self.v, fbs.writer() }) catch unreachable;
+                @field(V, method)(self.v, fbs.writer()) catch unreachable;
                 buf[buf.len] = 0;
                 const final = buf;
                 return &final;
@@ -105,7 +106,7 @@ pub fn Stringify(V: type) type {
         }
     };
 }
-pub fn stringify(v: anytype) Stringify(@TypeOf(v)) {
+pub fn stringify(v: anytype, comptime method: LiteralString) Stringify(@TypeOf(v), method) {
     return .{ .v = v };
 }
 

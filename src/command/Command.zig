@@ -23,6 +23,8 @@ const par = @import("par");
 const any = @import("fmt").any;
 const stringify = @import("fmt").stringify;
 
+const CFormatter = @import("CFormatter.zig");
+
 const Self = @This();
 
 fn log(self: Self, comptime fmt: String, args: anytype) void {
@@ -481,25 +483,14 @@ pub fn destroy(self: Self, r: *const self.Result(), allocator: Allocator) void {
         }
     }
 }
-
-const CFormatter = @import("CFormatter.zig");
-const StringifyUsage = struct {
-    v: CFormatter,
-    pub fn stringify(self: StringifyUsage, w: anytype) @TypeOf(w).Error!void {
-        try self.v.usage(w);
-    }
-};
-pub fn usageString(self: Self) *const [stringify(StringifyUsage{ .v = CFormatter.init(self, .{}) }).count():0]u8 {
-    return stringify(StringifyUsage{ .v = CFormatter.init(self, .{}) }).literal();
+fn formatter(self: Self, options: @import("AFormatter.zig").Options) CFormatter {
+    return .init(self, options);
 }
-const StringifyHelp = struct {
-    v: CFormatter,
-    pub fn stringify(self: StringifyHelp, w: anytype) @TypeOf(w).Error!void {
-        try self.v.help(w);
-    }
-};
-pub fn helpString(self: Self) *const [stringify(StringifyHelp{ .v = CFormatter.init(self, .{}) }).count():0]u8 {
-    return stringify(StringifyHelp{ .v = CFormatter.init(self, .{}) }).literal();
+pub fn usageString(self: Self) *const [stringify(self.formatter(.{}), "usage").count():0]u8 {
+    return stringify(self.formatter(.{}), "usage").literal();
+}
+pub fn helpString(self: Self) *const [stringify(self.formatter(.{}), "help").count():0]u8 {
+    return stringify(self.formatter(.{}), "help").literal();
 }
 
 const _test = struct {

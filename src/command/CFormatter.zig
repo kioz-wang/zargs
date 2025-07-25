@@ -3,7 +3,7 @@ const std = @import("std");
 const Command = @import("Command.zig");
 
 const AFormatter = @import("AFormatter.zig");
-const Options = AFormatter.Options;
+const Options = @import("AFormatter.zig").Options;
 
 const ztype = @import("ztype");
 const String = ztype.String;
