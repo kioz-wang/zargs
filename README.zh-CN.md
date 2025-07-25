@@ -241,8 +241,6 @@ pub fn getString(self: Self) *const [stringify(self, "fname").count():0]u8 {
 
 对解析器来说，除了累加选项和带不定数量参数的选项，任何选项都不可以重复出现。
 
-各种表现形式主要由迭代器负责支持。
-
 选项又分为短选项和长选项：
 - 短选项：`-v`
 - 长选项：`--verbose`
@@ -336,13 +334,13 @@ defer cmd.destroy(&args, allocator);
 - 行迭代器（`initLine`）：和常规迭代器一样，但可以指定分隔符
 - 列表迭代器（`initList`）：从给定的字符串列表中迭代
 
-可为迭代器自定义短选项前缀（`-`）、长选项前缀（`--`）、连接符（`=`）、选项终止符（`--`）（使用场景见[表现形式](#表现形式)）。
+可为迭代器自定义短选项前缀（`-`）、长选项前缀（`--`）、连接符（`=`）、选项终止符（`--`）（参考[ex-05](examples/ex-05.custom_config.zig)）。
 
 ### 编译时生成 usage 和 help
 
 ```zig
-_ = cmd.usage();
-_ = cmd.help();
+_ = cmd.usageString();
+_ = cmd.helpString();
 ```
 
 ## APIs
