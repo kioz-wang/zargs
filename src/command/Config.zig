@@ -86,25 +86,23 @@ pub const Token = struct {
         }
     }
 
-    const _test = struct {
-        test "Validate Config" {
-            try testing.expectError(Error.PrefixLongEmpty, (Self{ .prefix = .{ .long = "" } }).validate());
-            try testing.expectError(Error.PrefixShortEmpty, (Self{ .prefix = .{ .short = "" } }).validate());
-            try testing.expectError(Error.ConnectorOptArgEmpty, (Self{ .connector = "" }).validate());
-            try testing.expectError(Error.TerminatorEmpty, (Self{ .terminator = "" }).validate());
-            try testing.expectError(Error.PrefixLongShortEqual, (Self{ .prefix = .{ .long = "-", .short = "-" } }).validate());
-            try testing.expectError(Error.PrefixLongHasSpace, (Self{ .prefix = .{ .long = "a b" } }).validate());
-            try testing.expectError(Error.PrefixShortHasSpace, (Self{ .prefix = .{ .short = "a b" } }).validate());
-            try testing.expectError(Error.ConnectorOptArgHasSpace, (Self{ .connector = "a b" }).validate());
-            try testing.expectError(Error.TerminatorHasSpace, (Self{ .terminator = "a b" }).validate());
-        }
-        test "Format Config" {
-            try testing.expectEqualStrings(
-                "{ .prefix = { .short = -, .long = -- }, .terminator = --, .connector = = }",
-                comptimePrint("{}", .{Self{}}),
-            );
-        }
-    };
+    test "Validate Config" {
+        try testing.expectError(Error.PrefixLongEmpty, (Self{ .prefix = .{ .long = "" } }).validate());
+        try testing.expectError(Error.PrefixShortEmpty, (Self{ .prefix = .{ .short = "" } }).validate());
+        try testing.expectError(Error.ConnectorOptArgEmpty, (Self{ .connector = "" }).validate());
+        try testing.expectError(Error.TerminatorEmpty, (Self{ .terminator = "" }).validate());
+        try testing.expectError(Error.PrefixLongShortEqual, (Self{ .prefix = .{ .long = "-", .short = "-" } }).validate());
+        try testing.expectError(Error.PrefixLongHasSpace, (Self{ .prefix = .{ .long = "a b" } }).validate());
+        try testing.expectError(Error.PrefixShortHasSpace, (Self{ .prefix = .{ .short = "a b" } }).validate());
+        try testing.expectError(Error.ConnectorOptArgHasSpace, (Self{ .connector = "a b" }).validate());
+        try testing.expectError(Error.TerminatorHasSpace, (Self{ .terminator = "a b" }).validate());
+    }
+    test "Format Config" {
+        try testing.expectEqualStrings(
+            "{ .prefix = { .short = -, .long = -- }, .terminator = --, .connector = = }",
+            comptimePrint("{}", .{Self{}}),
+        );
+    }
 };
 
 pub const Format = struct {
