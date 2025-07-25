@@ -5,8 +5,6 @@ pub const Command = command.Command;
 pub const Arg = command.Arg;
 pub const TokenIter = command.TokenIter;
 
-pub const parseAny = @import("par").any;
-
 const h = @import("helper");
 pub const exit = h.exit;
 pub const exitf = h.exitf;

@@ -85,6 +85,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             });
             ex_exe.root_module.addImport("zargs", mod_zargs);
+            ex_exe.root_module.addImport("par", mod_par);
             const ex_install = b.addInstallArtifact(ex_exe, .{});
             ex_install.step.dependOn(&ex_exe.step);
 

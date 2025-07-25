@@ -96,7 +96,7 @@ zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.14.3.ta
 - z：迭代版本，包含新特性或其他重要改动的版本（见 [milestones](https://github.com/kioz-wang/zargs/milestones)）
 - n: 小版本，包含修复或其他小改动的版本
 
-### 导入
+### 导入核心模块
 
 在你的 `build.zig` 中使用 `addImport`（比如）：
 
@@ -120,13 +120,44 @@ const run_step = b.step("run", "Run the app");
 run_step.dependOn(&run_cmd.step);
 ```
 
-在源代码中导入后，你将获得迭代器（`TokenIter`）、命令构建器（`Command`）、通用解析函数（`parseAny`）：
+在源代码中导入后，你将获得以下支持：
+- 命令和参数构建器：`Command`, `Arg`
+- 多样的迭代器支持：`TokenIter`
+- 便捷的退出函数：`exit`, `exitf`
+
+> 详见[文档](#APIs)
 
 ```zig
 const zargs = @import("zargs");
 ```
 
-> 有关以上三大利器的更多信息和用法，请翻阅[文档](#APIs)。
+### 导入其他模块
+
+除了核心模块 `zargs`，我还导出了 `fmt` 和 `par` 模块。
+
+#### fmt
+
+`any`，提供了更灵活更强大的格式化方案。
+
+`stringify`，如果一个类包含形如`fname(self, writer)`的方法，那么可以这样得到编译时字符串：
+
+```zig
+pub fn getString(self: Self) *const [stringify(self, "fname").count():0]u8 {
+    return stringify(self, "fname").literal();
+}
+```
+
+`comptimeUpperString`，将编译时字符串转为大写。
+
+#### par
+
+`any`，将字符串解析为任何你想要的类型实例。
+
+对于 `struct`，需要实现 `pub fn parse(s: String, a_maybe: ?Allocator) ?Self`。对于 `enum`，默认使用 `std.meta.stringToEnum` 解析，如果实现了 `parse`，那么优先使用。
+
+`destroy`，释放解析到的类型实例。
+
+安全释放，对于解析时未发生内存分配的实例，不会产生实际的释放行为。对于 `struct` 和 `enum`，当实现了 `pub fn destroy(self: Self, a: Allocator) void` 时，才会产生实际的释放行为。
 
 ## 特性
 
@@ -190,9 +221,13 @@ const zargs = @import("zargs");
 
 当 T 实现了 `compare` 时，可以为该参数配置值范围。
 
+> 详见 [helper](src/helper.zig).Compare.compare
+
 ##### 可选项
 
 当 T 实现了 `equal` 时，可以为该参数配置值可选项。
+
+> 详见 [helper](src/helper.zig).Compare.equal
 
 #### 回调
 
@@ -255,6 +290,8 @@ const zargs = @import("zargs");
 ### 编译时命令构建
 
 如文章开始处的示例，通过链式调用可在一行语句中完成命令构建。
+
+当然，如果需要，你也可以分步骤构建。只要声明为 `comptime var cmd = Command.new(...)` 即可。
 
 #### 为命令添加回调
 
@@ -342,7 +379,7 @@ zig build ex-01.add -- -h
 
 更多真实案例：
 
-- [filepacker](https://github.com/kioz-wang/filepacker/blob/master/src/main.zig)
+- [zpacker](https://github.com/kioz-wang/zpacker/blob/master/src/main.zig)
 - [zterm](https://github.com/kioz-wang/zterm/blob/master/cli/main.zig)
 
 ## License
