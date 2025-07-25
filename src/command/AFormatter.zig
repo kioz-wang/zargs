@@ -1,31 +1,25 @@
 const std = @import("std");
 
 const Arg = @import("Argument.zig");
-const Ranges = @import("helper").Ranges;
+const Config = @import("Config.zig");
 
-const Prefix = @import("token.zig").Prefix;
+const Ranges = @import("helper").Ranges;
 
 const ztype = @import("ztype");
 const String = ztype.String;
 
 const any = @import("fmt").any;
 
-pub const Options = struct {
-    prefix: Prefix = .{},
-    indent: usize = 2,
-    left_max: usize = 24,
-};
-
 const Self = @This();
 
 arg: Arg,
-options: Options,
+config: Config,
 left_length: usize = undefined,
 
-pub fn init(arg: Arg, options: Options) Self {
+pub fn init(arg: Arg, config: Config) Self {
     var self = Self{
         .arg = arg,
-        .options = options,
+        .config = config,
     };
     var counting = std.io.countingWriter(std.io.null_writer);
     try self.usage1(counting.writer());
@@ -33,24 +27,25 @@ pub fn init(arg: Arg, options: Options) Self {
     return self;
 }
 pub fn usage(self: Self, w: anytype) !void {
+    const meta = self.arg.meta;
     var is_first = true;
-    if (self.arg.meta.default != null) {
+    if (meta.default != null) {
         try w.writeByte('[');
     }
-    if (self.arg.meta.short.len > 0) {
-        try w.writeAll(self.options.prefix.short);
-        try w.writeByte(self.arg.meta.short[0]);
+    if (meta.short.len > 0) {
+        try w.writeAll(self.config.token.prefix.short);
+        try w.writeByte(meta.short[0]);
         is_first = false;
     }
-    if (self.arg.meta.long.len > 0) {
+    if (meta.long.len > 0) {
         if (!is_first) try w.writeByte('|');
-        try w.writeAll(self.options.prefix.long);
-        try w.writeAll(self.arg.meta.long[0]);
+        try w.writeAll(self.config.token.prefix.long);
+        try w.writeAll(meta.long[0]);
         is_first = false;
     }
-    if (self.arg.meta.argName) |s| {
+    if (meta.argName) |s| {
         if (!is_first) try w.writeByte(' ');
-        if (!is_first or self.arg.meta.default == null) {
+        if (!is_first or meta.default == null) {
             try w.writeByte('{');
         }
         switch (@typeInfo(self.arg.T)) {
@@ -59,11 +54,11 @@ pub fn usage(self: Self, w: anytype) !void {
             else => {},
         }
         try w.writeAll(s);
-        if (!is_first or self.arg.meta.default == null) {
+        if (!is_first or meta.default == null) {
             try w.writeByte('}');
         }
     }
-    if (self.arg.meta.default != null) {
+    if (meta.default != null) {
         try w.writeByte(']');
     }
     if (self.arg.class == .opt and self.arg.T != bool or self.arg.class == .optArg and ztype.Type.isSlice(self.arg.T)) {
@@ -71,18 +66,19 @@ pub fn usage(self: Self, w: anytype) !void {
     }
 }
 fn usage1(self: Self, w: anytype) !void {
+    const meta = self.arg.meta;
     var is_first = true;
-    for (self.arg.meta.short) |short| {
+    for (meta.short) |short| {
         if (is_first) is_first = false else try w.writeAll(", ");
-        try w.writeAll(self.options.prefix.short);
+        try w.writeAll(self.config.token.prefix.short);
         try w.writeByte(short);
     }
-    for (self.arg.meta.long) |long| {
+    for (meta.long) |long| {
         if (is_first) is_first = false else try w.writeAll(", ");
-        try w.writeAll(self.options.prefix.long);
+        try w.writeAll(self.config.token.prefix.long);
         try w.writeAll(long);
     }
-    if (self.arg.meta.argName) |s| {
+    if (meta.argName) |s| {
         if (!is_first) try w.writeByte(' ');
         try w.writeByte('{');
         switch (@typeInfo(self.arg.T)) {
@@ -97,15 +93,15 @@ fn usage1(self: Self, w: anytype) !void {
 fn indent(self: Self, w: anytype, is_firstline: *bool) !void {
     if (is_firstline.*) {
         is_firstline.* = false;
-        if (self.left_length >= self.options.left_max) {
+        if (self.left_length >= self.config.format.left_max) {
             try w.writeByte('\n');
-            try w.writeAll(" " ** (self.options.left_max + self.options.indent));
+            try w.writeAll(" " ** (self.config.format.left_max + self.config.format.indent));
         } else {
-            try w.writeAll(" " ** (self.options.left_max - self.left_length));
+            try w.writeAll(" " ** (self.config.format.left_max - self.left_length));
         }
     } else {
         try w.writeByte('\n');
-        try w.writeAll(" " ** (self.options.left_max + self.options.indent));
+        try w.writeAll(" " ** (self.config.format.left_max + self.config.format.indent));
     }
 }
 pub fn help(self: Self, w: anytype) !void {
@@ -114,7 +110,7 @@ pub fn help(self: Self, w: anytype) !void {
 
     var is_firstline = true;
 
-    try w.writeAll(" " ** self.options.indent);
+    try w.writeAll(" " ** self.config.format.indent);
     try self.usage1(w);
 
     if (meta.help != null or meta.default != null) {
@@ -159,15 +155,15 @@ pub fn help(self: Self, w: anytype) !void {
 const testing = std.testing;
 
 test "usageString" {
-    try testing.expectEqualStrings("[-o]", Arg.opt("out", bool).short('o')._checkOut().usageString());
-    try testing.expectEqualStrings("[-o]...", Arg.opt("out", u32).short('o')._checkOut().usageString());
-    try testing.expectEqualStrings("-o {OUT}", Arg.optArg("out", bool).short('o')._checkOut().usageString());
-    try testing.expectEqualStrings("[-o {OUT}]", Arg.optArg("out", bool).short('o').default(false)._checkOut().usageString());
-    try testing.expectEqualStrings("[-o {OUT}]", Arg.optArg("out", ?bool).short('o')._checkOut().usageString());
-    try testing.expectEqualStrings("-o {[2]OUT}", Arg.optArg("out", [2]u32).short('o')._checkOut().usageString());
-    try testing.expectEqualStrings("-o {[]OUT}...", Arg.optArg("out", []const u32).short('o')._checkOut().usageString());
-    try testing.expectEqualStrings("{[2]OUT}", Arg.posArg("out", [2]u32)._checkOut().usageString());
-    try testing.expectEqualStrings("[OUT]", Arg.posArg("out", u32).default(1)._checkOut().usageString());
+    try testing.expectEqualStrings("[-o]", Arg.opt("out", bool).short('o')._checkOut().usageString(.{}));
+    try testing.expectEqualStrings("[-o]...", Arg.opt("out", u32).short('o')._checkOut().usageString(.{}));
+    try testing.expectEqualStrings("-o {OUT}", Arg.optArg("out", bool).short('o')._checkOut().usageString(.{}));
+    try testing.expectEqualStrings("[-o {OUT}]", Arg.optArg("out", bool).short('o').default(false)._checkOut().usageString(.{}));
+    try testing.expectEqualStrings("[-o {OUT}]", Arg.optArg("out", ?bool).short('o')._checkOut().usageString(.{}));
+    try testing.expectEqualStrings("-o {[2]OUT}", Arg.optArg("out", [2]u32).short('o')._checkOut().usageString(.{}));
+    try testing.expectEqualStrings("-o {[]OUT}...", Arg.optArg("out", []const u32).short('o')._checkOut().usageString(.{}));
+    try testing.expectEqualStrings("{[2]OUT}", Arg.posArg("out", [2]u32)._checkOut().usageString(.{}));
+    try testing.expectEqualStrings("[OUT]", Arg.posArg("out", u32).default(1)._checkOut().usageString(.{}));
 }
 
 test "helpString" {
@@ -183,7 +179,7 @@ test "helpString" {
         .ranges(Ranges(i32).new().u(-16, 3).u(16, null))
         .choices(&.{ 5, 6 })
         .default(1)
-        ._checkOut().helpString());
+        ._checkOut().helpString(.{}));
 
     try testing.expectEqualStrings(
         \\  -c, -n {COUNT}          This is a help message, with a very very long long long sentence
@@ -193,7 +189,7 @@ test "helpString" {
         .short('c').short('n')
         .help("This is a help message, with a very very long long long sentence")
         .choices(&.{ 5, 6 })
-        ._checkOut().helpString());
+        ._checkOut().helpString(.{}));
 
     try testing.expectEqualStrings(
         \\  -c, -n {COUNT}          possible inputs: { 0x05, 0x06 }
@@ -201,7 +197,7 @@ test "helpString" {
     , Arg.optArg("count", i32)
         .short('c').short('n')
         .rawChoices(&.{ "0x05", "0x06" })
-        ._checkOut().helpString());
+        ._checkOut().helpString(.{}));
 
     {
         const Color = enum { Red, Green, Blue };
@@ -209,7 +205,7 @@ test "helpString" {
             \\  {COLOR}                 Enum: { Red, Green, Blue }
             \\
         , Arg.posArg("color", Color)
-            ._checkOut().helpString());
+            ._checkOut().helpString(.{}));
     }
 
     try testing.expectEqualStrings(
@@ -219,14 +215,14 @@ test "helpString" {
     , Arg.opt("out", bool)
         .short('o').short('u').short('t')
         .long("out").long("output").help("Help of out")
-        ._checkOut().helpString());
+        ._checkOut().helpString(.{}));
 
     try testing.expectEqualStrings(
         \\  -o {OUT}                Help of out
         \\
     , Arg.optArg("out", String)
         .short('o').help("Help of out")
-        ._checkOut().helpString());
+        ._checkOut().helpString(.{}));
 
     try testing.expectEqualStrings(
         \\  -o, --out, --output {OUT}
@@ -236,14 +232,14 @@ test "helpString" {
         .short('o').long("out").long("output")
         .default("a.out")
         .help("Help of out")
-        ._checkOut().helpString());
+        ._checkOut().helpString(.{}));
 
     try testing.expectEqualStrings(
         \\  -p, --point {POINT}     (default is { 1, 1 })
         \\
     , Arg.optArg("point", @Vector(2, i32))
         .short('p').long("point").default(.{ 1, 1 })
-        ._checkOut().helpString());
+        ._checkOut().helpString(.{}));
 
     {
         const Color = enum { Red, Green, Blue };
@@ -255,7 +251,7 @@ test "helpString" {
             .short('c').long("color")
             .default(.{ .Red, .Green, .Blue })
             .help("Help of colors")
-            ._checkOut().helpString());
+            ._checkOut().helpString(.{}));
     }
 
     try testing.expectEqualStrings(
@@ -267,7 +263,7 @@ test "helpString" {
             .default(3)
             .ranges(Ranges(u32).new().u(5, 10).u(32, null))
             .choices(&.{ 15, 29 })
-            ._checkOut().helpString(),
+            ._checkOut().helpString(.{}),
     );
 
     try testing.expectEqualStrings(
@@ -276,7 +272,7 @@ test "helpString" {
     ,
         Arg.posArg("cc", String)
             .choices(&.{ "gcc", "clang" })
-            ._checkOut().helpString(),
+            ._checkOut().helpString(.{}),
     );
 
     try testing.expectEqualStrings(
@@ -285,6 +281,6 @@ test "helpString" {
     ,
         Arg.posArg("cc", String)
             .rawChoices(&.{ "gcc", "clang" })
-            ._checkOut().helpString(),
+            ._checkOut().helpString(.{}),
     );
 }

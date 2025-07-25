@@ -1,9 +1,8 @@
 const std = @import("std");
 
 const Command = @import("Command.zig");
-
 const AFormatter = @import("AFormatter.zig");
-const Options = @import("AFormatter.zig").Options;
+const Config = @import("Config.zig");
 
 const ztype = @import("ztype");
 const String = ztype.String;
@@ -14,14 +13,10 @@ const stringify = @import("fmt").stringify;
 const Self = @This();
 
 c: Command,
-options: Options,
 left_length: usize = undefined,
 
-pub fn init(c: Command, options: Options) Self {
-    var self = Self{
-        .c = c,
-        .options = options,
-    };
+pub fn init(c: Command) Self {
+    var self = Self{ .c = c };
     var counting = std.io.countingWriter(std.io.null_writer);
     try self.usage1(counting.writer());
     self.left_length = counting.bytes_written;
@@ -32,33 +27,33 @@ pub fn usage(self: Self, w: anytype) !void {
     try w.writeAll(self.c.name[0]);
     if (self.c._builtin_help) |m| {
         try w.writeByte(' ');
-        try AFormatter.init(m, self.options).usage(w);
+        try AFormatter.init(m, self.c._config).usage(w);
     }
     inline for (self.c._args) |m| {
         if (m.class != .opt) continue;
         try w.writeByte(' ');
-        try AFormatter.init(m, self.options).usage(w);
+        try AFormatter.init(m, self.c._config).usage(w);
     }
     inline for (self.c._args) |m| {
         if (m.class != .optArg) continue;
         try w.writeByte(' ');
-        try AFormatter.init(m, self.options).usage(w);
+        try AFormatter.init(m, self.c._config).usage(w);
     }
     if (self.c._stat.posArg != 0 or self.c._stat.cmd != 0) {
-        try w.print(" [{s}]", .{self.c._config.terminator});
+        try w.print(" [{s}]", .{self.c._config.token.terminator});
     }
     inline for (self.c._args) |m| {
         if (m.class != .posArg) continue;
         if (m.meta.default == null) {
             try w.writeByte(' ');
-            try AFormatter.init(m, self.options).usage(w);
+            try AFormatter.init(m, self.c._config).usage(w);
         }
     }
     inline for (self.c._args) |m| {
         if (m.class != .posArg) continue;
         if (m.meta.default != null) {
             try w.writeByte(' ');
-            try AFormatter.init(m, self.options).usage(w);
+            try AFormatter.init(m, self.c._config).usage(w);
         }
     }
     if (self.c._stat.cmd != 0) {
@@ -78,15 +73,15 @@ pub fn usage1(self: Self, w: anytype) !void {
 }
 
 pub fn help1(self: Self, w: anytype) !void {
-    try w.writeAll(" " ** self.options.indent);
+    try w.writeAll(" " ** self.c._config.format.indent);
     try self.usage1(w);
 
     if (self.c.meta.about) |s| {
-        if (self.left_length >= self.options.left_max) {
+        if (self.left_length >= self.c._config.format.left_max) {
             try w.writeByte('\n');
-            try w.writeAll(" " ** (self.options.left_max + self.options.indent));
+            try w.writeAll(" " ** (self.c._config.format.left_max + self.c._config.format.indent));
         } else {
-            try w.writeAll(" " ** (self.options.left_max - self.left_length));
+            try w.writeAll(" " ** (self.c._config.format.left_max - self.left_length));
         }
         try w.writeAll(s);
     }
@@ -125,11 +120,11 @@ pub fn help(self: Self, w: anytype) !void {
     if (self.c._stat.opt != 0 or self.c._builtin_help != null) {
         try w.writeAll("\nOption:\n");
         if (self.c._builtin_help) |m| {
-            try AFormatter.init(m, self.options).help(w);
+            try AFormatter.init(m, self.c._config).help(w);
         }
         inline for (self.c._args) |m| {
             if (m.class != .opt) continue;
-            try AFormatter.init(m, self.options).help(w);
+            try AFormatter.init(m, self.c._config).help(w);
         }
     }
 
@@ -137,7 +132,7 @@ pub fn help(self: Self, w: anytype) !void {
         try w.writeAll("\nOption with arguments:\n");
         inline for (self.c._args) |m| {
             if (m.class != .optArg) continue;
-            try AFormatter.init(m, self.options).help(w);
+            try AFormatter.init(m, self.c._config).help(w);
         }
     }
 
@@ -145,22 +140,16 @@ pub fn help(self: Self, w: anytype) !void {
         try w.writeAll("\nPositional arguments:\n");
         inline for (self.c._args) |m| {
             if (m.class != .posArg) continue;
-            try AFormatter.init(m, self.options).help(w);
+            try AFormatter.init(m, self.c._config).help(w);
         }
     }
 
     if (self.c._stat.cmd != 0) {
         try w.writeAll("\nCommands:\n");
         inline for (self.c._cmds) |c| {
-            try Self.init(c, self.options).help1(w);
+            try Self.init(c).help1(w);
         }
     }
-}
-pub fn comptimeUsage(self: Self) *const [stringify(self, "usage").count():0]u8 {
-    return stringify(self, "usage").literal();
-}
-pub fn comptimeHelp(self: Self) *const [stringify(self, "help").count():0]u8 {
-    return stringify(self, "help").literal();
 }
 
 const testing = std.testing;

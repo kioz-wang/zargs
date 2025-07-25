@@ -23,18 +23,16 @@ const _a = Command.new("A")
     .arg(Arg.opt("ignore", bool).short('i').long("ignore"))
     .arg(Arg.optArg("output", ?String).long("out").short('o'));
 const a = _a.requireSub("sub").sub(
-    _b.setConfig(.{
-        .prefix = .{
-            .long = "==",
-        },
+    _b.config(.{ .token = .{
+        .prefix = .{ .long = "==" },
         .terminator = "##",
         .connector = ":",
-    }).requireSub("sub").sub(
-        _c.requireSub("sub").sub(_d).setConfig(.{
+    } }).requireSub("sub").sub(
+        _c.requireSub("sub").sub(_d).config(.{ .token = .{
             .prefix = .{ .long = "+++", .short = "@" },
             .terminator = "**",
             .connector = "=>",
-        }),
+        } }),
     ),
 );
 

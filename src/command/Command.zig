@@ -15,7 +15,7 @@ const isSlice = Type.isSlice;
 const TryOptional = Type.TryOptional;
 
 const TokenIter = @import("token.zig").Iter;
-const Config = @import("token.zig").Config;
+const Config = @import("Config.zig");
 
 const Argument = @import("Argument.zig");
 
@@ -185,15 +185,15 @@ pub fn posArg(
     }
     return self.arg(argument);
 }
-pub fn setConfig(self: Self, config: Config) Self {
-    config.validate() catch |err| {
-        @compileError(comptimePrint("command({s}) invalid config {}: {any}", .{ self.name, config, err }));
+pub fn config(self: Self, conf: Config) Self {
+    conf.token.validate() catch |err| {
+        @compileError(comptimePrint("command({s}) invalid config {}: {any}", .{ self.name, conf, err }));
     };
     var cmd = self;
     var cmds: []const Self = &.{};
-    cmd._config = config;
+    cmd._config = conf;
     for (cmd._cmds) |c| {
-        cmds = cmds ++ .{c.setConfig(config)};
+        cmds = cmds ++ .{c.config(conf)};
     }
     cmd._cmds = cmds;
     return cmd;
@@ -386,7 +386,7 @@ pub fn parseFrom(self: Self, it: *TokenIter, a_maybe: ?Allocator) Error!self.Res
         break :blk i;
     } else .{});
 
-    it.reinit(self._config);
+    it.reinit(self._config.token);
 
     while (it.view() catch |e| return self._errCastIter(e)) |t| {
         switch (t) {
@@ -483,14 +483,14 @@ pub fn destroy(self: Self, r: *const self.Result(), allocator: Allocator) void {
         }
     }
 }
-fn formatter(self: Self, options: @import("AFormatter.zig").Options) CFormatter {
-    return .init(self, options);
+fn formatter(self: Self) CFormatter {
+    return .init(self);
 }
-pub fn usageString(self: Self) *const [stringify(self.formatter(.{}), "usage").count():0]u8 {
-    return stringify(self.formatter(.{}), "usage").literal();
+pub fn usageString(self: Self) *const [stringify(self.formatter(), "usage").count():0]u8 {
+    return stringify(self.formatter(), "usage").literal();
 }
-pub fn helpString(self: Self) *const [stringify(self.formatter(.{}), "help").count():0]u8 {
-    return stringify(self.formatter(.{}), "help").literal();
+pub fn helpString(self: Self) *const [stringify(self.formatter(), "help").count():0]u8 {
+    return stringify(self.formatter(), "help").literal();
 }
 
 const _test = struct {
@@ -692,7 +692,7 @@ const _test = struct {
                 } },
             } },
         } };
-        const complex_config: Config = .{ .prefix = .{ .long = "+++", .short = "@" }, .terminator = "**", .connector = "=>" };
+        const complex_config: Config = .{ .token = .{ .prefix = .{ .long = "+++", .short = "@" }, .terminator = "**", .connector = "=>" } };
         {
             const a = _a.requireSub("sub").sub(
                 _b.requireSub("sub").sub(
@@ -706,11 +706,11 @@ const _test = struct {
         }
         {
             const a = _a.requireSub("sub").sub(
-                _b.setConfig(.{
+                _b.config(.{ .token = .{
                     .terminator = "##",
                     .connector = ":",
-                }).requireSub("sub").sub(
-                    _c.setConfig(complex_config).requireSub("sub").sub(_d),
+                } }).requireSub("sub").sub(
+                    _c.config(complex_config).requireSub("sub").sub(_d),
                 ),
             );
             var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C @v +++out=>cc ** D -vio=dd in", null, .{});
@@ -720,12 +720,12 @@ const _test = struct {
         }
         {
             const a = _a.requireSub("sub").sub(
-                _b.setConfig(.{
+                _b.config(.{ .token = .{
                     .terminator = "##",
                     .connector = ":",
-                }).requireSub("sub").sub(
+                } }).requireSub("sub").sub(
                     _c.requireSub("sub").sub(
-                        _d.setConfig(complex_config),
+                        _d.config(complex_config),
                     ),
                 ),
             );
@@ -736,10 +736,10 @@ const _test = struct {
         }
         {
             const a = _a.requireSub("sub").sub(
-                _b.setConfig(.{
+                _b.config(.{ .token = .{
                     .terminator = "##",
                     .connector = ":",
-                }).requireSub("sub").sub(
+                } }).requireSub("sub").sub(
                     _c.requireSub("sub").sub(
                         _d,
                     ),
@@ -751,13 +751,13 @@ const _test = struct {
             try testing.expectEqualDeep(r, args);
         }
         {
-            const a = _a.setConfig(.{
+            const a = _a.config(.{ .token = .{
                 .terminator = "##",
                 .connector = ":",
-            }).requireSub("sub").sub(
+            } }).requireSub("sub").sub(
                 _b.requireSub("sub").sub(
                     _c.requireSub("sub").sub(
-                        _d.setConfig(complex_config),
+                        _d.config(complex_config),
                     ),
                 ),
             );
@@ -768,11 +768,11 @@ const _test = struct {
         }
         {
             const a = _a.requireSub("sub").sub(
-                _b.setConfig(.{
+                _b.config(.{ .token = .{
                     .terminator = "##",
                     .connector = ":",
-                }).requireSub("sub").sub(
-                    _c.requireSub("sub").sub(_d).setConfig(complex_config),
+                } }).requireSub("sub").sub(
+                    _c.requireSub("sub").sub(_d).config(complex_config),
                 ),
             );
             var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C @v +++out=>cc ** D @vio=>dd in", null, .{});

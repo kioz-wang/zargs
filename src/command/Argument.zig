@@ -27,6 +27,7 @@ const stringify = @import("fmt").stringify;
 const comptimeUpperString = @import("fmt").comptimeUpperString;
 
 const AFormatter = @import("AFormatter.zig");
+const Config = @import("Config.zig");
 
 const Self = @This();
 
@@ -424,14 +425,14 @@ pub fn _destroy(self: Self, r: anytype, a: Allocator) void {
         par.destroy(@field(r, self.name), a);
     }
 }
-fn formatter(self: Self, options: AFormatter.Options) AFormatter {
-    return .init(self, options);
+fn formatter(self: Self, config: Config) AFormatter {
+    return .init(self, config);
 }
-pub fn usageString(self: Self) *const [stringify(self.formatter(.{}), "usage").count():0]u8 {
-    return stringify(self.formatter(.{}), "usage").literal();
+pub fn usageString(self: Self, comptime config: Config) *const [stringify(self.formatter(config), "usage").count():0]u8 {
+    return stringify(self.formatter(config), "usage").literal();
 }
-pub fn helpString(self: Self) *const [stringify(self.formatter(.{}), "help").count():0]u8 {
-    return stringify(self.formatter(.{}), "help").literal();
+pub fn helpString(self: Self, comptime config: Config) *const [stringify(self.formatter(config), "help").count():0]u8 {
+    return stringify(self.formatter(config), "help").literal();
 }
 
 test "Compile Errors" {
