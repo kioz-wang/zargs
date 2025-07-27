@@ -11,24 +11,50 @@ const Type = ztype.Type;
 const any = @import("fmt").any;
 
 pub const Collection = struct {
-    pub fn StringSet(capacity: comptime_int) type {
-        const A = std.ArrayListUnmanaged(String);
+    pub fn BufferedList(capacity: comptime_int, T: type) type {
+        const A = std.ArrayListUnmanaged(T);
         return struct {
             const Self = @This();
             base: A = undefined,
-            buffer: [capacity]String = undefined,
+            buffer: [capacity]T = undefined,
             pub fn init(self: *Self) void {
                 self.base = A.initBuffer(self.buffer[0..]);
             }
-            pub fn contain(self: *const Self, s: String) bool {
+            pub fn pop(self: *Self) ?T {
+                return self.base.pop();
+            }
+            pub fn push(self: *Self, t: T) T {
+                self.base.appendAssumeCapacity(t);
+                return t;
+            }
+            pub fn enqueue(self: *Self, t: T) T {
+                return self.push(t);
+            }
+            pub fn dequeue(self: *Self) ?T {
+                if (self.first()) |t| {
+                    if (self.base.items.len > 1) {
+                        std.mem.copyForwards(T, self.base.items[0..], self.base.items[1..]);
+                    }
+                    self.base.items.len -= 1;
+                    return t;
+                }
+                return null;
+            }
+            pub fn contain(self: *const Self, t: T) bool {
                 return for (self.base.items) |item| {
-                    if (std.mem.eql(u8, item, s)) break true;
+                    if (Compare.equal(item, t)) break true;
                 } else false;
             }
-            pub fn add(self: *Self, s: String) bool {
-                if (self.contain(s)) return false;
-                self.base.appendAssumeCapacity(s);
-                return true;
+            pub fn pushOnce(self: *Self, t: T) ?T {
+                if (self.contain(t)) return null;
+                return self.push(t);
+            }
+            pub fn last(self: Self) ?T {
+                return self.base.getLastOrNull();
+            }
+            pub fn first(self: Self) ?T {
+                if (self.base.items.len == 0) return null;
+                return self.base.items[0];
             }
         };
     }
@@ -94,13 +120,13 @@ pub const Collection = struct {
     }
 
     const _test = struct {
-        test StringSet {
-            var set: StringSet(2) = .{};
+        test "StringSet" {
+            var set: BufferedList(2, String) = .{};
             set.init();
             try testing.expect(!set.contain("a"));
-            try testing.expect(set.add("a"));
+            try testing.expect(set.pushOnce("a") != null);
             try testing.expect(set.contain("a"));
-            try testing.expect(!set.add("a"));
+            try testing.expect(set.pushOnce("a") == null);
         }
         test "Range format" {
             var buffer: [16]u8 = undefined;

@@ -5,7 +5,7 @@ const bufPrint = std.fmt.bufPrint;
 const Allocator = std.mem.Allocator;
 
 const helper = @import("helper");
-const StringSet = helper.Collection.StringSet;
+const BufferedList = helper.Collection.BufferedList;
 
 const ztype = @import("ztype");
 const String = ztype.String;
@@ -374,7 +374,7 @@ pub fn parse(self: Self, a: Allocator) !self.Result() {
 }
 
 pub fn parseFrom(self: Self, it: *TokenIter, a_maybe: ?Allocator) Error!self.Result() {
-    var matched: StringSet(self._stat.opt + self._stat.optArg) = .{};
+    var matched: BufferedList(self._stat.opt + self._stat.optArg, String) = .{};
     matched.init();
 
     var r = std.mem.zeroInit(self.Result(), if (self.meta.subName) |s| blk: {
@@ -401,7 +401,7 @@ pub fn parseFrom(self: Self, it: *TokenIter, a_maybe: ?Allocator) Error!self.Res
                     if (a.class == .posArg) continue;
                     hit = a._consume(&r, it, a_maybe) catch |e| return self._errCastArg(e, false);
                     if (hit) {
-                        if (!matched.add(a.name)) {
+                        if (matched.pushOnce(a.name) == null) {
                             if ((a.class == .opt and a.T != bool) or (a.class == .optArg and isSlice(a.T))) break;
                             self.log("match {} again with {}", .{ a, t.opt });
                             return Error.RepeatOpt;
