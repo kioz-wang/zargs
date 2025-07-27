@@ -5,6 +5,10 @@ const comptimePrint = std.fmt.comptimePrint;
 const ztype = @import("ztype");
 const String = ztype.String;
 
+const BufferedList = @import("helper").Collection.BufferedList;
+
+const Attr = @import("attr").Attribute;
+
 pub const Prefix = struct {
     const Self = @This();
     pub const Error = error{
@@ -106,14 +110,124 @@ pub const Token = struct {
 };
 
 pub const Format = struct {
-    const Self = @This();
     indent: usize = 2,
     left_max: usize = 24,
 };
 
 pub const Style = struct {
-    const Self = @This();
+    usage: struct {
+        optarg: Attr = .none,
+        optional: Attr = .none,
+        argument: Attr = .none,
+        alias: Attr = .none,
+    } = .{},
+    help: struct {
+        default: Attr = .none,
+        defaultValue: Attr = .none,
+        possible: Attr = .none,
+        possibleValue: Attr = .none,
+        possibleInput: Attr = .none,
+        enum_: Attr = .none,
+        enumValue: Attr = .none,
+    } = .{},
+    homepage: Attr = .none,
+    title: Attr = .none,
+
+    pub const none = Style{};
+    pub const classic = Style{
+        .usage = .{
+            .optarg = Attr.none.underscore(),
+            .optional = Attr.none.half_bright(),
+            .argument = Attr.none.italic(),
+            .alias = Attr.none.half_bright(),
+        },
+        .help = .{
+            .default = Attr.none.green().italic().half_bright(),
+            .defaultValue = Attr.none.off_italic().normal_intensity(),
+            .possible = Attr.none.cyan().italic().half_bright(),
+            .possibleValue = Attr.none.off_italic().normal_intensity(),
+            .possibleInput = Attr.none.off_italic().normal_intensity(),
+            .enum_ = Attr.none.red().italic().half_bright(),
+            .enumValue = Attr.none.off_italic().normal_intensity(),
+        },
+        .homepage = Attr.none.underscore().italic().blue(),
+        .title = Attr.none.colorRGB(0xee, 0xee, 0),
+    };
 };
+
+pub fn StyleRecord(capacity: comptime_int) type {
+    return struct {
+        const Self = @This();
+        const Queue = BufferedList(capacity, union(enum) {
+            _apply: Attr,
+            _restore: Attr,
+            _reset,
+        });
+        clean: bool = true,
+        queue: Queue = .{},
+        inited: bool = false,
+        fn format_apply(self: *Self, w: anytype, a: Attr) @TypeOf(w).Error!void {
+            if (!std.meta.eql(a, Attr.none)) {
+                if (self.clean) {
+                    try Attr.reset.stringify(w);
+                }
+                self.clean = false;
+                try a.stringify(w);
+            }
+        }
+        fn format_reset(self: *Self, w: anytype) @TypeOf(w).Error!void {
+            if (!self.clean) {
+                try Attr.reset.stringify(w);
+                self.clean = true;
+            }
+        }
+        pub fn format(self: *Self, comptime _: []const u8, _: anytype, w: anytype) @TypeOf(w).Error!void {
+            switch (self.queue.dequeue().?) {
+                ._apply => |a| try self.format_apply(w, a),
+                ._reset => try self.format_reset(w),
+                ._restore => |a| {
+                    try self.format_reset(w);
+                    try self.format_apply(w, a);
+                },
+            }
+        }
+        fn init(self: *Self) void {
+            if (!self.inited) {
+                self.inited = true;
+                self.queue.init();
+            }
+        }
+        pub fn apply(self: *Self, a: Attr) *Self {
+            self.init();
+            _ = self.queue.enqueue(.{ ._apply = a });
+            return self;
+        }
+        pub fn restore(self: *Self, a: Attr) *Self {
+            self.init();
+            _ = self.queue.enqueue(.{ ._restore = a });
+            return self;
+        }
+        pub fn reset(self: *Self) *Self {
+            self.init();
+            _ = self.queue.enqueue(._reset);
+            return self;
+        }
+    };
+}
+
+test StyleRecord {
+    var rec = StyleRecord(4){};
+    var buffer: [64]u8 = undefined;
+    try testing.expectEqualStrings(
+        "\x1b[0m\x1b[32ma \x1b[4;31mb \x1b[0m\x1b[0m\x1b[3;32ma \x1b[0m hello",
+        try std.fmt.bufPrint(&buffer, "{}a {}b {}a {s} hello", .{
+            rec.apply(Attr.none.green()),
+            rec.apply(Attr.none.underscore().red()),
+            rec.restore(Attr.none.green().italic()),
+            rec.reset(),
+        }),
+    );
+}
 
 test {
     _ = Prefix;
@@ -124,4 +238,8 @@ test {
 
 token: Token = .{},
 format: Format = .{},
-style: Style = .{},
+style: Style = .none,
+
+pub fn destruct(self: @This()) struct { Token, Format, Style } {
+    return .{ self.token, self.format, self.style };
+}

@@ -13,7 +13,7 @@ pub const Options = struct {
 
     const Optional = struct {
         show_null: bool,
-        const default: @This() = .{ .show_null = true };
+        pub const default: @This() = .{ .show_null = true };
     };
     const Multiple = struct {
         begin: String,
@@ -23,8 +23,8 @@ pub const Options = struct {
         pub fn dump(separator: String, groupSize: usize) @This() {
             return .{ .begin = "", .separator = separator, .end = "", .groupSize = groupSize };
         }
-        const array: @This() = .{ .begin = "{ ", .separator = ", ", .end = " }" };
-        const memory: @This() = dump("", 1);
+        pub const array: @This() = .{ .begin = "{ ", .separator = ", ", .end = " }" };
+        pub const memory: @This() = dump("", 1);
     };
     fn assert(self: @This()) void {
         std.debug.assert(self.multiple.groupSize != 0);
