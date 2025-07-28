@@ -21,16 +21,26 @@ pub fn init(arg: Arg, config: Config) Self {
         .arg = arg,
         .config = config,
     };
-    var counting = std.io.countingWriter(std.io.null_writer);
-    try self.usage1(counting.writer());
-    self.left_length = counting.bytes_written;
+    self.left_length = blk: {
+        var pure = self;
+        pure.config.style = .none;
+        var counting = std.io.countingWriter(std.io.null_writer);
+        try pure.usage1(counting.writer());
+        break :blk counting.bytes_written;
+    };
     return self;
 }
 pub fn usage(self: Self, w: anytype) !void {
+    _, _, const sConfig = self.config.destruct();
+    var sRec = Config.StyleRecord(3){};
     const meta = self.arg.meta;
     var is_first = true;
+
     if (meta.default != null) {
-        try w.writeByte('[');
+        try w.print("{}[", .{sRec.apply(sConfig.usage.optional)});
+    }
+    if ((meta.short.len > 0 or meta.long.len > 0) and meta.argName != null) {
+        try w.print("{}", .{sRec.apply(sConfig.usage.optarg)});
     }
     if (meta.short.len > 0) {
         try w.writeAll(self.config.token.prefix.short);
@@ -45,6 +55,7 @@ pub fn usage(self: Self, w: anytype) !void {
     }
     if (meta.argName) |s| {
         if (!is_first) try w.writeByte(' ');
+        try w.print("{}", .{sRec.apply(sConfig.usage.argument)});
         if (!is_first or meta.default == null) {
             try w.writeByte('{');
         }
@@ -59,24 +70,36 @@ pub fn usage(self: Self, w: anytype) !void {
         }
     }
     if (meta.default != null) {
-        try w.writeByte(']');
+        try w.print("{}]", .{sRec.restore(sConfig.usage.optional)});
     }
+    try w.print("{}", .{sRec.reset()});
     if (self.arg.class == .opt and self.arg.T != bool or self.arg.class == .optArg and ztype.Type.isSlice(self.arg.T)) {
         try w.writeAll("...");
     }
 }
 fn usage1(self: Self, w: anytype) !void {
+    const tConfig, _, const sConfig = self.config.destruct();
+    var sRec = Config.StyleRecord(3){};
     const meta = self.arg.meta;
     var is_first = true;
-    for (meta.short) |short| {
+
+    for (meta.short, 0..) |short, i| {
+        if (i != 0) {
+            try w.print("{}", .{sRec.apply(sConfig.usage.alias)});
+        }
         if (is_first) is_first = false else try w.writeAll(", ");
-        try w.writeAll(self.config.token.prefix.short);
+        try w.writeAll(tConfig.prefix.short);
         try w.writeByte(short);
+        try w.print("{}", .{sRec.reset()});
     }
-    for (meta.long) |long| {
+    for (meta.long, 0..) |long, i| {
+        if (i != 0) {
+            try w.print("{}", .{sRec.apply(sConfig.usage.alias)});
+        }
         if (is_first) is_first = false else try w.writeAll(", ");
-        try w.writeAll(self.config.token.prefix.long);
+        try w.writeAll(tConfig.prefix.long);
         try w.writeAll(long);
+        try w.print("{}", .{sRec.reset()});
     }
     if (meta.argName) |s| {
         if (!is_first) try w.writeByte(' ');
@@ -105,12 +128,13 @@ fn indent(self: Self, w: anytype, is_firstline: *bool) !void {
     }
 }
 pub fn help(self: Self, w: anytype) !void {
+    _, const fConfig, const sConfig = self.config.destruct();
+    var sRec = Config.StyleRecord(5){};
     const Base = ztype.Type.Base;
     const meta = self.arg.meta;
-
     var is_firstline = true;
 
-    try w.writeAll(" " ** self.config.format.indent);
+    try w.writeAll(" " ** fConfig.indent);
     try self.usage1(w);
 
     if (meta.help != null or meta.default != null) {
@@ -120,13 +144,22 @@ pub fn help(self: Self, w: anytype) !void {
         }
         if (meta.default) |_| {
             if (meta.help != null) try w.writeByte(' ');
-            try w.print("(default is {})", .{any(self.arg._toField().defaultValue().?, .{})});
+            try w.print("{}(default is {}{}{}){}", .{
+                sRec.apply(sConfig.help.default),
+                sRec.apply(sConfig.help.defaultValue),
+                any(self.arg._toField().defaultValue().?, .{}),
+                sRec.restore(sConfig.help.default),
+                sRec.reset(),
+            });
         }
     }
 
     if (meta.ranges != null or meta.choices != null) {
         try self.indent(w, &is_firstline);
-        try w.writeAll("possible values: ");
+        try w.print("{}possible values: {}", .{
+            sRec.apply(sConfig.help.possible),
+            sRec.apply(sConfig.help.possibleValue),
+        });
         if (meta.ranges) |_| {
             try w.print("{}", .{any(self.arg.getRanges().?.rs, .{ .multiple = .dump(" or ", 1) })});
         }
@@ -134,17 +167,28 @@ pub fn help(self: Self, w: anytype) !void {
             if (meta.ranges != null) try w.writeAll(" or ");
             try w.print("{}", .{any(self.arg.getChoices().?.*, .{})});
         }
+        try w.print("{}", .{sRec.reset()});
     }
 
     if (meta.rawChoices) |cs| {
         try self.indent(w, &is_firstline);
-        try w.print("possible inputs: {}", .{any(cs, .{})});
+        try w.print("{}possible inputs: {}{}{}", .{
+            sRec.apply(sConfig.help.possible),
+            sRec.apply(sConfig.help.possibleInput),
+            any(cs, .{}),
+            sRec.reset(),
+        });
     }
 
     if (meta.ranges == null and meta.choices == null and meta.rawChoices == null) {
         if (@typeInfo(Base(self.arg.T)) == .@"enum" and self.arg.getParseFn() == null and !std.meta.hasMethod(Base(self.arg.T), "parse")) {
             try self.indent(w, &is_firstline);
-            try w.print("Enum: {}", .{any(std.meta.fieldNames(Base(self.arg.T)).*, .{})});
+            try w.print("{}Enum: {}{}{}", .{
+                sRec.apply(sConfig.help.enum_),
+                sRec.apply(sConfig.help.enumValue),
+                any(std.meta.fieldNames(Base(self.arg.T)).*, .{}),
+                sRec.reset(),
+            });
             is_firstline = false;
         }
     }

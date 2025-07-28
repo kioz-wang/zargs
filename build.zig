@@ -48,6 +48,7 @@ pub fn build(b: *std.Build) void {
     mod_command.addImport("par", mod_par);
     mod_command.addImport("helper", mod_helper);
     mod_command.addImport("iter", mod_iter);
+    mod_command.addImport("attr", b.dependency("zterm", .{}).module("attr"));
 
     const mod_zargs = b.addModule("zargs", .{
         .root_source_file = b.path("src/root.zig"),

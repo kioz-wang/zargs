@@ -22,6 +22,7 @@ const Ranges = zargs.Ranges;
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
     const remove = Command.new("remove")
+        .about("Remove something")
         .alias("rm").alias("uninstall").alias("del")
         .opt("verbose", u32, .{ .short = 'v' })
         .optArg("count", u32, .{ .short = 'c', .argName = "CNT", .default = 9 })
@@ -35,6 +36,7 @@ pub fn main() !void {
         .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
         .arg(Arg.optArg("logfile", ?[]const u8).long("log").help("Store log into a file"))
         .sub(Command.new("install")
+            .about("Install something")
             .arg(Arg.optArg("count", u32).default(10)
                 .short('c').short('n').short('t')
                 .long("count").long("cnt")
@@ -47,7 +49,7 @@ pub fn main() !void {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
 
-    const args = cmd.parse(allocator) catch |e|
+    const args = cmd.config(.{ .style = .classic }).parse(allocator) catch |e|
         zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     if (args.logfile) |logfile| std.debug.print("Store log into {s}\n", .{logfile});
@@ -90,7 +92,7 @@ zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.14.3.ta
 
 > See https://github.com/kioz-wang/zargs/releases
 
-The version number follows the format `vx.y.z`:
+The version number follows the format `vx.y.z[-alpha.n]`:
 - **x**: Currently fixed at 0. It will increment to 1 when the project stabilizes. Afterward, it will increment by 1 for any breaking changes.
 - **y**: Represents the supported Zig version. For example, `vx.14.z` supports [Zig 0.14.0](https://github.com/ziglang/zig/releases/tag/0.14.0).
 - **z**: Iteration version, indicating releases with new features or significant changes (see [milestones](https://github.com/kioz-wang/zargs/milestones)).
@@ -122,9 +124,9 @@ run_step.dependOn(&run_cmd.step);
 
 After importing in your source code, you will gain access to the following features:
 
-- Command and argument builders: Command, Arg
-- Versatile iterator support: TokenIter
-- Convenient exit functions: exit, exitf
+- Command and argument builders: `Command`, `Arg`
+- Versatile iterator support: `TokenIter`
+- Convenient exit functions: `exit`, `exitf`
 
 > See the [documentation](#APIs) for details.
 
@@ -217,7 +219,6 @@ Value ranges (`.ranges`, `.choices`) can be configured for arguments, which are 
 > Default values are not validated (intentional feature? 😄)
 
 If constructing value ranges is cumbersome, `.rawChoices` can be used to filter values before parsing.
-Ranges
 
 ##### Ranges
 
@@ -243,8 +244,6 @@ A command cannot have both positional arguments and subcommands simultaneously.
 #### Representation
 
 For the parser, except for accumulative options and options with a variable number of arguments, no option can appear more than once.
-
-Various representations are primarily supported by the iterator.
 
 Options are further divided into short options and long options:
 - **Short Option**: `-v`
@@ -339,13 +338,13 @@ Flexible for real and test scenarios
 - Line iterator (`initLine`): same as regular iterator, but you can specify delimiters.
 - List iterator (`initList`): iterates over a list of strings.
 
-Short option prefixes (`-`), long option prefixes (`--`), connectors (`=`), option terminators (`--`) can be customized for iterators (see [presentation](#presentation) for usage scenarios).
+Short option prefixes (`-`), long option prefixes (`--`), connectors (`=`), option terminators (`--`) can be customized for iterators (see [ex-05](examples/ex-05.custom_config.zig)).
 
 ### Compile-Time Usage and Help Generation
 
 ```zig
-_ = cmd.usage();
-_ = cmd.help();
+_ = cmd.usageString();
+_ = cmd.helpString();
 ```
 
 ## APIs

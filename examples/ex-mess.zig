@@ -86,7 +86,8 @@ pub fn main() !void {
         .author("kioz.wang@gmail.com")
         .arg(Arg.opt("verbose", u8).short('v'))
         .sub(sub0)
-        .sub(Command.new("sub1").about("This is an empty subCmd"));
+        .sub(Command.new("sub1").about("This is an empty subCmd"))
+        .config(.{ .style = .classic });
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();

@@ -22,6 +22,7 @@ const Ranges = zargs.Ranges;
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
     const remove = Command.new("remove")
+        .about("Remove something")
         .alias("rm").alias("uninstall").alias("del")
         .opt("verbose", u32, .{ .short = 'v' })
         .optArg("count", u32, .{ .short = 'c', .argName = "CNT", .default = 9 })
@@ -35,6 +36,7 @@ pub fn main() !void {
         .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
         .arg(Arg.optArg("logfile", ?[]const u8).long("log").help("Store log into a file"))
         .sub(Command.new("install")
+            .about("Install something")
             .arg(Arg.optArg("count", u32).default(10)
                 .short('c').short('n').short('t')
                 .long("count").long("cnt")
@@ -47,7 +49,7 @@ pub fn main() !void {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
 
-    const args = cmd.parse(allocator) catch |e|
+    const args = cmd.config(.{ .style = .classic }).parse(allocator) catch |e|
         zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     if (args.logfile) |logfile| std.debug.print("Store log into {s}\n", .{logfile});
@@ -241,8 +243,6 @@ pub fn getString(self: Self) *const [stringify(self, "fname").count():0]u8 {
 
 对解析器来说，除了累加选项和带不定数量参数的选项，任何选项都不可以重复出现。
 
-各种表现形式主要由迭代器负责支持。
-
 选项又分为短选项和长选项：
 - 短选项：`-v`
 - 长选项：`--verbose`
@@ -336,13 +336,13 @@ defer cmd.destroy(&args, allocator);
 - 行迭代器（`initLine`）：和常规迭代器一样，但可以指定分隔符
 - 列表迭代器（`initList`）：从给定的字符串列表中迭代
 
-可为迭代器自定义短选项前缀（`-`）、长选项前缀（`--`）、连接符（`=`）、选项终止符（`--`）（使用场景见[表现形式](#表现形式)）。
+可为迭代器自定义短选项前缀（`-`）、长选项前缀（`--`）、连接符（`=`）、选项终止符（`--`）（参考[ex-05](examples/ex-05.custom_config.zig)）。
 
 ### 编译时生成 usage 和 help
 
 ```zig
-_ = cmd.usage();
-_ = cmd.help();
+_ = cmd.usageString();
+_ = cmd.helpString();
 ```
 
 ## APIs
