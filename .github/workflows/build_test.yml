@@ -59,6 +59,7 @@ jobs:
         run: zig build test -Dtarget=${{ matrix.target }}
 
       - name: Generate filename
+        if: always()
         shell: bash
         run: |
           REPO_NAME=$(echo "${{ github.repository }}" | awk -F/ '{print $2}')
