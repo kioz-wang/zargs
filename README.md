@@ -200,6 +200,7 @@ For arguments, T must be the smallest parsable unit: `[]const u8` -> T
     - Only supports base types of `.int`, `.float`, and `.bool`
     - `@Vector{1,1}`: `[\(\[\{][ ]*1[ ]*[;:,][ ]*1[ ]*[\)\]\}]`
     - `@Vector{true,false}`: `[\(\[\{][ ]*y[ ]*[;:,][ ]*no[ ]*[\)\]\}]`
+- `std.fs.File/Dir`
 
 If type T has no associated default parser or `parse` method, you can specify a custom parser (`.parseFn`) for the parameter. Obviously, single-option parameters cannot have parsers as it would be meaningless.
 

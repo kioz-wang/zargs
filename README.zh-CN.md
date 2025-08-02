@@ -199,6 +199,7 @@ pub fn getString(self: Self) *const [stringify(self, "fname").count():0]u8 {
     - 仅支持基类型为 `.int`, `.float` 和 `.bool` 的
     - `@Vector{1,1}`：`[\(\[\{][ ]*1[ ]*[;:,][ ]*1[ ]*[\)\]\}]`
     - `@Vector{true,false}`：`[\(\[\{][ ]*y[ ]*[;:,][ ]*no[ ]*[\)\]\}]`
+- `std.fs.File/Dir`
 
 如果 T 不存在相关联的默认解析器或`parse`方法，可以为参数自定义解析器（`.parseFn`）。显然，无法为单选项配置解析器，因为这是无意义的。
 
