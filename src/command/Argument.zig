@@ -47,6 +47,7 @@ const Meta = struct {
     ranges: ?*const anyopaque = null, // optArg, posArg
     choices: ?*const anyopaque = null, // optArg, posArg
     rawChoices: ?[]const String = null, // optArg, posArg
+    rawDefault: ?String = null, // optArg, posArg
 };
 const Class = enum { opt, optArg, posArg };
 
@@ -177,6 +178,23 @@ pub fn rawChoices(self: Self, cs: []const String) Self {
     arg.meta.rawChoices = cs;
     return arg;
 }
+pub fn rawDefault(self: Self, s: String) Self {
+    if (isOptional(self.T)) {
+        @compileError(comptimePrint("{} not support .rawDefault, it's forced to be null", .{self}));
+    }
+    if (isSlice(self.T)) {
+        @compileError(comptimePrint("{} not support .rawDefault, it's forced to be empty slice", .{self}));
+    }
+    if (self.class != .optArg) {
+        @compileError(comptimePrint("{} not support .rawDefault", .{self}));
+    }
+    if (isArray(self.T)) {
+        @compileError(comptimePrint("{} not support .rawDefault", .{self}));
+    }
+    var arg = self;
+    arg.meta.rawDefault = s;
+    return arg;
+}
 
 // TODO move into Command.zig?
 pub fn _checkOut(self: Self) Self {
@@ -211,6 +229,11 @@ pub fn _checkOut(self: Self) Self {
         // Set default `argName`
         if (self.meta.argName == null) {
             arg.meta.argName = &comptimeUpperString(self.name);
+        }
+    }
+    if (self.class == .optArg) {
+        if (self.meta.default != null and self.meta.rawDefault != null) {
+            @compileError(comptimePrint("{} .rawDefault conflicts with .default", .{self}));
         }
     }
     return arg;
@@ -278,7 +301,7 @@ pub fn getParseFn(self: Self) ?*const par.Fn(self.T) {
 fn getCallbackFn(self: Self) ?*const fn (*TryOptional(self.T)) void {
     return @ptrCast(@alignCast(self.meta.callbackFn orelse return null));
 }
-fn parseValue(self: Self, s: String, a_maybe: ?Allocator) ?Base(self.T) {
+pub fn parseValue(self: Self, s: String, a_maybe: ?Allocator) ?Base(self.T) {
     if (!self.checkInput(s)) return null;
     if (if (comptime self.getParseFn()) |f| f(s, a_maybe) else par.any(Base(self.T), s, a_maybe)) |value| {
         if (!self.checkValue(value)) {
@@ -673,5 +696,19 @@ test "Consume posArg with choices" {
     {
         var it = try token.Iter.initList(&.{"update"}, .{});
         try testing.expectError(Error.Invalid, meta_out.consumePosArg(&r, &it, testing.allocator));
+    }
+}
+test "Comsume posArg with parseFn" {
+    const R = struct { out: std.fs.Dir };
+    var r = std.mem.zeroes(R);
+    const meta_out = Self.posArg("out", std.fs.Dir).parseFn(struct {
+        pub fn f(s: String, _: ?Allocator) ?std.fs.Dir {
+            return std.fs.cwd().openDir(s, .{}) catch null;
+        }
+    }.f)._checkOut();
+    {
+        var it = try token.Iter.initList(&.{"/"}, .{});
+        try testing.expect(try meta_out.consumePosArg(&r, &it, null));
+        defer r.out.close();
     }
 }

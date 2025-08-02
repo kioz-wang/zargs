@@ -36,8 +36,11 @@ pub fn usage(self: Self, w: anytype) !void {
     const meta = self.arg.meta;
     var is_first = true;
 
-    if (meta.default != null) {
-        try w.print("{}[", .{sRec.apply(sConfig.usage.optional)});
+    if (meta.default != null or meta.rawDefault != null or ztype.Type.isSlice(self.arg.T)) {
+        try w.print("{}", .{sRec.apply(sConfig.usage.optional)});
+        if (!ztype.Type.isSlice(self.arg.T)) {
+            try w.writeByte('[');
+        }
     }
     if ((meta.short.len > 0 or meta.long.len > 0) and meta.argName != null) {
         try w.print("{}", .{sRec.apply(sConfig.usage.optarg)});
@@ -56,7 +59,7 @@ pub fn usage(self: Self, w: anytype) !void {
     if (meta.argName) |s| {
         if (!is_first) try w.writeByte(' ');
         try w.print("{}", .{sRec.apply(sConfig.usage.argument)});
-        if (!is_first or meta.default == null) {
+        if (!is_first or (meta.default == null and meta.rawDefault == null)) {
             try w.writeByte('{');
         }
         switch (@typeInfo(self.arg.T)) {
@@ -65,12 +68,15 @@ pub fn usage(self: Self, w: anytype) !void {
             else => {},
         }
         try w.writeAll(s);
-        if (!is_first or meta.default == null) {
+        if (!is_first or (meta.default == null and meta.rawDefault == null)) {
             try w.writeByte('}');
         }
     }
-    if (meta.default != null) {
-        try w.print("{}]", .{sRec.restore(sConfig.usage.optional)});
+    if (meta.default != null or meta.rawDefault != null or ztype.Type.isSlice(self.arg.T)) {
+        try w.print("{}", .{sRec.restore(sConfig.usage.optional)});
+        if (!ztype.Type.isSlice(self.arg.T)) {
+            try w.writeByte(']');
+        }
     }
     try w.print("{}", .{sRec.reset()});
     if (self.arg.class == .opt and self.arg.T != bool or self.arg.class == .optArg and ztype.Type.isSlice(self.arg.T)) {
@@ -137,17 +143,18 @@ pub fn help(self: Self, w: anytype) !void {
     try w.writeAll(" " ** fConfig.indent);
     try self.usage1(w);
 
-    if (meta.help != null or meta.default != null) {
+    if (meta.help != null or meta.default != null or meta.rawDefault != null) {
         try self.indent(w, &is_firstline);
         if (meta.help) |s| {
             try w.writeAll(s);
         }
-        if (meta.default) |_| {
+        if (meta.default != null or meta.rawDefault != null) {
             if (meta.help != null) try w.writeByte(' ');
-            try w.print("{}(default is {}{}{}){}", .{
+            try w.print("{}({s} is {}{}{}){}", .{
                 sRec.apply(sConfig.help.default),
+                if (meta.default != null) "default" else "default input",
                 sRec.apply(sConfig.help.defaultValue),
-                any(self.arg._toField().defaultValue().?, .{}),
+                any(if (meta.default != null) self.arg._toField().defaultValue().? else meta.rawDefault.?, .{}),
                 sRec.restore(sConfig.help.default),
                 sRec.reset(),
             });
@@ -156,7 +163,7 @@ pub fn help(self: Self, w: anytype) !void {
 
     if (meta.ranges != null or meta.choices != null) {
         try self.indent(w, &is_firstline);
-        try w.print("{}possible values: {}", .{
+        try w.print("{}possible: {}", .{
             sRec.apply(sConfig.help.possible),
             sRec.apply(sConfig.help.possibleValue),
         });
@@ -214,7 +221,7 @@ test "helpString" {
     try testing.expectEqualStrings(
         \\  -c, -n, --count, --cnt {COUNT}
         \\                          This is a help message, with a very very long long long sentence (default is 1)
-        \\                          possible values: [-16,3) or [16,∞) or { 5, 6 }
+        \\                          possible: [-16,3) or [16,∞) or { 5, 6 }
         \\
     , Arg.optArg("count", i32)
         .short('c').short('n')
@@ -227,7 +234,7 @@ test "helpString" {
 
     try testing.expectEqualStrings(
         \\  -c, -n {COUNT}          This is a help message, with a very very long long long sentence
-        \\                          possible values: { 5, 6 }
+        \\                          possible: { 5, 6 }
         \\
     , Arg.optArg("count", i32)
         .short('c').short('n')
@@ -299,8 +306,17 @@ test "helpString" {
     }
 
     try testing.expectEqualStrings(
+        \\  --u32 {U32}             (default input is 3)
+        \\
+    ,
+        Arg.optArg("u32", u32).long("u32")
+            .rawDefault("3")
+            ._checkOut().helpString(.{}),
+    );
+
+    try testing.expectEqualStrings(
         \\  {U32}                   (default is 3)
-        \\                          possible values: [5,10) or [32,∞) or { 15, 29 }
+        \\                          possible: [5,10) or [32,∞) or { 15, 29 }
         \\
     ,
         Arg.posArg("u32", u32)
@@ -311,7 +327,7 @@ test "helpString" {
     );
 
     try testing.expectEqualStrings(
-        \\  {CC}                    possible values: { gcc, clang }
+        \\  {CC}                    possible: { gcc, clang }
         \\
     ,
         Arg.posArg("cc", String)

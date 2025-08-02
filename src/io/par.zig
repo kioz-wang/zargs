@@ -12,12 +12,15 @@ const Type = ztype.Type;
 ///
 /// for String, allocate if Allocator is given
 pub fn any(T: type, s: String, a_maybe: ?Allocator) ?T {
-    if (T == String) {
-        return if (a_maybe) |a| blk: {
+    switch (T) {
+        String => return if (a_maybe) |a| blk: {
             const s_alloc = a.alloc(u8, s.len) catch return null;
             @memcpy(s_alloc, s);
             break :blk s_alloc;
-        } else s;
+        } else s,
+        std.fs.File => return std.fs.cwd().openFile(s, .{}) catch null,
+        std.fs.Dir => return std.fs.cwd().openDir(s, .{}) catch null,
+        else => {},
     }
     switch (@typeInfo(T)) {
         .int => return std.fmt.parseInt(T, s, 0) catch null,
@@ -61,9 +64,17 @@ pub fn any(T: type, s: String, a_maybe: ?Allocator) ?T {
 /// for struct, if find `pub fn destroy(self: T, a: Allocator) void`, use it
 pub fn destroy(v: anytype, a: Allocator) void {
     const T = @TypeOf(v);
-    if (T == String) {
-        a.free(v);
-        return;
+    switch (T) {
+        String => {
+            a.free(v);
+            return;
+        },
+        std.fs.File, std.fs.Dir => {
+            var obj = v;
+            obj.close();
+            return;
+        },
+        else => {},
     }
     switch (@typeInfo(T)) {
         .@"struct", .@"enum" => if (std.meta.hasMethod(T, "destroy")) v.destroy(a),
