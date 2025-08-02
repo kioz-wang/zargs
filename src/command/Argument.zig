@@ -6,6 +6,7 @@ const bufPrint = std.fmt.bufPrint;
 const helper = @import("helper");
 const Ranges = helper.Ranges;
 const equal = helper.Compare.equal;
+const initStruct = helper.initStruct;
 
 const ztype = @import("ztype");
 const String = ztype.String;
@@ -499,7 +500,7 @@ test "Match prefix" {
 }
 test "Consume opt" {
     const R = struct { out: bool, verbose: u32 };
-    var r = std.mem.zeroes(R);
+    var r = initStruct(R);
     var it = try token.Iter.initList(&.{ "--out", "-v", "-v", "--out", "-t" }, .{});
     const meta_out = Self.opt("out", bool).long("out")._checkOut();
     const meta_verbose = Self.opt("verbose", u32).short('v')._checkOut();
@@ -512,7 +513,7 @@ test "Consume opt" {
 }
 test "Consume optArg" {
     const R = struct { out: bool, verbose: u32, files: []const String, twins: [2]u32, point: @Vector(2, i32) };
-    var r = std.mem.zeroes(R);
+    var r = initStruct(R);
     const meta_out = Self.optArg("out", bool).long("out")._checkOut();
     const meta_verbose = Self.optArg("verbose", u32).short('v')._checkOut();
     const meta_files = Self.optArg("files", []const String).short('f')._checkOut();
@@ -578,7 +579,7 @@ test "Consume optArg with both ranges and choices" {
     const arg = Self.optArg("int", []i32).short('i');
     {
         const meta_int = arg.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
-        var r = std.mem.zeroes(R);
+        var r = initStruct(R);
         var it = try token.Iter.initLine("-i=-1 -i 3 -i 5 -i=23", null, .{});
         try testing.expect(try meta_int.consumeOptArg(&r, &it, testing.allocator));
         try testing.expect(try meta_int.consumeOptArg(&r, &it, testing.allocator));
@@ -589,26 +590,26 @@ test "Consume optArg with both ranges and choices" {
     }
     {
         const meta_int = arg.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
-        var r = std.mem.zeroes(R);
+        var r = initStruct(R);
         var it = try token.Iter.initLine("-i 6", null, .{});
         try testing.expectError(Error.Invalid, meta_int.consumeOptArg(&r, &it, testing.allocator));
     }
     {
         const meta_int = arg.ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
-        var r = std.mem.zeroes(R);
+        var r = initStruct(R);
         var it = try token.Iter.initLine("-i 6", null, .{});
         try testing.expectError(Error.Invalid, meta_int.consumeOptArg(&r, &it, testing.allocator));
     }
     {
         const meta_int = arg.choices(&.{ 3, 5, 7 })._checkOut();
-        var r = std.mem.zeroes(R);
+        var r = initStruct(R);
         var it = try token.Iter.initLine("-i 6", null, .{});
         try testing.expectError(Error.Invalid, meta_int.consumeOptArg(&r, &it, testing.allocator));
     }
 }
 test "Consume posArg" {
     const R = struct { out: bool, twins: [2]u32 };
-    var r = std.mem.zeroes(R);
+    var r = initStruct(R);
     const meta_out = Self.posArg("out", bool)._checkOut();
     const meta_twins = Self.posArg("twins", [2]u32)._checkOut();
 
@@ -657,7 +658,7 @@ test "Consume posArg with ranges or rawChoices" {
     const arg = Self.posArg("mem", Mem);
     {
         const meta_mem = arg.ranges(Ranges(Mem).new().u(null, Mem{ .len = 5 }))._checkOut();
-        var r = std.mem.zeroes(R);
+        var r = initStruct(R);
         {
             var it = try token.Iter.initList(&.{"3"}, .{});
             try testing.expect(try meta_mem.consumePosArg(&r, &it, testing.allocator));
@@ -675,7 +676,7 @@ test "Consume posArg with ranges or rawChoices" {
     }
     {
         const meta_mem = arg.rawChoices(&.{ "1", "2", "3", "16" })._checkOut();
-        var r = std.mem.zeroes(R);
+        var r = initStruct(R);
         var it = try token.Iter.initList(&.{"32"}, .{});
         try testing.expectError(
             Error.Invalid,
@@ -685,7 +686,7 @@ test "Consume posArg with ranges or rawChoices" {
 }
 test "Consume posArg with choices" {
     const R = struct { out: String };
-    var r = std.mem.zeroes(R);
+    var r = initStruct(R);
     const meta_out = Self.posArg("out", String).choices(&.{ "install", "remove" })._checkOut();
     {
         var it = try token.Iter.initList(&.{"remove"}, .{});
@@ -700,7 +701,7 @@ test "Consume posArg with choices" {
 }
 test "Comsume posArg with parseFn" {
     const R = struct { out: std.fs.Dir };
-    var r = std.mem.zeroes(R);
+    var r = initStruct(R);
     const meta_out = Self.posArg("out", std.fs.Dir).parseFn(struct {
         pub fn f(s: String, _: ?Allocator) ?std.fs.Dir {
             return std.fs.cwd().openDir(s, .{}) catch null;

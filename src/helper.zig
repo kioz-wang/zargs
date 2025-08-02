@@ -383,3 +383,18 @@ test {
     _ = Collection._test;
     _ = Compare._test;
 }
+
+pub fn initStruct(T: type) T {
+    var result: T = undefined;
+    inline for (@typeInfo(T).@"struct".fields) |field| {
+        @field(result, field.name) = blk: {
+            if (field.defaultValue()) |val| break :blk val;
+            break :blk switch (@typeInfo(field.type)) {
+                .@"union", .@"struct" => undefined,
+                .array, .vector => @splat(undefined),
+                else => std.mem.zeroes(field.type),
+            };
+        };
+    }
+    return result;
+}
