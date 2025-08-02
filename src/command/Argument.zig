@@ -675,3 +675,20 @@ test "Consume posArg with choices" {
         try testing.expectError(Error.Invalid, meta_out.consumePosArg(&r, &it, testing.allocator));
     }
 }
+test "Comsume posArg with parseFn" {
+    const R = struct { out: std.fs.Dir };
+    var r = std.mem.zeroes(R);
+    const meta_out = Self.posArg("out", std.fs.Dir).parseFn(struct {
+        pub fn f(s: String, _: ?Allocator) ?std.fs.Dir {
+            return std.fs.cwd().openDir(s, .{}) catch null;
+        }
+    }.f)._checkOut();
+    {
+        var it = try token.Iter.initList(&.{"/tmp"}, .{});
+        try testing.expect(try meta_out.consumePosArg(&r, &it, null));
+        defer r.out.close();
+        const path = try r.out.realpathAlloc(testing.allocator, ".");
+        defer testing.allocator.free(path);
+        try testing.expectEqualStrings("/tmp", path);
+    }
+}
