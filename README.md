@@ -212,6 +212,8 @@ Options and arguments can be configured with default values (`.default`). Once c
 
 > Single options, options with a single argument of optional type, or single positional arguments of optional type are always optional.
 
+Default values must be determined at comptime. For `argOpt`, if the value cannot be determined at comptime (e.g., `std.fs.cwd()` at `Windows`), you can configure the default input (`.rawDefault`), which will determine the default value in the perser.
+
 #### Value Ranges
 
 Value ranges (`.ranges`, `.choices`) can be configured for arguments, which are validated after parsing.

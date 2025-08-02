@@ -211,6 +211,8 @@ pub fn getString(self: Self) *const [stringify(self, "fname").count():0]u8 {
 
 > 单选项、具有可选类型的带单参数选项或具有可选类型的单位置参数，总是可选的。
 
+默认值需要在编译期确定。对于带参数选项（`argOpt`），如果无法在编译期确定值（比如在`Windows`上的`std.fs.cwd()`），那么可以配置默认输入（`.rawDefault`），这将在解析器中完成默认值的确定。
+
 #### 取值范围
 
 可以为参数配置值取值范围（`.ranges`, `.choices`），这将在解析后执行有效性检查。
