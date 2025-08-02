@@ -236,58 +236,58 @@ test "usageString" {
     );
 }
 
-test "helpString" {
+test "helpString 0" {
     const Arg = @import("Argument.zig");
-    {
-        const cmd = Command.new("cmd")
-            .arg(Arg.opt("verbose", u8).short('v').help("Set log level"))
-            .arg(Arg.optArg("optional_int", i32).long("oint").default(1).argName("OINT").help("Optional integer"))
-            .arg(Arg.optArg("int", i32).long("int").help("Required integer"))
-            .arg(Arg.optArg("files", []String).short('f').long("file").help("Multiple files"))
-            .arg(Arg.posArg("optional_pos", u32).default(6).help("Optional position argument"))
-            .arg(Arg.posArg("io", [2]String).help("Array position arguments"))
-            .arg(Arg.posArg("message", ?String).help("Optional message"));
-        try testing.expectEqualStrings(
-            \\Usage:
-            \\  cmd [-h|--help] [-v]... [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [OPTIONAL_POS] [MESSAGE]
-            \\
-            \\Option:
-            \\  -h, --help              Show this help then exit (default is false)
-            \\  -v                      Set log level (default is 0)
-            \\
-            \\Option with arguments:
-            \\  --oint {OINT}           Optional integer (default is 1)
-            \\  --int {INT}             Required integer
-            \\  -f, --file {[]FILES}    Multiple files
-            \\
-            \\Positional arguments:
-            \\  {OPTIONAL_POS}          Optional position argument (default is 6)
-            \\  {[2]IO}                 Array position arguments
-            \\  {MESSAGE}               Optional message (default is null)
-            \\
-        ,
-            cmd.helpString(),
-        );
-    }
-    {
-        const cmd = Command.new("cmd").requireSub("sub")
-            .arg(Arg.opt("verbose", u8).short('v'))
-            .sub(Command.new("subcmd0").alias("alias0").alias("alias1"))
-            .sub(Command.new("subcmd1").alias("alias3"));
-        try testing.expectEqualStrings(
-            \\Usage:
-            \\  cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}
-            \\
-            \\Option:
-            \\  -h, --help              Show this help then exit (default is false)
-            \\  -v                      (default is 0)
-            \\
-            \\Commands:
-            \\  subcmd0, alias0, alias1
-            \\  subcmd1, alias3
-            \\
-        ,
-            cmd.helpString(),
-        );
-    }
+    const cmd = Command.new("cmd")
+        .arg(Arg.opt("verbose", u8).short('v').help("Set log level"))
+        .arg(Arg.optArg("optional_int", i32).long("oint").default(1).argName("OINT").help("Optional integer"))
+        .arg(Arg.optArg("int", i32).long("int").help("Required integer"))
+        .arg(Arg.optArg("files", []String).short('f').long("file").help("Multiple files"))
+        .arg(Arg.posArg("optional_pos", u32).default(6).help("Optional position argument"))
+        .arg(Arg.posArg("io", [2]String).help("Array position arguments"))
+        .arg(Arg.posArg("message", ?String).help("Optional message"));
+    try testing.expectEqualStrings(
+        \\Usage:
+        \\  cmd [-h|--help] [-v]... [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [OPTIONAL_POS] [MESSAGE]
+        \\
+        \\Option:
+        \\  -h, --help              Show this help then exit (default is false)
+        \\  -v                      Set log level (default is 0)
+        \\
+        \\Option with arguments:
+        \\  --oint {OINT}           Optional integer (default is 1)
+        \\  --int {INT}             Required integer
+        \\  -f, --file {[]FILES}    Multiple files
+        \\
+        \\Positional arguments:
+        \\  {OPTIONAL_POS}          Optional position argument (default is 6)
+        \\  {[2]IO}                 Array position arguments
+        \\  {MESSAGE}               Optional message (default is null)
+        \\
+    ,
+        cmd.helpString(),
+    );
+}
+
+test "helpString 1" {
+    const Arg = @import("Argument.zig");
+    const cmd = Command.new("cmd").requireSub("sub")
+        .arg(Arg.opt("verbose", u8).short('v'))
+        .sub(Command.new("subcmd0").alias("alias0").alias("alias1"))
+        .sub(Command.new("subcmd1").alias("alias3"));
+    try testing.expectEqualStrings(
+        \\Usage:
+        \\  cmd [-h|--help] [-v]... [--] {subcmd0|subcmd1}
+        \\
+        \\Option:
+        \\  -h, --help              Show this help then exit (default is false)
+        \\  -v                      (default is 0)
+        \\
+        \\Commands:
+        \\  subcmd0, alias0, alias1
+        \\  subcmd1, alias3
+        \\
+    ,
+        cmd.helpString(),
+    );
 }

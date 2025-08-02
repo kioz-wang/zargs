@@ -199,6 +199,7 @@ pub fn getString(self: Self) *const [stringify(self, "fname").count():0]u8 {
     - 仅支持基类型为 `.int`, `.float` 和 `.bool` 的
     - `@Vector{1,1}`：`[\(\[\{][ ]*1[ ]*[;:,][ ]*1[ ]*[\)\]\}]`
     - `@Vector{true,false}`：`[\(\[\{][ ]*y[ ]*[;:,][ ]*no[ ]*[\)\]\}]`
+- `std.fs.File/Dir`
 
 如果 T 不存在相关联的默认解析器或`parse`方法，可以为参数自定义解析器（`.parseFn`）。显然，无法为单选项配置解析器，因为这是无意义的。
 
@@ -210,6 +211,8 @@ pub fn getString(self: Self) *const [stringify(self, "fname").count():0]u8 {
 - 具有可选类型 `?T` 的选项或参数不可显式配置：强制默认为 `null`
 
 > 单选项、具有可选类型的带单参数选项或具有可选类型的单位置参数，总是可选的。
+
+默认值需要在编译期确定。对于带参数选项（`argOpt`），如果无法在编译期确定值（比如在`Windows`上的`std.fs.cwd()`），那么可以配置默认输入（`.rawDefault`），这将在解析器中完成默认值的确定。
 
 #### 取值范围
 

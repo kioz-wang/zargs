@@ -36,8 +36,11 @@ pub fn usage(self: Self, w: anytype) !void {
     const meta = self.arg.meta;
     var is_first = true;
 
-    if (meta.default != null) {
-        try w.print("{}[", .{sRec.apply(sConfig.usage.optional)});
+    if (meta.default != null or meta.rawDefault != null or ztype.Type.isSlice(self.arg.T)) {
+        try w.print("{}", .{sRec.apply(sConfig.usage.optional)});
+        if (!ztype.Type.isSlice(self.arg.T)) {
+            try w.writeByte('[');
+        }
     }
     if ((meta.short.len > 0 or meta.long.len > 0) and meta.argName != null) {
         try w.print("{}", .{sRec.apply(sConfig.usage.optarg)});
@@ -56,7 +59,7 @@ pub fn usage(self: Self, w: anytype) !void {
     if (meta.argName) |s| {
         if (!is_first) try w.writeByte(' ');
         try w.print("{}", .{sRec.apply(sConfig.usage.argument)});
-        if (!is_first or meta.default == null) {
+        if (!is_first or (meta.default == null and meta.rawDefault == null)) {
             try w.writeByte('{');
         }
         switch (@typeInfo(self.arg.T)) {
@@ -65,12 +68,15 @@ pub fn usage(self: Self, w: anytype) !void {
             else => {},
         }
         try w.writeAll(s);
-        if (!is_first or meta.default == null) {
+        if (!is_first or (meta.default == null and meta.rawDefault == null)) {
             try w.writeByte('}');
         }
     }
-    if (meta.default != null) {
-        try w.print("{}]", .{sRec.restore(sConfig.usage.optional)});
+    if (meta.default != null or meta.rawDefault != null or ztype.Type.isSlice(self.arg.T)) {
+        try w.print("{}", .{sRec.restore(sConfig.usage.optional)});
+        if (!ztype.Type.isSlice(self.arg.T)) {
+            try w.writeByte(']');
+        }
     }
     try w.print("{}", .{sRec.reset()});
     if (self.arg.class == .opt and self.arg.T != bool or self.arg.class == .optArg and ztype.Type.isSlice(self.arg.T)) {
@@ -137,17 +143,18 @@ pub fn help(self: Self, w: anytype) !void {
     try w.writeAll(" " ** fConfig.indent);
     try self.usage1(w);
 
-    if (meta.help != null or meta.default != null) {
+    if (meta.help != null or meta.default != null or meta.rawDefault != null) {
         try self.indent(w, &is_firstline);
         if (meta.help) |s| {
             try w.writeAll(s);
         }
-        if (meta.default) |_| {
+        if (meta.default != null or meta.rawDefault != null) {
             if (meta.help != null) try w.writeByte(' ');
-            try w.print("{}(default is {}{}{}){}", .{
+            try w.print("{}({s} is {}{}{}){}", .{
                 sRec.apply(sConfig.help.default),
+                if (meta.default != null) "default" else "default input",
                 sRec.apply(sConfig.help.defaultValue),
-                any(self.arg._toField().defaultValue().?, .{}),
+                any(if (meta.default != null) self.arg._toField().defaultValue().? else meta.rawDefault.?, .{}),
                 sRec.restore(sConfig.help.default),
                 sRec.reset(),
             });
@@ -156,7 +163,7 @@ pub fn help(self: Self, w: anytype) !void {
 
     if (meta.ranges != null or meta.choices != null) {
         try self.indent(w, &is_firstline);
-        try w.print("{}possible values: {}", .{
+        try w.print("{}possible: {}", .{
             sRec.apply(sConfig.help.possible),
             sRec.apply(sConfig.help.possibleValue),
         });
@@ -210,11 +217,11 @@ test "usageString" {
     try testing.expectEqualStrings("[OUT]", Arg.posArg("out", u32).default(1)._checkOut().usageString(.{}));
 }
 
-test "helpString" {
+test "helpString 0" {
     try testing.expectEqualStrings(
         \\  -c, -n, --count, --cnt {COUNT}
         \\                          This is a help message, with a very very long long long sentence (default is 1)
-        \\                          possible values: [-16,3) or [16,∞) or { 5, 6 }
+        \\                          possible: [-16,3) or [16,∞) or { 5, 6 }
         \\
     , Arg.optArg("count", i32)
         .short('c').short('n')
@@ -224,17 +231,19 @@ test "helpString" {
         .choices(&.{ 5, 6 })
         .default(1)
         ._checkOut().helpString(.{}));
-
+}
+test "helpString 1" {
     try testing.expectEqualStrings(
         \\  -c, -n {COUNT}          This is a help message, with a very very long long long sentence
-        \\                          possible values: { 5, 6 }
+        \\                          possible: { 5, 6 }
         \\
     , Arg.optArg("count", i32)
         .short('c').short('n')
         .help("This is a help message, with a very very long long long sentence")
         .choices(&.{ 5, 6 })
         ._checkOut().helpString(.{}));
-
+}
+test "helpString 2" {
     try testing.expectEqualStrings(
         \\  -c, -n {COUNT}          possible inputs: { 0x05, 0x06 }
         \\
@@ -242,16 +251,16 @@ test "helpString" {
         .short('c').short('n')
         .rawChoices(&.{ "0x05", "0x06" })
         ._checkOut().helpString(.{}));
-
-    {
-        const Color = enum { Red, Green, Blue };
-        try testing.expectEqualStrings(
-            \\  {COLOR}                 Enum: { Red, Green, Blue }
-            \\
-        , Arg.posArg("color", Color)
-            ._checkOut().helpString(.{}));
-    }
-
+}
+test "helpString 3" {
+    const Color = enum { Red, Green, Blue };
+    try testing.expectEqualStrings(
+        \\  {COLOR}                 Enum: { Red, Green, Blue }
+        \\
+    , Arg.posArg("color", Color)
+        ._checkOut().helpString(.{}));
+}
+test "helpString 4" {
     try testing.expectEqualStrings(
         \\  -o, -u, -t, --out, --output
         \\                          Help of out (default is false)
@@ -260,14 +269,16 @@ test "helpString" {
         .short('o').short('u').short('t')
         .long("out").long("output").help("Help of out")
         ._checkOut().helpString(.{}));
-
+}
+test "helpString 5" {
     try testing.expectEqualStrings(
         \\  -o {OUT}                Help of out
         \\
     , Arg.optArg("out", String)
         .short('o').help("Help of out")
         ._checkOut().helpString(.{}));
-
+}
+test "helpString 6" {
     try testing.expectEqualStrings(
         \\  -o, --out, --output {OUT}
         \\                          Help of out (default is a.out)
@@ -277,54 +288,59 @@ test "helpString" {
         .default("a.out")
         .help("Help of out")
         ._checkOut().helpString(.{}));
-
+}
+test "helpString 7" {
     try testing.expectEqualStrings(
         \\  -p, --point {POINT}     (default is { 1, 1 })
         \\
     , Arg.optArg("point", @Vector(2, i32))
         .short('p').long("point").default(.{ 1, 1 })
         ._checkOut().helpString(.{}));
-
-    {
-        const Color = enum { Red, Green, Blue };
-        try testing.expectEqualStrings(
-            \\  -c, --color {[3]COLORS} Help of colors (default is { Red, Green, Blue })
-            \\                          Enum: { Red, Green, Blue }
-            \\
-        , Arg.optArg("colors", [3]Color)
-            .short('c').long("color")
-            .default(.{ .Red, .Green, .Blue })
-            .help("Help of colors")
-            ._checkOut().helpString(.{}));
-    }
-
+}
+test "helpString 8" {
+    const Color = enum { Red, Green, Blue };
+    try testing.expectEqualStrings(
+        \\  -c, --color {[3]COLORS} Help of colors (default is { Red, Green, Blue })
+        \\                          Enum: { Red, Green, Blue }
+        \\
+    , Arg.optArg("colors", [3]Color)
+        .short('c').long("color")
+        .default(.{ .Red, .Green, .Blue })
+        .help("Help of colors")
+        ._checkOut().helpString(.{}));
+}
+test "helpString 9" {
+    try testing.expectEqualStrings(
+        \\  --u32 {U32}             (default input is 3)
+        \\
+    , Arg.optArg("u32", u32).long("u32")
+        .rawDefault("3")
+        ._checkOut().helpString(.{}));
+}
+test "helpString a" {
     try testing.expectEqualStrings(
         \\  {U32}                   (default is 3)
-        \\                          possible values: [5,10) or [32,∞) or { 15, 29 }
+        \\                          possible: [5,10) or [32,∞) or { 15, 29 }
         \\
-    ,
-        Arg.posArg("u32", u32)
-            .default(3)
-            .ranges(Ranges(u32).new().u(5, 10).u(32, null))
-            .choices(&.{ 15, 29 })
-            ._checkOut().helpString(.{}),
-    );
-
+    , Arg.posArg("u32", u32)
+        .default(3)
+        .ranges(Ranges(u32).new().u(5, 10).u(32, null))
+        .choices(&.{ 15, 29 })
+        ._checkOut().helpString(.{}));
+}
+test "helpString b" {
     try testing.expectEqualStrings(
-        \\  {CC}                    possible values: { gcc, clang }
+        \\  {CC}                    possible: { gcc, clang }
         \\
-    ,
-        Arg.posArg("cc", String)
-            .choices(&.{ "gcc", "clang" })
-            ._checkOut().helpString(.{}),
-    );
-
+    , Arg.posArg("cc", String)
+        .choices(&.{ "gcc", "clang" })
+        ._checkOut().helpString(.{}));
+}
+test "helpString c" {
     try testing.expectEqualStrings(
         \\  {CC}                    possible inputs: { gcc, clang }
         \\
-    ,
-        Arg.posArg("cc", String)
-            .rawChoices(&.{ "gcc", "clang" })
-            ._checkOut().helpString(.{}),
-    );
+    , Arg.posArg("cc", String)
+        .rawChoices(&.{ "gcc", "clang" })
+        ._checkOut().helpString(.{}));
 }

@@ -377,14 +377,7 @@ pub fn parseFrom(self: Self, it: *TokenIter, a_maybe: ?Allocator) Error!self.Res
     var matched: BufferedList(self._stat.opt + self._stat.optArg, String) = .{};
     matched.init();
 
-    var r = std.mem.zeroInit(self.Result(), if (self.meta.subName) |s| blk: {
-        comptime var info = @typeInfo(struct {}).@"struct";
-        info.fields = info.fields ++ .{self.subCmdField()};
-        const I = @Type(.{ .@"struct" = info });
-        var i: I = undefined;
-        @field(i, s) = undefined;
-        break :blk i;
-    } else .{});
+    var r = helper.initStruct(self.Result());
 
     it.reinit(self._config.token);
 
@@ -424,8 +417,12 @@ pub fn parseFrom(self: Self, it: *TokenIter, a_maybe: ?Allocator) Error!self.Res
         if (a.class != .optArg) continue;
         if (a.meta.default == null) {
             if (!isSlice(a.T) and !matched.contain(a.name)) {
-                self.log("requires {} but not found", .{a});
-                return Error.MissingOptArg;
+                if (a.meta.rawDefault) |s| {
+                    @field(r, a.name) = a.parseValue(s, a_maybe) orelse return Error.InvalidOptArg;
+                } else {
+                    self.log("requires {} but not found", .{a});
+                    return Error.MissingOptArg;
+                }
             }
         }
     }

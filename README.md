@@ -200,6 +200,7 @@ For arguments, T must be the smallest parsable unit: `[]const u8` -> T
     - Only supports base types of `.int`, `.float`, and `.bool`
     - `@Vector{1,1}`: `[\(\[\{][ ]*1[ ]*[;:,][ ]*1[ ]*[\)\]\}]`
     - `@Vector{true,false}`: `[\(\[\{][ ]*y[ ]*[;:,][ ]*no[ ]*[\)\]\}]`
+- `std.fs.File/Dir`
 
 If type T has no associated default parser or `parse` method, you can specify a custom parser (`.parseFn`) for the parameter. Obviously, single-option parameters cannot have parsers as it would be meaningless.
 
@@ -211,6 +212,8 @@ Options and arguments can be configured with default values (`.default`). Once c
 - Options or arguments with an optional type `?T` cannot be explicitly configured: they are forced to default to `null`.
 
 > Single options, options with a single argument of optional type, or single positional arguments of optional type are always optional.
+
+Default values must be determined at comptime. For `argOpt`, if the value cannot be determined at comptime (e.g., `std.fs.cwd()` at `Windows`), you can configure the default input (`.rawDefault`), which will determine the default value in the perser.
 
 #### Value Ranges
 
