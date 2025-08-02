@@ -280,7 +280,7 @@ fn getCallbackFn(self: Self) ?*const fn (*TryOptional(self.T)) void {
 }
 fn parseValue(self: Self, s: String, a_maybe: ?Allocator) ?Base(self.T) {
     if (!self.checkInput(s)) return null;
-    if (if (self.getParseFn()) |f| f(s, a_maybe) else par.any(Base(self.T), s, a_maybe)) |value| {
+    if (if (comptime self.getParseFn()) |f| f(s, a_maybe) else par.any(Base(self.T), s, a_maybe)) |value| {
         if (!self.checkValue(value)) {
             if (a_maybe) |a| par.destroy(value, a);
             return null;
