@@ -36,8 +36,11 @@ pub fn usage(self: Self, w: anytype) !void {
     const meta = self.arg.meta;
     var is_first = true;
 
-    if (meta.default != null or meta.rawDefault != null) {
-        try w.print("{}[", .{sRec.apply(sConfig.usage.optional)});
+    if (meta.default != null or meta.rawDefault != null or ztype.Type.isSlice(self.arg.T)) {
+        try w.print("{}", .{sRec.apply(sConfig.usage.optional)});
+        if (!ztype.Type.isSlice(self.arg.T)) {
+            try w.writeByte('[');
+        }
     }
     if ((meta.short.len > 0 or meta.long.len > 0) and meta.argName != null) {
         try w.print("{}", .{sRec.apply(sConfig.usage.optarg)});
@@ -69,8 +72,11 @@ pub fn usage(self: Self, w: anytype) !void {
             try w.writeByte('}');
         }
     }
-    if (meta.default != null or meta.rawDefault != null) {
-        try w.print("{}]", .{sRec.restore(sConfig.usage.optional)});
+    if (meta.default != null or meta.rawDefault != null or ztype.Type.isSlice(self.arg.T)) {
+        try w.print("{}", .{sRec.restore(sConfig.usage.optional)});
+        if (!ztype.Type.isSlice(self.arg.T)) {
+            try w.writeByte(']');
+        }
     }
     try w.print("{}", .{sRec.reset()});
     if (self.arg.class == .opt and self.arg.T != bool or self.arg.class == .optArg and ztype.Type.isSlice(self.arg.T)) {
