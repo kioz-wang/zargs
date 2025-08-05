@@ -171,3 +171,47 @@ test "Type: Base" {
         try testing.expectEqual(T, checker.Base([]T));
     }
 }
+
+const OpenType = enum { file, dir, fileCreate };
+fn OpenFlags(openType: OpenType) type {
+    return switch (openType) {
+        .file => std.fs.File.OpenFlags,
+        .dir => std.fs.Dir.OpenOptions,
+        .fileCreate => std.fs.File.CreateFlags,
+    };
+}
+fn OpenValue(openType: OpenType) type {
+    return switch (openType) {
+        .file, .fileCreate => std.fs.File,
+        .dir => std.fs.Dir,
+    };
+}
+
+pub fn Open(openType: OpenType, flags: OpenFlags(openType)) type {
+    return struct {
+        const Self = @This();
+        v: OpenValue(openType),
+        s: String,
+        pub fn parse(s: String, a_maybe: ?std.mem.Allocator) ?Self {
+            return Self{
+                .s = if (a_maybe) |a| blk: {
+                    const s_alloc = a.alloc(u8, s.len) catch return null;
+                    @memcpy(s_alloc, s);
+                    break :blk s_alloc;
+                } else s,
+                .v = switch (openType) {
+                    .file => std.fs.cwd().openFile(s, flags),
+                    .dir => std.fs.cwd().openDir(s, flags),
+                    .fileCreate => std.fs.cwd().createFile(s, flags),
+                } catch return null,
+            };
+        }
+        pub fn destroy(self: *Self, a_maybe: ?std.mem.Allocator) void {
+            if (a_maybe) |a| a.free(self.s);
+            self.v.close();
+        }
+        pub fn format(self: Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+            try writer.print("{s}({s},{?})", .{ @typeName(@TypeOf(self.v)), self.s, flags });
+        }
+    };
+}

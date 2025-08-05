@@ -58,7 +58,9 @@ pub fn format(self: Self, comptime _: []const u8, _: std.fmt.FormatOptions, writ
 }
 fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
     // TODO maybe compileErrorf()?
-    std.debug.print(comptimePrint("{} {s}\n", .{ self, fmt }), args);
+    std.debug.print("{} ", .{self});
+    std.debug.print(fmt, args);
+    std.debug.print("\n", .{});
 }
 
 pub fn opt(name: LiteralString, T: type) Self {

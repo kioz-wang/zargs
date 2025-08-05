@@ -18,8 +18,6 @@ pub fn any(T: type, s: String, a_maybe: ?Allocator) ?T {
             @memcpy(s_alloc, s);
             break :blk s_alloc;
         } else s,
-        std.fs.File => return std.fs.cwd().openFile(s, .{}) catch null,
-        std.fs.Dir => return std.fs.cwd().openDir(s, .{}) catch null,
         else => {},
     }
     switch (@typeInfo(T)) {
@@ -69,7 +67,6 @@ pub fn destroy(v: anytype, a_maybe: ?Allocator) void {
             if (a_maybe) |a| a.free(v.*);
             return;
         },
-        std.fs.File, std.fs.Dir => v.close(),
         else => {},
     }
     switch (@typeInfo(T)) {
