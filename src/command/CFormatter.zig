@@ -57,14 +57,14 @@ pub fn usage(self: Self, w: anytype) !void {
     }
     inline for (self.c._args) |m| {
         if (m.class != .posArg) continue;
-        if (m.meta.default == null) {
+        if (m.meta.default == null and m.meta.rawDefault == null) {
             try w.writeByte(' ');
             try AFormatter.init(m, config).usage(w);
         }
     }
     inline for (self.c._args) |m| {
         if (m.class != .posArg) continue;
-        if (m.meta.default != null) {
+        if (m.meta.default != null or m.meta.rawDefault != null) {
             try w.writeByte(' ');
             try AFormatter.init(m, config).usage(w);
         }
@@ -243,12 +243,13 @@ test "helpString 0" {
         .arg(Arg.optArg("optional_int", i32).long("oint").default(1).argName("OINT").help("Optional integer"))
         .arg(Arg.optArg("int", i32).long("int").help("Required integer"))
         .arg(Arg.optArg("files", []String).short('f').long("file").help("Multiple files"))
+        .arg(Arg.posArg("compiler", String).rawDefault("rustcc"))
         .arg(Arg.posArg("optional_pos", u32).default(6).help("Optional position argument"))
         .arg(Arg.posArg("io", [2]String).help("Array position arguments"))
         .arg(Arg.posArg("message", ?String).help("Optional message"));
     try testing.expectEqualStrings(
         \\Usage:
-        \\  cmd [-h|--help] [-v]... [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [OPTIONAL_POS] [MESSAGE]
+        \\  cmd [-h|--help] [-v]... [--oint {OINT}] --int {INT} -f|--file {[]FILES}... [--] {[2]IO} [COMPILER] [OPTIONAL_POS] [MESSAGE]
         \\
         \\Option:
         \\  -h, --help              Show this help then exit (default is false)
@@ -260,6 +261,7 @@ test "helpString 0" {
         \\  -f, --file {[]FILES}    Multiple files
         \\
         \\Positional arguments:
+        \\  {COMPILER}              (default input is rustcc)
         \\  {OPTIONAL_POS}          Optional position argument (default is 6)
         \\  {[2]IO}                 Array position arguments
         \\  {MESSAGE}               Optional message (default is null)

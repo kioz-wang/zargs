@@ -428,15 +428,20 @@ pub fn parseFrom(self: Self, it: *TokenIter, a_maybe: ?Allocator) Error!self.Res
     }
     inline for (self._args) |a| {
         if (a.class != .posArg) continue;
-        if (a.meta.default == null) {
+        if (a.meta.default == null and a.meta.rawDefault == null) {
             _ = a._consume(&r, it, a_maybe) catch |e| return self._errCastArg(e, true);
         }
     }
     inline for (self._args) |a| {
         if (a.class != .posArg) continue;
-        if (a.meta.default != null) {
-            if ((it.view() catch |e| return self._errCastIter(e)) == null) break;
-            _ = a._consume(&r, it, a_maybe) catch |e| return self._errCastArg(e, true);
+        if (a.meta.default != null or a.meta.rawDefault != null) {
+            if ((it.view() catch |e| return self._errCastIter(e)) == null) {
+                if (a.meta.rawDefault) |s| {
+                    @field(r, a.name) = a.parseValue(s, a_maybe) orelse return Error.InvalidPosArg;
+                }
+            } else {
+                _ = a._consume(&r, it, a_maybe) catch |e| return self._errCastArg(e, true);
+            }
         }
     }
     if (self.meta.subName) |s| {

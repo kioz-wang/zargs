@@ -188,9 +188,6 @@ pub fn rawDefault(self: Self, s: String) Self {
     if (isSlice(self.T)) {
         @compileError(comptimePrint("{} not support .rawDefault, it's forced to be empty slice", .{self}));
     }
-    if (self.class != .optArg) {
-        @compileError(comptimePrint("{} not support .rawDefault", .{self}));
-    }
     if (isArray(self.T)) {
         @compileError(comptimePrint("{} not support .rawDefault", .{self}));
     }
@@ -221,6 +218,9 @@ pub fn _checkOut(self: Self) Self {
                 arg.meta.default = @ptrCast(&nul);
             }
         }
+        if (self.meta.default != null and self.meta.rawDefault != null) {
+            @compileError(comptimePrint("{} .rawDefault conflicts with .default", .{self}));
+        }
     }
     if (self.class == .opt or self.class == .optArg) {
         // Check short and long
@@ -234,9 +234,9 @@ pub fn _checkOut(self: Self) Self {
             arg.meta.argName = &comptimeUpperString(self.name);
         }
     }
-    if (self.class == .optArg) {
-        if (self.meta.default != null and self.meta.rawDefault != null) {
-            @compileError(comptimePrint("{} .rawDefault conflicts with .default", .{self}));
+    if (self.meta.rawDefault) |s| {
+        if (!self.checkInput(s)) {
+            @compileError(comptimePrint("{} invalid default input: {s}", .{ self, s }));
         }
     }
     return arg;
@@ -259,15 +259,12 @@ pub fn getChoices(self: Self) ?*const []const Base(self.T) {
 }
 fn checkInput(self: Self, s: String) bool {
     if (self.meta.rawChoices) |rcs| {
-        const rcs_found = for (rcs) |rc| {
+        return for (rcs) |rc| {
             if (equal(rc, s)) break true;
         } else false;
-        if (!rcs_found) {
-            self.log("to parse {s} but out of rawChoices{}", .{ s, any(rcs, .{}) });
-        }
-        return rcs_found;
+    } else {
+        return true;
     }
-    return true;
 }
 fn checkValue(self: Self, value: Base(self.T)) bool {
     if (comptime self.getChoices()) |cs| {
@@ -305,7 +302,10 @@ fn getCallbackFn(self: Self) ?*const fn (*TryOptional(self.T)) void {
     return @ptrCast(@alignCast(self.meta.callbackFn orelse return null));
 }
 pub fn parseValue(self: Self, s: String, a_maybe: ?Allocator) ?Base(self.T) {
-    if (!self.checkInput(s)) return null;
+    if (!self.checkInput(s)) {
+        self.log("to parse {s} but out of rawChoices{}", .{ s, any(self.meta.rawChoices, .{}) });
+        return null;
+    }
     if (if (comptime self.getParseFn()) |f| f(s, a_maybe) else par.any(Base(self.T), s, a_maybe)) |value| {
         if (!self.checkValue(value)) {
             var x = value;
