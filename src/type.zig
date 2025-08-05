@@ -4,7 +4,7 @@
 //! const ztype = @import("ztype");
 //! const String = ztype.String;
 //! const LiteralString = ztype.LiteralString;
-//! const Type = ztype.Type;
+//! const checker = ztype.checker;
 //! ```
 
 const std = @import("std");
@@ -15,7 +15,7 @@ const bufPrint = std.fmt.bufPrint;
 pub const String = []const u8;
 pub const LiteralString = [:0]const u8;
 
-pub const Type = struct {
+pub const checker = struct {
     pub fn isBase(T: type) bool {
         if (T == String) return true;
         return switch (@typeInfo(T)) {
@@ -119,55 +119,55 @@ test "Check type about String" {
     }
 }
 test "Type: isMultiple" {
-    try testing.expect(Type.isMultiple([4]u8));
-    try testing.expect(Type.isSlice([]u8));
-    try testing.expect(!Type.isSlice(LiteralString));
+    try testing.expect(checker.isMultiple([4]u8));
+    try testing.expect(checker.isSlice([]u8));
+    try testing.expect(!checker.isSlice(LiteralString));
     {
         var ab = [_]u8{ 'a', 'b' };
-        try testing.expect(Type.isMultiple(@TypeOf(ab)));
-        try testing.expect(Type.isArray(@TypeOf(ab)));
-        try testing.expect(Type.isSlice(@TypeOf(@as([]u8, &ab))));
-        try testing.expect(Type.isSlice(@TypeOf(@as([]u8, ab[0..]))));
+        try testing.expect(checker.isMultiple(@TypeOf(ab)));
+        try testing.expect(checker.isArray(@TypeOf(ab)));
+        try testing.expect(checker.isSlice(@TypeOf(@as([]u8, &ab))));
+        try testing.expect(checker.isSlice(@TypeOf(@as([]u8, ab[0..]))));
         {
             var i: usize = 0;
             i = 1;
-            try testing.expect(Type.isSlice(@TypeOf(ab[i..])));
+            try testing.expect(checker.isSlice(@TypeOf(ab[i..])));
         }
     }
     {
         const ab = [_]u8{ 'a', 'b' };
-        try testing.expect(Type.isMultiple(@TypeOf(ab)));
-        try testing.expect(Type.isArray(@TypeOf(ab)));
+        try testing.expect(checker.isMultiple(@TypeOf(ab)));
+        try testing.expect(checker.isArray(@TypeOf(ab)));
         try testing.expectEqual(String, @TypeOf(@as([]const u8, &ab)));
         try testing.expectEqual(String, @TypeOf(@as([]const u8, ab[0..])));
         {
             var i: usize = 0;
             i = 1;
             try testing.expectEqual(String, @TypeOf(ab[i..]));
-            try testing.expect(Type.isSlice(@TypeOf(@constCast(ab[i..]))));
+            try testing.expect(checker.isSlice(@TypeOf(@constCast(ab[i..]))));
         }
     }
 }
 test "Type: Base" {
-    try testing.expectEqual(u32, Type.Base(?u32));
-    try testing.expectEqual(u32, Type.Base([]u32));
-    try testing.expectEqual(u32, Type.Base([4]u32));
-    try testing.expectEqual(u8, Type.Base([]u8));
-    try testing.expectEqual(u8, Type.Base([4]u8));
+    try testing.expectEqual(u32, checker.Base(?u32));
+    try testing.expectEqual(u32, checker.Base([]u32));
+    try testing.expectEqual(u32, checker.Base([4]u32));
+    try testing.expectEqual(u8, checker.Base([]u8));
+    try testing.expectEqual(u8, checker.Base([4]u8));
     {
         const ab = [_]u8{ 'a', 'b', 'c' };
-        try testing.expectEqual(u8, Type.Base(@TypeOf(ab)));
+        try testing.expectEqual(u8, checker.Base(@TypeOf(ab)));
     }
-    try testing.expectEqual(String, Type.Base(?String));
-    try testing.expectEqual(String, Type.Base([]String));
-    try testing.expectEqual(LiteralString, Type.Try([]LiteralString));
-    try testing.expect(!Type.isBase(Type.Try([]LiteralString)));
+    try testing.expectEqual(String, checker.Base(?String));
+    try testing.expectEqual(String, checker.Base([]String));
+    try testing.expectEqual(LiteralString, checker.Try([]LiteralString));
+    try testing.expect(!checker.isBase(checker.Try([]LiteralString)));
     {
         const T = struct { a: i32 };
-        try testing.expectEqual(T, Type.Base(?T));
+        try testing.expectEqual(T, checker.Base(?T));
     }
     {
         const T = enum { Red, Blue };
-        try testing.expectEqual(T, Type.Base([]T));
+        try testing.expectEqual(T, checker.Base([]T));
     }
 }

@@ -2,8 +2,8 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const Arg = zargs.Arg;
-const String = []const u8;
 const TokenIter = zargs.TokenIter;
+const String = @import("ztype").String;
 
 const _d = Command.new("D")
     .arg(Arg.opt("verbose", u32).short('v').long("verbose"))

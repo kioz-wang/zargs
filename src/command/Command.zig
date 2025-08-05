@@ -10,9 +10,9 @@ const BufferedList = helper.Collection.BufferedList;
 const ztype = @import("ztype");
 const String = ztype.String;
 const LiteralString = ztype.LiteralString;
-const Type = ztype.Type;
-const isSlice = Type.isSlice;
-const TryOptional = Type.TryOptional;
+const checker = ztype.checker;
+const isSlice = checker.isSlice;
+const TryOptional = checker.TryOptional;
 
 const TokenIter = @import("token.zig").Iter;
 const Config = @import("Config.zig");

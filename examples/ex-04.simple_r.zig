@@ -1,14 +1,15 @@
 const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
+const String = @import("ztype").String;
 
 pub fn main() !void {
     const cmd = Command.new("demo").requireSub("action")
         .about("This is a demo using APIs in a style similar to Python3's `argparse`.")
         .opt("verbose", u32, .{ .short = 'v', .help = "help of verbose" })
-        .optArg("output", []const u8, .{ .short = 'o', .long = "out" })
-        .sub(Command.new("install").posArg("name", []const u8, .{}))
-        .sub(Command.new("remove").posArg("name", []const u8, .{}));
+        .optArg("output", String, .{ .short = 'o', .long = "out" })
+        .sub(Command.new("install").posArg("name", String, .{}))
+        .sub(Command.new("remove").posArg("name", String, .{}));
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();

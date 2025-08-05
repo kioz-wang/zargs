@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 
 const ztype = @import("ztype");
 const String = ztype.String;
-const Type = ztype.Type;
+const checker = ztype.checker;
 
 /// parse String to any base T
 ///
@@ -84,7 +84,7 @@ pub fn destroy(v: anytype, a: Allocator) void {
 
 /// Parser of Base(T)
 pub fn Fn(T: type) type {
-    return fn (String, ?Allocator) ?Type.Base(T);
+    return fn (String, ?Allocator) ?checker.Base(T);
 }
 
 const testing = std.testing;

@@ -6,7 +6,7 @@ const bufPrint = std.fmt.bufPrint;
 const ztype = @import("ztype");
 const String = ztype.String;
 const LiteralString = ztype.LiteralString;
-const Type = ztype.Type;
+const checker = ztype.checker;
 
 const any = @import("fmt").any;
 

@@ -3,6 +3,7 @@ const zargs = @import("zargs");
 const Command = zargs.Command;
 const Arg = zargs.Arg;
 const Ranges = zargs.Ranges;
+const String = @import("ztype").String;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
@@ -11,7 +12,7 @@ pub fn main() !void {
         .alias("rm").alias("uninstall").alias("del")
         .opt("verbose", u32, .{ .short = 'v' })
         .optArg("count", u32, .{ .short = 'c', .argName = "CNT", .default = 9 })
-        .posArg("name", []const u8, .{});
+        .posArg("name", String, .{});
 
     // Like Rust clap, https://docs.rs/clap/latest/clap/
     const cmd = Command.new("demo").requireSub("action")
@@ -19,15 +20,15 @@ pub fn main() !void {
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
         .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
-        .arg(Arg.optArg("logfile", ?[]const u8).long("log").help("Store log into a file"))
+        .arg(Arg.optArg("logfile", ?String).long("log").help("Store log into a file"))
         .sub(Command.new("install")
             .about("Install something")
             .arg(Arg.optArg("count", u32).default(10)
                 .short('c').short('n').short('t')
                 .long("count").long("cnt")
                 .ranges(Ranges(u32).new().u(5, 7).u(13, null)).choices(&.{ 10, 11 }))
-            .arg(Arg.posArg("name", []const u8).rawChoices(&.{ "gcc", "clang" }))
-            .arg(Arg.optArg("output", []const u8).short('o').long("out"))
+            .arg(Arg.posArg("name", String).rawChoices(&.{ "gcc", "clang" }))
+            .arg(Arg.optArg("output", String).short('o').long("out"))
             .arg(Arg.optArg("vector", ?@Vector(3, i32)).long("vec")))
         .sub(remove);
 

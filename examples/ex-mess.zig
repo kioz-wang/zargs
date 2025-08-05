@@ -3,8 +3,9 @@ const zargs = @import("zargs");
 const Command = zargs.Command;
 const TokenIter = zargs.TokenIter;
 const Arg = zargs.Arg;
+const String = @import("ztype").String;
 
-fn limitPlusOne(s: []const u8, _: ?std.mem.Allocator) ?u32 {
+fn limitPlusOne(s: String, _: ?std.mem.Allocator) ?u32 {
     const limit = std.fmt.parseInt(u32, s, 0) catch return null;
     return limit + 1;
 }
@@ -13,12 +14,12 @@ const ColorWithParser = enum {
     White,
     Black,
     Gray,
-    pub fn parse(s: []const u8, _: ?std.mem.Allocator) ?@This() {
+    pub fn parse(s: String, _: ?std.mem.Allocator) ?@This() {
         return if (std.ascii.eqlIgnoreCase(s, "White")) .White else if (std.ascii.eqlIgnoreCase(s, "Black")) .Black else if (std.ascii.eqlIgnoreCase(s, "Gray")) .Gray else null;
     }
 };
 const lastCharacter = struct {
-    fn p(s: []const u8, _: ?std.mem.Allocator) ?u8 {
+    fn p(s: String, _: ?std.mem.Allocator) ?u8 {
         return if (s.len == 0) null else s[s.len - 1];
     }
 }.p;
@@ -60,9 +61,9 @@ pub fn main() !void {
             .help("give me a word")
             .argName("word")
             .parseFn(lastCharacter))
-        .arg(Arg.optArg("word", []const u8)
+        .arg(Arg.optArg("word", String)
             .long("word"))
-        .arg(Arg.optArg("3word", [3][]const u8)
+        .arg(Arg.optArg("3word", [3]String)
             .long("3word")
             .help("give me three words"))
         .arg(Arg.optArg("nums", []const u32)

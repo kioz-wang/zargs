@@ -5,7 +5,7 @@ const bufPrint = std.fmt.bufPrint;
 const ztype = @import("ztype");
 const String = ztype.String;
 const LiteralString = ztype.LiteralString;
-const Type = ztype.Type;
+const checker = ztype.checker;
 
 pub const Options = struct {
     optional: Optional = .default,
@@ -41,7 +41,7 @@ pub fn Any(V: type) type {
             return .{ .value = value, .options = options };
         }
         pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
-            if (comptime Type.isOptional(V)) {
+            if (comptime checker.isOptional(V)) {
                 if (self.value) |v| {
                     try any(v, self.options).format(fmt, options, writer);
                 } else {
@@ -55,7 +55,7 @@ pub fn Any(V: type) type {
                     return;
                 }
             }
-            if (comptime Type.isMultiple(V) or V == LiteralString or V == String) {
+            if (comptime checker.isMultiple(V) or V == LiteralString or V == String) {
                 self.options.assert();
                 try std.fmt.formatBuf(self.options.multiple.begin, .{}, writer);
                 for (self.value, 0..) |v, i| {
@@ -66,7 +66,7 @@ pub fn Any(V: type) type {
                 try std.fmt.formatBuf(self.options.multiple.end, .{}, writer);
                 return;
             }
-            if (comptime Type.isBase(V)) {
+            if (comptime checker.isBase(V)) {
                 switch (@typeInfo(V)) {
                     .@"enum" => try std.fmt.formatBuf(@tagName(self.value), options, writer),
                     else => try std.fmt.formatType(self.value, fmt, options, writer, std.options.fmt_max_depth),

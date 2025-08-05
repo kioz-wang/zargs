@@ -2,14 +2,15 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const Arg = zargs.Arg;
+const String = @import("ztype").String;
 
 pub fn main() !void {
     const install = Command.new("install")
-        .arg(Arg.posArg("name", []const u8))
+        .arg(Arg.posArg("name", String))
         .arg(Arg.optArg("count", u32).short('c').default(1));
 
     const remove = Command.new("remove")
-        .arg(Arg.posArg("name", []const u8))
+        .arg(Arg.posArg("name", String))
         .arg(Arg.optArg("count", u32).short('c').default(2));
 
     const _cmd = Command.new("demo").requireSub("action")

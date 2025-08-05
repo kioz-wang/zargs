@@ -11,14 +11,14 @@ const initStruct = helper.initStruct;
 const ztype = @import("ztype");
 const String = ztype.String;
 const LiteralString = ztype.LiteralString;
-const Type = ztype.Type;
+const checker = ztype.checker;
 const Allocator = std.mem.Allocator;
-const Base = Type.Base;
-const isSlice = Type.isSlice;
-const isOptional = Type.isOptional;
-const isArray = Type.isArray;
-const isMultiple = Type.isMultiple;
-const TryOptional = Type.TryOptional;
+const Base = checker.Base;
+const isSlice = checker.isSlice;
+const isOptional = checker.isOptional;
+const isArray = checker.isArray;
+const isMultiple = checker.isMultiple;
+const TryOptional = checker.TryOptional;
 
 const token = @import("token.zig");
 
