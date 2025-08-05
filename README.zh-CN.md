@@ -18,6 +18,7 @@ const zargs = @import("zargs");
 const Command = zargs.Command;
 const Arg = zargs.Arg;
 const Ranges = zargs.Ranges;
+const String = @import("ztype").String;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
@@ -26,7 +27,7 @@ pub fn main() !void {
         .alias("rm").alias("uninstall").alias("del")
         .opt("verbose", u32, .{ .short = 'v' })
         .optArg("count", u32, .{ .short = 'c', .argName = "CNT", .default = 9 })
-        .posArg("name", []const u8, .{});
+        .posArg("name", String, .{});
 
     // Like Rust clap, https://docs.rs/clap/latest/clap/
     const cmd = Command.new("demo").requireSub("action")
@@ -34,22 +35,22 @@ pub fn main() !void {
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
         .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
-        .arg(Arg.optArg("logfile", ?[]const u8).long("log").help("Store log into a file"))
+        .arg(Arg.optArg("logfile", ?String).long("log").help("Store log into a file"))
         .sub(Command.new("install")
             .about("Install something")
             .arg(Arg.optArg("count", u32).default(10)
                 .short('c').short('n').short('t')
                 .long("count").long("cnt")
                 .ranges(Ranges(u32).new().u(5, 7).u(13, null)).choices(&.{ 10, 11 }))
-            .arg(Arg.posArg("name", []const u8).rawChoices(&.{ "gcc", "clang" }))
-            .arg(Arg.optArg("output", []const u8).short('o').long("out"))
+            .arg(Arg.posArg("name", String).rawChoices(&.{ "gcc", "clang" }))
+            .arg(Arg.optArg("output", String).short('o').long("out"))
             .arg(Arg.optArg("vector", ?@Vector(3, i32)).long("vec")))
         .sub(remove);
 
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const allocator = gpa.allocator();
 
-    const args = cmd.config(.{ .style = .classic }).parse(allocator) catch |e|
+    var args = cmd.config(.{ .style = .classic }).parse(allocator) catch |e|
         zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     if (args.logfile) |logfile| std.debug.print("Store log into {s}\n", .{logfile});
@@ -160,6 +161,10 @@ pub fn getString(self: Self) *const [stringify(self, "fname").count():0]u8 {
 `destroy`，释放解析到的类型实例。
 
 安全释放，对于解析时未发生内存分配的实例，不会产生实际的释放行为。对于 `struct` 和 `enum`，当实现了 `pub fn destroy(self: Self, a: Allocator) void` 时，才会产生实际的释放行为。
+
+#### ztype
+
+提供 `String`, `LiteralString` 和 `checker`。
 
 ## 特性
 

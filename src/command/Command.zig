@@ -10,9 +10,9 @@ const BufferedList = helper.Collection.BufferedList;
 const ztype = @import("ztype");
 const String = ztype.String;
 const LiteralString = ztype.LiteralString;
-const Type = ztype.Type;
-const isSlice = Type.isSlice;
-const TryOptional = Type.TryOptional;
+const checker = ztype.checker;
+const isSlice = checker.isSlice;
+const TryOptional = checker.TryOptional;
 
 const TokenIter = @import("token.zig").Iter;
 const Config = @import("Config.zig");
@@ -428,15 +428,20 @@ pub fn parseFrom(self: Self, it: *TokenIter, a_maybe: ?Allocator) Error!self.Res
     }
     inline for (self._args) |a| {
         if (a.class != .posArg) continue;
-        if (a.meta.default == null) {
+        if (a.meta.default == null and a.meta.rawDefault == null) {
             _ = a._consume(&r, it, a_maybe) catch |e| return self._errCastArg(e, true);
         }
     }
     inline for (self._args) |a| {
         if (a.class != .posArg) continue;
-        if (a.meta.default != null) {
-            if ((it.view() catch |e| return self._errCastIter(e)) == null) break;
-            _ = a._consume(&r, it, a_maybe) catch |e| return self._errCastArg(e, true);
+        if (a.meta.default != null or a.meta.rawDefault != null) {
+            if ((it.view() catch |e| return self._errCastIter(e)) == null) {
+                if (a.meta.rawDefault) |s| {
+                    @field(r, a.name) = a.parseValue(s, a_maybe) orelse return Error.InvalidPosArg;
+                }
+            } else {
+                _ = a._consume(&r, it, a_maybe) catch |e| return self._errCastArg(e, true);
+            }
         }
     }
     if (self.meta.subName) |s| {
@@ -466,15 +471,14 @@ pub fn parseFrom(self: Self, it: *TokenIter, a_maybe: ?Allocator) Error!self.Res
     return r;
 }
 
-pub fn destroy(self: Self, r: *const self.Result(), allocator: Allocator) void {
+pub fn destroy(self: Self, r: *self.Result(), a_maybe: ?Allocator) void {
     inline for (self._args) |a| {
-        a._destroy(r, allocator);
+        a._destroy(r, a_maybe);
     }
     if (self.meta.subName) |s| {
         inline for (self._cmds) |c| {
             if (std.enums.nameCast(std.meta.Tag(self.SubCmdUnion()), c.name[0]) == @field(r, s)) {
-                const a = &@field(@field(r, s), c.name[0]);
-                c.destroy(a, allocator);
+                c.destroy(&@field(@field(r, s), c.name[0]), a_maybe);
                 break;
             }
         }
@@ -594,14 +598,14 @@ const _test = struct {
     test "Parse struct with par and allocator" {
         const Mem = struct {
             buf: []u8,
-            pub fn parse(s: String, a: ?Allocator) ?@This() {
-                const allocator = a orelse return null;
+            pub fn parse(s: String, a_maybe: ?Allocator) ?@This() {
+                const a = a_maybe orelse return null;
                 const len = par.any(usize, s, null) orelse return null;
-                const buf = allocator.alloc(u8, len) catch return null;
+                const buf = a.alloc(u8, len) catch return null;
                 return .{ .buf = buf };
             }
-            pub fn destroy(self: @This(), a: Allocator) void {
-                a.free(self.buf);
+            pub fn destroy(self: *@This(), a_maybe: ?Allocator) void {
+                a_maybe.?.free(self.buf);
             }
         };
         const cmd = Self.new("cmd")
@@ -641,7 +645,7 @@ const _test = struct {
         const R = cmd.Result();
         {
             var it = try TokenIter.initLine("--int 3 --out hello world", null, .{});
-            const args = try cmd.parseFrom(&it, testing.allocator);
+            var args = try cmd.parseFrom(&it, testing.allocator);
             defer cmd.destroy(&args, testing.allocator);
             try testing.expectEqualDeep(
                 R{ .integer = 3, .output = "hello", .message = "world" },
@@ -650,7 +654,7 @@ const _test = struct {
         }
         {
             var it = try TokenIter.initLine("", null, .{});
-            const args = try cmd.parseFrom(&it, testing.allocator);
+            var args = try cmd.parseFrom(&it, testing.allocator);
             defer cmd.destroy(&args, testing.allocator);
             try testing.expectEqualDeep(
                 R{ .integer = null, .output = null, .message = null },
@@ -697,7 +701,7 @@ const _test = struct {
                 ),
             );
             var it = try TokenIter.initLine("-vvo=aa B -vi --out=bb C -vo cc -- D -vio=dd in", null, .{});
-            const args = try a.parseFrom(&it, testing.allocator);
+            var args = try a.parseFrom(&it, testing.allocator);
             defer a.destroy(&args, testing.allocator);
             try testing.expectEqualDeep(r, args);
         }
@@ -711,7 +715,7 @@ const _test = struct {
                 ),
             );
             var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C @v +++out=>cc ** D -vio=dd in", null, .{});
-            const args = try a.parseFrom(&it, testing.allocator);
+            var args = try a.parseFrom(&it, testing.allocator);
             defer a.destroy(&args, testing.allocator);
             try testing.expectEqualDeep(r, args);
         }
@@ -727,7 +731,7 @@ const _test = struct {
                 ),
             );
             var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C -vo=cc -- D @vio=>dd in", null, .{});
-            const args = try a.parseFrom(&it, testing.allocator);
+            var args = try a.parseFrom(&it, testing.allocator);
             defer a.destroy(&args, testing.allocator);
             try testing.expectEqualDeep(r, args);
         }
@@ -743,7 +747,7 @@ const _test = struct {
                 ),
             );
             var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C -v --out=cc -- D -vio=dd in", null, .{ .connector = "=>" });
-            const args = try a.parseFrom(&it, testing.allocator);
+            var args = try a.parseFrom(&it, testing.allocator);
             defer a.destroy(&args, testing.allocator);
             try testing.expectEqualDeep(r, args);
         }
@@ -759,7 +763,7 @@ const _test = struct {
                 ),
             );
             var it = try TokenIter.initLine("-vvo:aa ## B -vi --out=bb -- C -v --out=cc -- D @vio=>dd in", null, .{});
-            const args = try a.parseFrom(&it, testing.allocator);
+            var args = try a.parseFrom(&it, testing.allocator);
             defer a.destroy(&args, testing.allocator);
             try testing.expectEqualDeep(r, args);
         }
@@ -773,7 +777,7 @@ const _test = struct {
                 ),
             );
             var it = try TokenIter.initLine("-vvo=aa B -vi --out:bb ## C @v +++out=>cc ** D @vio=>dd in", null, .{});
-            const args = try a.parseFrom(&it, testing.allocator);
+            var args = try a.parseFrom(&it, testing.allocator);
             defer a.destroy(&args, testing.allocator);
             try testing.expectEqualDeep(r, args);
         }
@@ -782,7 +786,7 @@ const _test = struct {
     test "Bug, destroy default String" {
         const cmd = Self.new("cmd").arg(Argument.posArg("pos", String).default("hello"));
         var it = try TokenIter.initList(&.{}, .{});
-        const args = try cmd.parseFrom(&it, testing.allocator);
+        var args = try cmd.parseFrom(&it, testing.allocator);
         cmd.destroy(&args, testing.allocator);
     }
 };

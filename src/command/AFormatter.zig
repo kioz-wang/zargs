@@ -36,9 +36,9 @@ pub fn usage(self: Self, w: anytype) !void {
     const meta = self.arg.meta;
     var is_first = true;
 
-    if (meta.default != null or meta.rawDefault != null or ztype.Type.isSlice(self.arg.T)) {
+    if (meta.default != null or meta.rawDefault != null or ztype.checker.isSlice(self.arg.T)) {
         try w.print("{}", .{sRec.apply(sConfig.usage.optional)});
-        if (!ztype.Type.isSlice(self.arg.T)) {
+        if (!ztype.checker.isSlice(self.arg.T)) {
             try w.writeByte('[');
         }
     }
@@ -72,14 +72,14 @@ pub fn usage(self: Self, w: anytype) !void {
             try w.writeByte('}');
         }
     }
-    if (meta.default != null or meta.rawDefault != null or ztype.Type.isSlice(self.arg.T)) {
+    if (meta.default != null or meta.rawDefault != null or ztype.checker.isSlice(self.arg.T)) {
         try w.print("{}", .{sRec.restore(sConfig.usage.optional)});
-        if (!ztype.Type.isSlice(self.arg.T)) {
+        if (!ztype.checker.isSlice(self.arg.T)) {
             try w.writeByte(']');
         }
     }
     try w.print("{}", .{sRec.reset()});
-    if (self.arg.class == .opt and self.arg.T != bool or self.arg.class == .optArg and ztype.Type.isSlice(self.arg.T)) {
+    if (self.arg.class == .opt and self.arg.T != bool or self.arg.class == .optArg and ztype.checker.isSlice(self.arg.T)) {
         try w.writeAll("...");
     }
 }
@@ -136,7 +136,7 @@ fn indent(self: Self, w: anytype, is_firstline: *bool) !void {
 pub fn help(self: Self, w: anytype) !void {
     _, const fConfig, const sConfig = self.config.destruct();
     var sRec = Config.StyleRecord(5){};
-    const Base = ztype.Type.Base;
+    const Base = ztype.checker.Base;
     const meta = self.arg.meta;
     var is_firstline = true;
 

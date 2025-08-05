@@ -2,8 +2,8 @@ const std = @import("std");
 const zargs = @import("zargs");
 const Command = zargs.Command;
 const Arg = zargs.Arg;
-const String = []const u8;
 const TokenIter = zargs.TokenIter;
+const String = @import("ztype").String;
 
 const _d = Command.new("D")
     .arg(Arg.opt("verbose", u32).short('v').long("verbose"))
@@ -54,7 +54,7 @@ pub fn main() !void {
             };
             var it = TokenIter.initLine(line, null, .{}) catch unreachable;
             it.debug(true);
-            const args = a.parseFrom(&it, allocator) catch unreachable;
+            var args = a.parseFrom(&it, allocator) catch unreachable;
             defer a.destroy(&args, allocator);
         }
     }.f));

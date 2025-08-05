@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 
 const ztype = @import("ztype");
 const String = ztype.String;
-const Type = ztype.Type;
+const checker = ztype.checker;
 
 /// parse String to any base T
 ///
@@ -18,8 +18,6 @@ pub fn any(T: type, s: String, a_maybe: ?Allocator) ?T {
             @memcpy(s_alloc, s);
             break :blk s_alloc;
         } else s,
-        std.fs.File => return std.fs.cwd().openFile(s, .{}) catch null,
-        std.fs.Dir => return std.fs.cwd().openDir(s, .{}) catch null,
         else => {},
     }
     switch (@typeInfo(T)) {
@@ -61,30 +59,25 @@ pub fn any(T: type, s: String, a_maybe: ?Allocator) ?T {
 
 /// destroy any base T value
 ///
-/// for struct, if find `pub fn destroy(self: T, a: Allocator) void`, use it
-pub fn destroy(v: anytype, a: Allocator) void {
-    const T = @TypeOf(v);
+/// for struct, if find `pub fn destroy(self: *T, a_maybe: ?Allocator) void`, use it
+pub fn destroy(v: anytype, a_maybe: ?Allocator) void {
+    const T = @typeInfo(@TypeOf(v)).pointer.child;
     switch (T) {
         String => {
-            a.free(v);
-            return;
-        },
-        std.fs.File, std.fs.Dir => {
-            var obj = v;
-            obj.close();
+            if (a_maybe) |a| a.free(v.*);
             return;
         },
         else => {},
     }
     switch (@typeInfo(T)) {
-        .@"struct", .@"enum" => if (std.meta.hasMethod(T, "destroy")) v.destroy(a),
+        .@"struct", .@"enum" => if (std.meta.hasMethod(T, "destroy")) v.destroy(a_maybe),
         else => {},
     }
 }
 
 /// Parser of Base(T)
 pub fn Fn(T: type) type {
-    return fn (String, ?Allocator) ?Type.Base(T);
+    return fn (String, ?Allocator) ?checker.Base(T);
 }
 
 const testing = std.testing;

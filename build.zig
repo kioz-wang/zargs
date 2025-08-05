@@ -4,25 +4,23 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const mod_type = b.createModule(.{
+    const mod_ztype = b.addModule("ztype", .{
         .root_source_file = b.path("src/type.zig"),
         .target = target,
         .optimize = optimize,
     });
-
     const mod_fmt = b.addModule("fmt", .{
         .root_source_file = b.path("src/io/fmt.zig"),
         .target = target,
         .optimize = optimize,
     });
-    mod_fmt.addImport("ztype", mod_type);
-
+    mod_fmt.addImport("ztype", mod_ztype);
     const mod_par = b.addModule("par", .{
         .root_source_file = b.path("src/io/par.zig"),
         .target = target,
         .optimize = optimize,
     });
-    mod_par.addImport("ztype", mod_type);
+    mod_par.addImport("ztype", mod_ztype);
 
     const mod_helper = b.createModule(.{
         .root_source_file = b.path("src/helper.zig"),
@@ -30,7 +28,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     mod_helper.addImport("fmt", mod_fmt);
-    mod_helper.addImport("ztype", mod_type);
+    mod_helper.addImport("ztype", mod_ztype);
 
     const mod_iter = b.createModule(.{
         .root_source_file = b.path("src/iter.zig"),
@@ -43,7 +41,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    mod_command.addImport("ztype", mod_type);
+    mod_command.addImport("ztype", mod_ztype);
     mod_command.addImport("fmt", mod_fmt);
     mod_command.addImport("par", mod_par);
     mod_command.addImport("helper", mod_helper);
@@ -87,6 +85,7 @@ pub fn build(b: *std.Build) void {
             });
             ex_exe.root_module.addImport("zargs", mod_zargs);
             ex_exe.root_module.addImport("par", mod_par);
+            ex_exe.root_module.addImport("ztype", mod_ztype);
             const ex_install = b.addInstallArtifact(ex_exe, .{});
             ex_install.step.dependOn(&ex_exe.step);
 
@@ -108,7 +107,7 @@ pub fn build(b: *std.Build) void {
         "test_filter",
         "Skip tests that do not match any of the specified filters",
     ) orelse &.{};
-    const mods_utest = [_]*std.Build.Module{ mod_type, mod_fmt, mod_par, mod_helper, mod_iter, mod_command };
+    const mods_utest = [_]*std.Build.Module{ mod_ztype, mod_fmt, mod_par, mod_helper, mod_iter, mod_command };
     for (mods_utest) |unit| {
         test_step.dependOn(&b.addRunArtifact(
             b.addTest(.{
