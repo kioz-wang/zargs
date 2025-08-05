@@ -192,23 +192,41 @@ pub fn Open(openType: OpenType, flags: OpenFlags(openType)) type {
         const Self = @This();
         v: OpenValue(openType),
         s: String,
+        @".is_stdio": bool = false,
         pub fn parse(s: String, a_maybe: ?std.mem.Allocator) ?Self {
-            return Self{
-                .s = if (a_maybe) |a| blk: {
-                    const s_alloc = a.alloc(u8, s.len) catch return null;
-                    @memcpy(s_alloc, s);
-                    break :blk s_alloc;
-                } else s,
-                .v = switch (openType) {
-                    .file => std.fs.cwd().openFile(s, flags),
-                    .dir => std.fs.cwd().openDir(s, flags),
-                    .fileCreate => std.fs.cwd().createFile(s, flags),
-                } catch return null,
-            };
+            var self: Self = undefined;
+
+            switch (openType) {
+                .file => {
+                    if ((comptime flags.mode != .read_write) and std.mem.eql(u8, s, "-")) {
+                        self.@".is_stdio" = true;
+                        self.v = switch (flags.mode) {
+                            .read_only => std.io.getStdIn(),
+                            .write_only => std.io.getStdOut(),
+                            else => unreachable,
+                        };
+                    } else self.v = std.fs.cwd().openFile(s, flags) catch return null;
+                },
+                .dir => self.v = std.fs.cwd().openDir(s, flags) catch return null,
+                .fileCreate => {
+                    if ((comptime !flags.read) and std.mem.eql(u8, s, "-")) {
+                        self.@".is_stdio" = true;
+                        self.v = std.io.getStdOut();
+                    } else self.v = std.fs.cwd().createFile(s, flags) catch return null;
+                },
+            }
+
+            self.s = if (a_maybe) |a| blk: {
+                const s_alloc = a.alloc(u8, s.len) catch return null;
+                @memcpy(s_alloc, s);
+                break :blk s_alloc;
+            } else s;
+
+            return self;
         }
         pub fn destroy(self: *Self, a_maybe: ?std.mem.Allocator) void {
+            if (!self.@".is_stdio") self.v.close();
             if (a_maybe) |a| a.free(self.s);
-            self.v.close();
         }
         pub fn format(self: Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
             try writer.print("{s}({s},{?})", .{ @typeName(@TypeOf(self.v)), self.s, flags });
