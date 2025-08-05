@@ -54,7 +54,7 @@ pub fn main() !void {
             };
             var it = TokenIter.initLine(line, null, .{}) catch unreachable;
             it.debug(true);
-            const args = a.parseFrom(&it, allocator) catch unreachable;
+            var args = a.parseFrom(&it, allocator) catch unreachable;
             defer a.destroy(&args, allocator);
         }
     }.f));

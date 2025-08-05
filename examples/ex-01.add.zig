@@ -59,7 +59,7 @@ pub fn main() !void {
 
     // it.debug(true);
 
-    const args = try cmd.parseFrom(&it, allocator);
+    var args = try cmd.parseFrom(&it, allocator);
     defer cmd.destroy(&args, allocator);
 
     std.log.debug("parse done for {s}", .{@tagName(args.use)});

@@ -61,23 +61,19 @@ pub fn any(T: type, s: String, a_maybe: ?Allocator) ?T {
 
 /// destroy any base T value
 ///
-/// for struct, if find `pub fn destroy(self: T, a: Allocator) void`, use it
-pub fn destroy(v: anytype, a: Allocator) void {
-    const T = @TypeOf(v);
+/// for struct, if find `pub fn destroy(self: *T, a_maybe: ?Allocator) void`, use it
+pub fn destroy(v: anytype, a_maybe: ?Allocator) void {
+    const T = @typeInfo(@TypeOf(v)).pointer.child;
     switch (T) {
         String => {
-            a.free(v);
+            if (a_maybe) |a| a.free(v.*);
             return;
         },
-        std.fs.File, std.fs.Dir => {
-            var obj = v;
-            obj.close();
-            return;
-        },
+        std.fs.File, std.fs.Dir => v.close(),
         else => {},
     }
     switch (@typeInfo(T)) {
-        .@"struct", .@"enum" => if (std.meta.hasMethod(T, "destroy")) v.destroy(a),
+        .@"struct", .@"enum" => if (std.meta.hasMethod(T, "destroy")) v.destroy(a_maybe),
         else => {},
     }
 }

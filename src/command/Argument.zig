@@ -306,7 +306,8 @@ pub fn parseValue(self: Self, s: String, a_maybe: ?Allocator) ?Base(self.T) {
     if (!self.checkInput(s)) return null;
     if (if (comptime self.getParseFn()) |f| f(s, a_maybe) else par.any(Base(self.T), s, a_maybe)) |value| {
         if (!self.checkValue(value)) {
-            if (a_maybe) |a| par.destroy(value, a);
+            var x = value;
+            par.destroy(&x, a_maybe);
             return null;
         }
         return value;
@@ -349,7 +350,7 @@ fn consumeOpt(self: Self, r: anytype, it: *token.Iter) bool {
     }
     return false;
 }
-fn consumeOptArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!bool {
+fn consumeOptArg(self: Self, r: anytype, it: *token.Iter, a_maybe: ?Allocator) Error!bool {
     const prefix = it.viewMust() catch unreachable;
     if (self._match(prefix)) {
         _ = it.next() catch unreachable;
@@ -365,7 +366,7 @@ fn consumeOptArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!b
                     return Error.Missing;
                 }
                 s = t.arg;
-                item.* = self.parseValue(s, a) orelse return Error.Invalid;
+                item.* = self.parseValue(s, a_maybe) orelse return Error.Invalid;
             }
         } else {
             const t = it.nextMust() catch |err| {
@@ -379,16 +380,16 @@ fn consumeOptArg(self: Self, r: anytype, it: *token.Iter, a: ?Allocator) Error!b
                     return Error.Missing;
                 },
             };
-            const value = self.parseValue(s, a) orelse return Error.Invalid;
+            const value = self.parseValue(s, a_maybe) orelse return Error.Invalid;
             @field(r, self.name) = if (comptime isSlice(self.T)) blk: {
-                if (a == null) {
+                if (a_maybe == null) {
                     self.log("requires allocator", .{});
                     return Error.Allocator;
                 }
-                var list = std.ArrayList(Base(self.T)).initCapacity(a.?, @field(r, self.name).len + 1) catch return Error.Allocator;
+                var list = std.ArrayList(Base(self.T)).initCapacity(a_maybe.?, @field(r, self.name).len + 1) catch return Error.Allocator;
                 list.appendSliceAssumeCapacity(@field(r, self.name));
                 list.appendAssumeCapacity(value);
-                a.?.free(@field(r, self.name));
+                a_maybe.?.free(@field(r, self.name));
                 break :blk list.toOwnedSlice() catch return Error.Allocator;
             } else value;
         }
@@ -430,23 +431,26 @@ pub fn _consume(self: Self, r: anytype, it: *token.Iter, a_maybe: ?Allocator) Er
     }
     return consumed;
 }
-pub fn _destroy(self: Self, r: anytype, a: Allocator) void {
-    if (comptime isMultiple(self.T)) {
-        for (@field(r, self.name)) |v| {
-            par.destroy(v, a);
+pub fn _destroy(self: Self, r: anytype, a_maybe: ?Allocator) void {
+    if (comptime isArray(self.T)) {
+        for (&@field(r, self.name)) |*v| {
+            par.destroy(v, a_maybe);
         }
-        if (comptime isSlice(self.T)) {
-            a.free(@field(r, self.name));
+    }
+    if (comptime isSlice(self.T)) {
+        for (@field(r, self.name)) |*v| {
+            par.destroy(v, a_maybe);
         }
+        a_maybe.?.free(@field(r, self.name));
     } else if (comptime isOptional(self.T)) {
-        if (@field(r, self.name)) |v| {
-            par.destroy(v, a);
+        if (@field(r, self.name)) |*v| {
+            par.destroy(v, a_maybe);
         }
     } else {
         if (std.meta.eql(self._toField().defaultValue(), @field(r, self.name))) {
             return;
         }
-        par.destroy(@field(r, self.name), a);
+        par.destroy(&@field(r, self.name), a_maybe);
     }
 }
 fn formatter(self: Self, config: Config) AFormatter {
@@ -553,7 +557,7 @@ test "Consume optArg" {
         try testing.expectError(Error.Invalid, meta_twins.consumeOptArg(&r, &it, null));
     }
     {
-        var res = std.mem.zeroes(R);
+        var res = initStruct(R);
         var it = try token.Iter.initList(
             &.{ "--out", "n", "-v=1", "-f", "bin0", "-t", "1", "2", "-f=bin1", "-p", "[1;2]" },
             .{},
@@ -586,7 +590,7 @@ test "Consume optArg with both ranges and choices" {
         try testing.expect(try meta_int.consumeOptArg(&r, &it, testing.allocator));
         try testing.expect(try meta_int.consumeOptArg(&r, &it, testing.allocator));
         try testing.expectEqualDeep(&[_]i32{ -1, 3, 5, 23 }, r.int);
-        meta_int._destroy(r, testing.allocator);
+        meta_int._destroy(&r, testing.allocator);
     }
     {
         const meta_int = arg.choices(&.{ 3, 5, 7 }).ranges(Ranges(i32).new().u(null, 3).u(20, 32))._checkOut();
@@ -647,8 +651,8 @@ test "Consume posArg with ranges or rawChoices" {
             const buf = allocator.alloc(u8, len) catch return null;
             return .{ .buf = buf, .len = len };
         }
-        pub fn destroy(self: @This(), a: Allocator) void {
-            a.free(self.buf);
+        pub fn destroy(self: *@This(), a_maybe: ?Allocator) void {
+            a_maybe.?.free(self.buf);
         }
         pub fn compare(self: @This(), v: @This()) helper.Compare.Order {
             return helper.Compare.compare(self.len, v.len);
@@ -664,7 +668,7 @@ test "Consume posArg with ranges or rawChoices" {
             try testing.expect(try meta_mem.consumePosArg(&r, &it, testing.allocator));
             try testing.expectEqual(3, r.mem.len);
             try testing.expectEqual(3, r.mem.buf.len);
-            meta_mem._destroy(r, testing.allocator);
+            meta_mem._destroy(&r, testing.allocator);
         }
         {
             var it = try token.Iter.initList(&.{"8"}, .{});
@@ -692,7 +696,7 @@ test "Consume posArg with choices" {
         var it = try token.Iter.initList(&.{"remove"}, .{});
         try testing.expect(try meta_out.consumePosArg(&r, &it, testing.allocator));
         try testing.expectEqualStrings("remove", r.out);
-        meta_out._destroy(r, testing.allocator);
+        meta_out._destroy(&r, testing.allocator);
     }
     {
         var it = try token.Iter.initList(&.{"update"}, .{});

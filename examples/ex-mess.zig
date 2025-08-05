@@ -100,7 +100,7 @@ pub fn main() !void {
     defer it.deinit();
     // it.debug(true);
 
-    const args = cmd.parseFrom(&it, allocator) catch |e|
+    var args = cmd.parseFrom(&it, allocator) catch |e|
         zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     // it.debug(false);
