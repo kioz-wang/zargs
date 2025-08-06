@@ -18,7 +18,8 @@ const zargs = @import("zargs");
 const Command = zargs.Command;
 const Arg = zargs.Arg;
 const Ranges = zargs.Ranges;
-const String = @import("ztype").String;
+const ztype = @import("ztype");
+const String = ztype.String;
 
 pub fn main() !void {
     // Like Py3 argparse, https://docs.python.org/3.13/library/argparse.html
@@ -35,7 +36,7 @@ pub fn main() !void {
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
         .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
-        .arg(Arg.optArg("logfile", ?String).long("log").help("Store log into a file"))
+        .arg(Arg.optArg("logfile", ?ztype.OpenLazy(.fileCreate, .{ .read = true })).long("log").help("Store log into a file"))
         .sub(Command.new("install")
             .about("Install something")
             .arg(Arg.optArg("count", u32).default(10)
@@ -53,7 +54,7 @@ pub fn main() !void {
     var args = cmd.config(.{ .style = .classic }).parse(allocator) catch |e|
         zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
-    if (args.logfile) |logfile| std.debug.print("Store log into {s}\n", .{logfile});
+    if (args.logfile) |logfile| std.debug.print("Store log into {}\n", .{logfile});
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});
@@ -167,7 +168,7 @@ pub fn getString(self: Self) *const [stringify(self, "fname").count():0]u8 {
 提供 `String`, `LiteralString` 和 `checker`。
 
 为来自`std`的一些结构体提供封装：
-- `Open(...)`：`std.fs.File/Dir`
+- `Open/OpenLazy(...)`：`std.fs.File/Dir`
     - 用法详见[ex-06](examples/ex-06.copy.zig)
 - `...`
 
