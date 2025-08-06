@@ -21,7 +21,7 @@ pub fn main() !void {
         .author("KiozWang")
         .homepage("https://github.com/kioz-wang/zargs")
         .arg(Arg.opt("verbose", u32).short('v').help("help of verbose"))
-        .arg(Arg.optArg("logfile", ?ztype.Open(.fileCreate, .{ .read = true })).long("log").help("Store log into a file"))
+        .arg(Arg.optArg("logfile", ?ztype.OpenLazy(.fileCreate, .{ .read = true })).long("log").help("Store log into a file"))
         .sub(Command.new("install")
             .about("Install something")
             .arg(Arg.optArg("count", u32).default(10)

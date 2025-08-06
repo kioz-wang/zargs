@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const mod_ztype = b.addModule("ztype", .{
-        .root_source_file = b.path("src/type.zig"),
+        .root_source_file = b.path("src/type/root.zig"),
         .target = target,
         .optimize = optimize,
     });
