@@ -8,8 +8,9 @@
 //! const ... = ztype.zzz;
 //! ```
 
-pub const String = []const u8;
-pub const LiteralString = [:0]const u8;
+const base = @import("base.zig");
+pub const String = base.String;
+pub const LiteralString = base.LiteralString;
 
 pub const checker = @import("checker.zig");
 

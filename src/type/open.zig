@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const String = []const u8;
-const LiteralString = [:0]const u8;
+const String = @import("base.zig").String;
+const LiteralString = @import("base.zig").LiteralString;
 
 const OpenType = enum { file, fileCreate, dir, dirCreate };
 fn OpenFlags(openType: OpenType) type {

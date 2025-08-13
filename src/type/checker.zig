@@ -1,8 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
 
-const String = []const u8;
-const LiteralString = [:0]const u8;
+const String = @import("base.zig").String;
+const LiteralString = @import("base.zig").LiteralString;
 
 pub fn isBase(T: type) bool {
     if (T == String) return true;
