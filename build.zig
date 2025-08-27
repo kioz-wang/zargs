@@ -79,9 +79,11 @@ pub fn build(b: *std.Build) void {
             exe_name = exe_name[0..(exe_name.len - ex_suffix.len)];
             const ex_exe = b.addExecutable(.{
                 .name = exe_name,
-                .root_source_file = b.path(ex_dirname).path(b, e.name),
-                .target = target,
-                .optimize = optimize,
+                .root_module = b.createModule(.{
+                    .root_source_file = b.path(ex_dirname).path(b, e.name),
+                    .target = target,
+                    .optimize = optimize,
+                }),
             });
             ex_exe.root_module.addImport("zargs", mod_zargs);
             ex_exe.root_module.addImport("par", mod_par);

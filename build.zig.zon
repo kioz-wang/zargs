@@ -4,11 +4,11 @@
     .version = "0.14.8",
     .dependencies = .{
         .zterm = .{
-            .url = "git+https://github.com/kioz-wang/zterm#5a47f9a17285125fe35cb878759e01647899d814",
-            .hash = "zterm-0.14.4-buNfZ2o2BABFTy1TcC-Ecc2dytTdrX-fa1m98pioOQn-",
+            .url = "git+https://github.com/npc1054657282/zterm#53d24a00ac00c17dd953c8540416dab42e095b95",
+            .hash = "zterm-0.14.4-buNfZ_NCBADrIaWav2TsxdQE97hJQQG7QnW6mi67ItlE",
         },
     },
-    .minimum_zig_version = "0.14.0",
+    .minimum_zig_version = "0.15.1",
 
     .paths = .{
         "build.zig",

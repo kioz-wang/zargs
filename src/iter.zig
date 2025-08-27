@@ -47,7 +47,7 @@ pub fn Wrapper(I: type, R: type, specifier: ?[]const u8) type {
                 s = "";
             }
             const item = self.cache.?;
-            self.log("\x1b[92mview\x1b[90m{s}\x1b[0m {" ++ (specifier orelse "") ++ "}\n", .{ s, item });
+            self.log("\x1b[92mview\x1b[90m{s}\x1b[0m {" ++ (specifier orelse "f") ++ "}\n", .{ s, item });
             return item;
         }
         pub fn init(it: I) Self {
@@ -61,12 +61,12 @@ pub fn Wrapper(I: type, R: type, specifier: ?[]const u8) type {
         }
         /// Complete the remaining iteration.
         pub fn nextAll(self: *Self, allocator: std.mem.Allocator) ![]const BaseR {
-            var items = std.ArrayList(BaseR).init(allocator);
-            defer items.deinit();
+            var items: std.ArrayList(BaseR) = .empty;
+            defer items.deinit(allocator);
             while (if (is_ErrorUnion) (try self.next()) else self.next()) |item| {
-                try items.append(item);
+                try items.append(allocator, item);
             }
-            return try items.toOwnedSlice();
+            return try items.toOwnedSlice(allocator);
         }
     };
 }

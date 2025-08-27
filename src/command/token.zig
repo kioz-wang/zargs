@@ -43,15 +43,15 @@ pub const Type = union(enum) {
         short: u8,
         /// Long option that follows the prefix_long
         long: String,
-        pub fn format(self: @This(), comptime _: []const u8, options: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        pub fn format(self: @This(), writer: *std.io.Writer) std.io.Writer.Error!void {
             try writer.writeAll(@tagName(self));
             try writer.writeAll("<");
             switch (self) {
                 .short => |s| {
-                    try std.fmt.format(writer, "{c}", .{s});
+                    try writer.print("{c}", .{s});
                 },
                 .long => |l| {
-                    try std.fmt.formatBuf(l, options, writer);
+                    try writer.alignBufferOptions(l, .{});
                 },
             }
             try writer.writeAll(">");
@@ -75,15 +75,15 @@ pub const Type = union(enum) {
         };
         return .{ .posArg = arg };
     }
-    pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
         try writer.writeAll(@tagName(self));
         try writer.writeAll("<");
         switch (self) {
             .opt => |o| {
-                try o.format(fmt, options, writer);
+                try o.format(writer);
             },
             .optArg, .posArg, .arg => |a| {
-                try std.fmt.formatBuf(a, options, writer);
+                try writer.alignBufferOptions(a, .{});
             },
         }
         try writer.writeAll(">");
@@ -228,7 +228,7 @@ const FSM = struct {
                 }
             }
             test "Wrap, FSM, Short" {
-                var it = iter.Wrapper(Short, Error!?Type, "!?").init(Short.init("ac=hello", "="));
+                var it = iter.Wrapper(Short, Error!?Type, "!?f").init(Short.init("ac=hello", "="));
                 it.debug = true;
                 defer it.deinit();
                 try testing.expectEqual('a', (try it.view()).?.opt.short);
@@ -546,7 +546,7 @@ const FSM = struct {
 pub const Iter = struct {
     const Self = @This();
     pub const Error = FSM.Error;
-    const It = iter.Wrapper(FSM.Token, Error!?Type, "!?");
+    const It = iter.Wrapper(FSM.Token, Error!?Type, "!?f");
 
     it: It,
 

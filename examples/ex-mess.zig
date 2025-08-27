@@ -104,14 +104,14 @@ pub fn main() !void {
         zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
     // it.debug(false);
-    std.debug.print("{}\n\n", .{args});
+    std.debug.print("{any}\n\n", .{args});
 
     switch (args.sub) {
         .sub0 => |a| {
-            std.debug.print("Capture subCmd sub0\n{}\n", .{a});
+            std.debug.print("Capture subCmd sub0\n{any}\n", .{a});
         },
         .sub1 => |a| {
-            std.debug.print("Capture subCmd sub1\n{}\n", .{a});
+            std.debug.print("Capture subCmd sub1\n{any}\n", .{a});
         },
     }
 
@@ -119,6 +119,6 @@ pub fn main() !void {
         std.debug.print("\nRemain command line input:\n\t", .{});
         const remain = try it.nextAllBase(allocator);
         defer allocator.free(remain);
-        std.debug.print("{s}\n", .{remain});
+        std.debug.print("{any}\n", .{remain});
     }
 }
