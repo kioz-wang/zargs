@@ -645,7 +645,7 @@ test "Consume posArg" {
 }
 test "Consume posArg with ranges or rawChoices" {
     const Mem = struct {
-        buf: []u8 = undefined,
+        buf: []u8 = &@as([0]u8, .{}),
         len: usize,
         pub fn parse(s: String, a: ?Allocator) ?@This() {
             const allocator = a orelse return null;
