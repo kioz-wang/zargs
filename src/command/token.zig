@@ -44,6 +44,7 @@ pub const Type = union(enum) {
         /// Long option that follows the prefix_long
         long: String,
         pub fn format(self: @This(), writer: *std.io.Writer) std.io.Writer.Error!void {
+            const options: std.fmt.Options = .{};
             try writer.writeAll(@tagName(self));
             try writer.writeAll("<");
             switch (self) {
@@ -51,7 +52,7 @@ pub const Type = union(enum) {
                     try writer.print("{c}", .{s});
                 },
                 .long => |l| {
-                    try writer.alignBufferOptions(l, .{});
+                    try writer.alignBufferOptions(l, options);
                 },
             }
             try writer.writeAll(">");
@@ -76,6 +77,7 @@ pub const Type = union(enum) {
         return .{ .posArg = arg };
     }
     pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        const options: std.fmt.Options = .{};
         try writer.writeAll(@tagName(self));
         try writer.writeAll("<");
         switch (self) {
@@ -83,7 +85,7 @@ pub const Type = union(enum) {
                 try o.format(writer);
             },
             .optArg, .posArg, .arg => |a| {
-                try writer.alignBufferOptions(a, .{});
+                try writer.alignBufferOptions(a, options);
             },
         }
         try writer.writeAll(">");

@@ -24,10 +24,11 @@ pub const Prefix = struct {
     /// During matching, the `prefix_long` takes precedence over `prefix_short`.
     long: String = "--",
     pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        const options: std.fmt.Options = .{};
         try writer.writeAll("{ .short = ");
-        try writer.alignBufferOptions(self.short, .{});
+        try writer.alignBufferOptions(self.short, options);
         try writer.writeAll(", .long = ");
-        try writer.alignBufferOptions(self.long, .{});
+        try writer.alignBufferOptions(self.long, options);
         try writer.writeAll(" }");
     }
     pub fn validate(self: *const Self) Error!void {
@@ -66,12 +67,13 @@ pub const Token = struct {
     connector: String = "=",
 
     pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        const options: std.fmt.Options = .{};
         try writer.writeAll("{ .prefix = ");
         try self.prefix.format(writer);
         try writer.writeAll(", .terminator = ");
-        try writer.alignBufferOptions(self.terminator, .{});
+        try writer.alignBufferOptions(self.terminator, options);
         try writer.writeAll(", .connector = ");
-        try writer.alignBufferOptions(self.connector, .{});
+        try writer.alignBufferOptions(self.connector, options);
         try writer.writeAll(" }");
     }
     pub fn validate(self: *const Self) Error!void {

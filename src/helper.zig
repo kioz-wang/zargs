@@ -76,7 +76,7 @@ pub const Collection = struct {
             pub fn is_universal(self: Self) bool {
                 return self.left == null and self.right == null;
             }
-            pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+            fn formatInner(self: Self, writer: *std.io.Writer, comptime fmode: u8, number: ?std.fmt.Number) std.io.Writer.Error!void {
                 const s_empty = "∅";
                 const s_universal = "U";
                 const s_infinity = "∞";
@@ -90,43 +90,23 @@ pub const Collection = struct {
                 }
                 if (self.left) |left| {
                     try writer.writeAll("[");
-                    try any(left, .{}).format(writer);
+                    try any(left, .{}).formatInner(writer, fmode, number);
                 } else {
                     try writer.writeAll(comptimePrint("(-{s}", .{s_infinity}));
                 }
                 try writer.writeAll(",");
                 if (self.right) |right| {
-                    try any(right, .{}).format(writer);
+                    try any(right, .{}).formatInner(writer, fmode, number);
                 } else {
                     try writer.writeAll(s_infinity);
                 }
                 try writer.writeAll(")");
             }
+            pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+                return try self.formatInner(writer, 'f', null);
+            }
             pub fn formatNumber(self: Self, writer: *std.io.Writer, number: std.fmt.Number) std.io.Writer.Error!void {
-                const s_empty = "∅";
-                const s_universal = "U";
-                const s_infinity = "∞";
-                if (self.is_empty()) {
-                    try writer.writeAll(s_empty);
-                    return;
-                }
-                if (self.is_universal()) {
-                    try writer.writeAll(s_universal);
-                    return;
-                }
-                if (self.left) |left| {
-                    try writer.writeAll("[");
-                    try any(left, .{}).formatNumber(writer, number);
-                } else {
-                    try writer.writeAll(comptimePrint("(-{s}", .{s_infinity}));
-                }
-                try writer.writeAll(",");
-                if (self.right) |right| {
-                    try any(right, .{}).formatNumber(writer, number);
-                } else {
-                    try writer.writeAll(s_infinity);
-                }
-                try writer.writeAll(")");
+                return try self.formatInner(writer, 'n', number);
             }
             pub fn contain(self: Self, v: T) bool {
                 if (self.left) |left| {
