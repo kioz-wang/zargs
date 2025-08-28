@@ -54,7 +54,7 @@ pub fn main() !void {
     var args = cmd.config(.{ .style = .classic }).parse(allocator) catch |e|
         zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
-    if (args.logfile) |logfile| std.debug.print("Store log into {}\n", .{logfile});
+    if (args.logfile) |logfile| std.debug.print("Store log into {f}\n", .{logfile});
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});
@@ -107,9 +107,11 @@ zig fetch --save https://github.com/kioz-wang/zargs/archive/refs/tags/v0.14.3.ta
 ```zig
 const exe = b.addExecutable(.{
     .name = "your_app",
-    .root_source_file = b.path("src/main.zig"),
-    .target = b.standardTargetOptions(.{}),
-    .optimize = b.standardOptimizeOption(.{}),
+    .root_module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = b.standardTargetOptions(.{}),
+        .optimize = b.standardOptimizeOption(.{}),
+    }),
 });
 exe.root_module.addImport("zargs", b.dependency("zargs", .{}).module("zargs"));
 b.installArtifact(exe);
