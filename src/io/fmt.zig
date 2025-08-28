@@ -40,18 +40,24 @@ pub fn Any(V: type) type {
         pub fn init(value: V, options: Options) Self {
             return .{ .value = value, .options = options };
         }
-        pub fn formatInner(self: Self, writer: *std.io.Writer, comptime fmode: u8) std.io.Writer.Error!void {
+        pub fn formatInner(self: Self, writer: *std.io.Writer, comptime fmode: u8, number: ?std.fmt.Number) std.io.Writer.Error!void {
+            const options: std.fmt.Options = if (number) |num| .{
+                .alignment = num.alignment,
+                .fill = num.fill,
+                .precision = num.precision,
+                .width = num.width,
+            } else .{};
             if (comptime checker.isOptional(V)) {
                 if (self.value) |v| {
-                    try any(v, self.options).formatInner(writer, fmode);
+                    try any(v, self.options).formatInner(writer, fmode, number);
                 } else {
-                    if (self.options.optional.show_null) try writer.alignBufferOptions("null", .{});
+                    if (self.options.optional.show_null) try writer.alignBufferOptions("null", options);
                 }
                 return;
             }
             if (V == LiteralString or V == String) {
                 if (fmode == 's' or fmode == 'f') {
-                    try writer.alignBufferOptions(self.value, .{});
+                    try writer.alignBufferOptions(self.value, options);
                     return;
                 }
             }
@@ -61,60 +67,29 @@ pub fn Any(V: type) type {
                 for (self.value, 0..) |v, i| {
                     if (i != 0 and i % self.options.multiple.groupSize == 0)
                         try writer.alignBufferOptions(self.options.multiple.separator, .{});
-                    try any(v, self.options).formatInner(writer, fmode);
+                    try any(v, self.options).formatInner(writer, fmode, number);
                 }
                 try writer.alignBufferOptions(self.options.multiple.end, .{});
                 return;
             }
             if (V == u8 and fmode == 'c') {
-                return writer.printAsciiChar(self.value, .{});
+                return writer.printAsciiChar(self.value, options);
             }
             if (comptime checker.isBase(V) and fmode == 'f') {
                 switch (@typeInfo(V)) {
-                    .@"enum" => try writer.alignBufferOptions(@tagName(self.value), .{}),
+                    .@"enum" => try writer.alignBufferOptions(@tagName(self.value), options),
                     else => {
                         if (std.meta.hasMethod(V, "format")) {
                             try self.value.format(writer);
                         } else {
-                            try writer.printValue("", .{}, self.value, std.options.fmt_max_depth);
+                            try writer.printValue("", options, self.value, std.options.fmt_max_depth);
                         }
                     },
                 }
                 return;
             }
-            @compileError(comptimePrint("Unable to format {s}", .{@typeName(V)}));
-        }
-        pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
-            return self.formatInner(writer, 'f');
-        }
-        pub fn formatNumber(self: Self, writer: *std.io.Writer, number: std.fmt.Number) std.io.Writer.Error!void {
-            const options: std.fmt.Options = .{
-                .alignment = number.alignment,
-                .fill = number.fill,
-                .precision = number.precision,
-                .width = number.width,
-            };
-            @setEvalBranchQuota(5000);
-            if (comptime checker.isOptional(V)) {
-                if (self.value) |v| {
-                    try any(v, self.options).formatNumber(writer, number);
-                } else {
-                    if (self.options.optional.show_null) try writer.alignBufferOptions("null", .{});
-                }
-                return;
-            }
-            if (comptime checker.isMultiple(V) or V == LiteralString or V == String) {
-                self.options.assert();
-                try writer.alignBufferOptions(self.options.multiple.begin, options);
-                for (self.value, 0..) |v, i| {
-                    if (i != 0 and i % self.options.multiple.groupSize == 0)
-                        try writer.alignBufferOptions(self.options.multiple.separator, options);
-                    try any(v, self.options).formatNumber(writer, number);
-                }
-                try writer.alignBufferOptions(self.options.multiple.end, options);
-                return;
-            } else {
-                switch (number.mode) {
+            if (fmode == 'n') {
+                switch (number.?.mode) {
                     .decimal => switch (@typeInfo(@TypeOf(self.value))) {
                         .float, .comptime_float, .int, .comptime_int, .@"struct", .@"enum", .vector => {
                             try writer.printValue("d", options, self.value, std.options.fmt_max_depth);
@@ -135,7 +110,7 @@ pub fn Any(V: type) type {
                     },
                     .hex => switch (@typeInfo(@TypeOf(self.value))) {
                         .float, .comptime_float, .int, .comptime_int, .@"enum", .@"struct", .pointer, .vector => {
-                            switch (number.case) {
+                            switch (number.?.case) {
                                 .lower => try writer.printValue("x", options, self.value, std.options.fmt_max_depth),
                                 .upper => try writer.printValue("X", options, self.value, std.options.fmt_max_depth),
                             }
@@ -144,7 +119,7 @@ pub fn Any(V: type) type {
                     },
                     .scientific => switch (@typeInfo(@TypeOf(self.value))) {
                         .float, .comptime_float, .@"struct" => {
-                            switch (number.case) {
+                            switch (number.?.case) {
                                 .lower => try writer.printValue("e", options, self.value, std.options.fmt_max_depth),
                                 .upper => try writer.printValue("E", options, self.value, std.options.fmt_max_depth),
                             }
@@ -152,13 +127,22 @@ pub fn Any(V: type) type {
                         else => unreachable,
                     },
                 }
+                return;
             }
+            @compileError(comptimePrint("Unable to format {s}", .{@typeName(V)}));
+        }
+        pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+            return self.formatInner(writer, 'f', null);
+        }
+        pub fn formatNumber(self: Self, writer: *std.io.Writer, number: std.fmt.Number) std.io.Writer.Error!void {
+            @setEvalBranchQuota(5000);
+            return self.formatInner(writer, 'n', number);
         }
         pub fn formatString(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
-            return self.formatInner(writer, 's');
+            return self.formatInner(writer, 's', null);
         }
         pub fn formatChar(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
-            return self.formatInner(writer, 'c');
+            return self.formatInner(writer, 'c', null);
         }
     };
 }

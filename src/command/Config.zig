@@ -181,13 +181,13 @@ pub fn StyleRecord(capacity: comptime_int) type {
                 self.clean = true;
             }
         }
-        pub fn format(self: *Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        pub fn format(self: *Self, w: *std.io.Writer) std.io.Writer.Error!void {
             switch (self.queue.dequeue().?) {
-                ._apply => |a| try self.format_apply(writer, a),
-                ._reset => try self.format_reset(writer),
+                ._apply => |a| try self.format_apply(w, a),
+                ._reset => try self.format_reset(w),
                 ._restore => |a| {
-                    try self.format_reset(writer);
-                    try self.format_apply(writer, a);
+                    try self.format_reset(w);
+                    try self.format_apply(w, a);
                 },
             }
         }
