@@ -4,8 +4,8 @@
     .version = "0.14.8",
     .dependencies = .{
         .zterm = .{
-            .url = "git+https://github.com/npc1054657282/zterm#53d24a00ac00c17dd953c8540416dab42e095b95",
-            .hash = "zterm-0.14.4-buNfZ_NCBADrIaWav2TsxdQE97hJQQG7QnW6mi67ItlE",
+            .url = "https://github.com/kioz-wang/zterm/archive/refs/tags/v0.15.0-alpha.0.tar.gz",
+            .hash = "zterm-0.15.0-buNfZ_NCBABoC84oWTAg5slE62NYqgrOg7822amyYVmv",
         },
     },
     .minimum_zig_version = "0.15.1",
