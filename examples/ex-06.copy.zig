@@ -6,6 +6,7 @@ const TokenIter = zargs.TokenIter;
 const ztype = @import("ztype");
 const String = ztype.String;
 const Open = ztype.Open;
+const Read = ztype.Read;
 
 pub fn main() !void {
     const cmd = Command.new("copy").alias("cp")
@@ -14,7 +15,7 @@ pub fn main() !void {
         .homepage("https://github.com/kioz-wang/zargs")
         .arg(Arg.opt("verbose", bool).short('v').long("verbose").help("Show detail"))
         .arg(Arg.optArg("max", usize).long("max").help("Max byte to copy").default(32 << 10))
-        .arg(Arg.posArg("source", Open(.file, .{})))
+        .arg(Arg.posArg("source", Read()))
         .arg(Arg.posArg("target", Open(.fileCreate, .{})))
         .config(.{ .style = .classic });
 
@@ -28,11 +29,11 @@ pub fn main() !void {
     if (args.verbose) {
         std.debug.print("Try copy {s} to {s} with max 0x{x} bytes\n", .{ args.source.s, args.target.s, args.max });
     }
-    const content = try args.source.v.reader().any().readAllAlloc(allocator, args.max);
-    defer allocator.free(content);
-    try args.target.v.writer().any().writeAll(content);
+    // const content = try args.source.v.reader().any().readAllAlloc(allocator, args.max);
+    // defer allocator.free(content);
+    try args.target.v.writer().any().writeAll(args.source.v);
     if (args.verbose) {
-        std.debug.print("Done with 0x{x} bytes\n", .{content.len});
+        std.debug.print("Done with 0x{x} bytes\n", .{args.source.v.len});
     }
 }
 

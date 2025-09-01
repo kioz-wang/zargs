@@ -18,6 +18,10 @@ const open = @import("open.zig");
 pub const Open = open.Open;
 pub const OpenLazy = open.OpenLazy;
 
+const read = @import("read.zig");
+pub const Read = read.Read;
+pub const ReadLazy = read.ReadLazy;
+
 test {
     @import("std").testing.refAllDecls(@This());
 }
