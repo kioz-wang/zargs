@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const String = []const u8;
-const LiteralString = [:0]const u8;
+const String = @import("base.zig").String;
+const LiteralString = @import("base.zig").LiteralString;
 
 const OpenType = enum { file, fileCreate, dir, dirCreate };
 fn OpenFlags(openType: OpenType) type {
@@ -50,11 +50,11 @@ fn OpenFn(openType: OpenType, lazy: bool, flags: OpenFlags(openType)) type {
                 },
                 else => {},
             }
-            if (!lazy) _ = self.unlazy() catch return null;
+            if (!lazy) _ = self.unlazy(a_maybe) catch return null;
 
             return self;
         }
-        pub fn unlazy(self: *Self) !OpenValue(openType) {
+        pub fn unlazy(self: *Self, _: ?std.mem.Allocator) !OpenValue(openType) {
             if (!self.@".is_inited") {
                 self.v = switch (openType) {
                     .file => try std.fs.cwd().openFile(self.s, flags),
