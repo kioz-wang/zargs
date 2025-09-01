@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - ci-test/*
+      - main
 
   workflow_dispatch:
 
@@ -68,7 +69,7 @@ jobs:
           echo "COLOR=$COLOR" >> $GITHUB_ENV
 
       - name: Update badge
-        if: always()
+        if: ${{ always() && github.event_name == 'push' }}
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
           auth: ${{ secrets.GIST_TOKEN }}
