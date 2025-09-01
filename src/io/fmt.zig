@@ -226,8 +226,7 @@ test "Base" {
     }
     {
         const Person = struct { age: u32, name: String };
-        // The standard printing behavior of structures in `std` has changed.
-        // To restore the original behavior, a possible solution is to copy the implementation of `formatType` from the old standard library.
+        // NOTE: The standard printing behavior of structures in `std` has changed in 0.15.1.
         // const expect = "Person{ .age = 18, .name = { 74, 97, 99, 107 } }";
         const expect = ".{ .age = 18, .name = { 74, 97, 99, 107 } }";
         try testing.expect(std.mem.endsWith(
