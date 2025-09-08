@@ -36,15 +36,15 @@ fn OpenFn(openType: OpenType, lazy: bool, flags: OpenFlags(openType)) type {
             switch (openType) {
                 .file => if ((comptime flags.mode != .read_write) and std.mem.eql(u8, s, "-")) {
                     self.v = switch (flags.mode) {
-                        .read_only => std.io.getStdIn(),
-                        .write_only => std.io.getStdOut(),
+                        .read_only => std.fs.File.stdin(),
+                        .write_only => std.fs.File.stdout(),
                         else => unreachable,
                     };
                     self.@".is_stdio" = true;
                     self.@".is_inited" = true;
                 },
                 .fileCreate => if ((comptime !flags.read) and std.mem.eql(u8, s, "-")) {
-                    self.v = std.io.getStdOut();
+                    self.v = std.fs.File.stdout();
                     self.@".is_stdio" = true;
                     self.@".is_inited" = true;
                 },
@@ -70,7 +70,7 @@ fn OpenFn(openType: OpenType, lazy: bool, flags: OpenFlags(openType)) type {
             if (!self.@".is_stdio" and self.@".is_inited") self.v.close();
             if (a_maybe) |a| a.free(self.s);
         }
-        pub fn format(self: Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+        pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
             try writer.print("{s}({s})", .{ @tagName(openType), self.s });
         }
     };

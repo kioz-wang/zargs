@@ -24,7 +24,7 @@ fn ReadFn(lazy: bool) type {
         }
         pub fn unlazy(self: *Self, a_maybe: ?std.mem.Allocator) !String {
             if (!self.@".is_inited") {
-                var fp = if (std.mem.eql(u8, self.s, "-")) std.io.getStdIn() else try std.fs.cwd().openFile(self.s, .{});
+                var fp = if (std.mem.eql(u8, self.s, "-")) std.fs.File.stdin() else try std.fs.cwd().openFile(self.s, .{});
                 defer fp.close();
                 self.v = try fp.readToEndAlloc(a_maybe.?, 4 << 10);
                 self.@".is_inited" = true;

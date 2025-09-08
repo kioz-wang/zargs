@@ -23,11 +23,12 @@ pub const Prefix = struct {
     short: String = "-",
     /// During matching, the `prefix_long` takes precedence over `prefix_short`.
     long: String = "--",
-    pub fn format(self: @This(), comptime _: []const u8, options: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        const options: std.fmt.Options = .{};
         try writer.writeAll("{ .short = ");
-        try std.fmt.formatBuf(self.short, options, writer);
+        try writer.alignBufferOptions(self.short, options);
         try writer.writeAll(", .long = ");
-        try std.fmt.formatBuf(self.long, options, writer);
+        try writer.alignBufferOptions(self.long, options);
         try writer.writeAll(" }");
     }
     pub fn validate(self: *const Self) Error!void {
@@ -65,13 +66,14 @@ pub const Token = struct {
     /// Used as a connector between `singleArgOpt` and its argument.
     connector: String = "=",
 
-    pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+    pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+        const options: std.fmt.Options = .{};
         try writer.writeAll("{ .prefix = ");
-        try self.prefix.format(fmt, options, writer);
+        try self.prefix.format(writer);
         try writer.writeAll(", .terminator = ");
-        try std.fmt.formatBuf(self.terminator, options, writer);
+        try writer.alignBufferOptions(self.terminator, options);
         try writer.writeAll(", .connector = ");
-        try std.fmt.formatBuf(self.connector, options, writer);
+        try writer.alignBufferOptions(self.connector, options);
         try writer.writeAll(" }");
     }
     pub fn validate(self: *const Self) Error!void {
@@ -104,7 +106,7 @@ pub const Token = struct {
     test "Format Config" {
         try testing.expectEqualStrings(
             "{ .prefix = { .short = -, .long = -- }, .terminator = --, .connector = = }",
-            comptimePrint("{}", .{Self{}}),
+            comptimePrint("{f}", .{Self{}}),
         );
     }
 };
@@ -166,7 +168,7 @@ pub fn StyleRecord(capacity: comptime_int) type {
         clean: bool = true,
         queue: Queue = .{},
         inited: bool = false,
-        fn format_apply(self: *Self, w: anytype, a: Attr) @TypeOf(w).Error!void {
+        fn format_apply(self: *Self, w: *std.io.Writer, a: Attr) std.io.Writer.Error!void {
             if (!std.meta.eql(a, Attr.none)) {
                 if (self.clean) {
                     try Attr.reset.stringify(w);
@@ -175,13 +177,13 @@ pub fn StyleRecord(capacity: comptime_int) type {
                 try a.stringify(w);
             }
         }
-        fn format_reset(self: *Self, w: anytype) @TypeOf(w).Error!void {
+        fn format_reset(self: *Self, w: *std.io.Writer) std.io.Writer.Error!void {
             if (!self.clean) {
                 try Attr.reset.stringify(w);
                 self.clean = true;
             }
         }
-        pub fn format(self: *Self, comptime _: []const u8, _: anytype, w: anytype) @TypeOf(w).Error!void {
+        pub fn format(self: *Self, w: *std.io.Writer) std.io.Writer.Error!void {
             switch (self.queue.dequeue().?) {
                 ._apply => |a| try self.format_apply(w, a),
                 ._reset => try self.format_reset(w),
@@ -220,7 +222,7 @@ test StyleRecord {
     var buffer: [64]u8 = undefined;
     try testing.expectEqualStrings(
         "\x1b[0m\x1b[32ma \x1b[4;31mb \x1b[0m\x1b[0m\x1b[3;32ma \x1b[0m hello",
-        try std.fmt.bufPrint(&buffer, "{}a {}b {}a {s} hello", .{
+        try std.fmt.bufPrint(&buffer, "{f}a {f}b {f}a {f} hello", .{
             rec.apply(Attr.none.green()),
             rec.apply(Attr.none.underscore().red()),
             rec.restore(Attr.none.green().italic()),

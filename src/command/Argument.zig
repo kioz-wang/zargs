@@ -53,12 +53,12 @@ const Meta = struct {
 const Class = enum { opt, optArg, posArg };
 
 // TODO remove this ?
-pub fn format(self: Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
     try writer.writeAll(comptimePrint("{s}({s},{s})", .{ @tagName(self.class), self.name, @typeName(self.T) }));
 }
 fn log(self: Self, comptime fmt: []const u8, args: anytype) void {
     // TODO maybe compileErrorf()?
-    std.debug.print("{} ", .{self});
+    std.debug.print("{f} ", .{self});
     std.debug.print(fmt, args);
     std.debug.print("\n", .{});
 }
@@ -67,7 +67,7 @@ pub fn opt(name: LiteralString, T: type) Self {
     const arg: Self = .{ .name = name, .T = T, .class = .opt };
     // Check T
     if (T != bool and @typeInfo(T) != .int) {
-        @compileError(comptimePrint("{} expect .bool or .int type, found '{s}'", .{ arg, @typeName(T) }));
+        @compileError(comptimePrint("{f} expect .bool or .int type, found '{s}'", .{ arg, @typeName(T) }));
     }
     // Initialize Arg
     return arg;
@@ -84,7 +84,7 @@ pub fn posArg(name: LiteralString, T: type) Self {
     // Check T
     _ = Base(T);
     if (isSlice(T)) {
-        @compileError(comptimePrint("{} illegal type, consider to use .nextAllBase of TokenIter", .{arg}));
+        @compileError(comptimePrint("{f} illegal type, consider to use .nextAllBase of TokenIter", .{arg}));
     }
     // Initialize Arg
     return arg;
@@ -96,10 +96,10 @@ pub fn help(self: Self, s: LiteralString) Self {
 }
 pub fn default(self: Self, v: self.T) Self {
     if (isOptional(self.T)) {
-        @compileError(comptimePrint("{} not support .default, it's forced to be null", .{self}));
+        @compileError(comptimePrint("{f} not support .default, it's forced to be null", .{self}));
     }
     if (isSlice(self.T)) {
-        @compileError(comptimePrint("{} not support .default, it's forced to be empty slice", .{self}));
+        @compileError(comptimePrint("{f} not support .default, it's forced to be empty slice", .{self}));
     }
     var arg = self;
     arg.meta.default = @ptrCast(&v);
@@ -107,7 +107,7 @@ pub fn default(self: Self, v: self.T) Self {
 }
 pub fn parseFn(self: Self, f: par.Fn(self.T)) Self {
     if (self.class == .opt) {
-        @compileError(comptimePrint("{} not support .parseFn", .{self}));
+        @compileError(comptimePrint("{f} not support .parseFn", .{self}));
     }
     var arg = self;
     arg.meta.parseFn = @ptrCast(&f);
@@ -120,7 +120,7 @@ pub fn callbackFn(self: Self, f: fn (*TryOptional(self.T)) void) Self {
 }
 pub fn short(self: Self, c: u8) Self {
     if (self.class == .posArg) {
-        @compileError(comptimePrint("{} not support .short", .{self}));
+        @compileError(comptimePrint("{f} not support .short", .{self}));
     }
     var arg = self;
     arg.meta.short = arg.meta.short ++ .{c};
@@ -128,7 +128,7 @@ pub fn short(self: Self, c: u8) Self {
 }
 pub fn long(self: Self, s: String) Self {
     if (self.class == .posArg) {
-        @compileError(comptimePrint("{} not support .long", .{self}));
+        @compileError(comptimePrint("{f} not support .long", .{self}));
     }
     var arg = self;
     arg.meta.long = arg.meta.long ++ .{s};
@@ -136,7 +136,7 @@ pub fn long(self: Self, s: String) Self {
 }
 pub fn argName(self: Self, s: LiteralString) Self {
     if (self.class == .opt) {
-        @compileError(comptimePrint("{} not support .argName", .{self}));
+        @compileError(comptimePrint("{f} not support .argName", .{self}));
     }
     var arg = self;
     arg.meta.argName = s;
@@ -144,10 +144,10 @@ pub fn argName(self: Self, s: LiteralString) Self {
 }
 pub fn ranges(self: Self, rs: Ranges(Base(self.T))) Self {
     if (self.class == .opt) {
-        @compileError(comptimePrint("{} not support .ranges", .{self}));
+        @compileError(comptimePrint("{f} not support .ranges", .{self}));
     }
     if (self.meta.rawChoices) |_| {
-        @compileError(comptimePrint("{} .ranges conflicts with .rawChoices", .{self}));
+        @compileError(comptimePrint("{f} .ranges conflicts with .rawChoices", .{self}));
     }
     var arg = self;
     arg.meta.ranges = @ptrCast(&rs._checkOut());
@@ -155,10 +155,10 @@ pub fn ranges(self: Self, rs: Ranges(Base(self.T))) Self {
 }
 pub fn choices(self: Self, cs: []const Base(self.T)) Self {
     if (self.class == .opt) {
-        @compileError(comptimePrint("{} not support .choices", .{self}));
+        @compileError(comptimePrint("{f} not support .choices", .{self}));
     }
     if (self.meta.rawChoices) |_| {
-        @compileError(comptimePrint("{} .choices conflicts with .rawChoices", .{self}));
+        @compileError(comptimePrint("{f} .choices conflicts with .rawChoices", .{self}));
     }
     if (cs.len == 0) {
         @compileError(comptimePrint("requires at least one choice", .{}));
@@ -169,10 +169,10 @@ pub fn choices(self: Self, cs: []const Base(self.T)) Self {
 }
 pub fn rawChoices(self: Self, cs: []const String) Self {
     if (self.class == .opt) {
-        @compileError(comptimePrint("{} not support .rawChoices", .{self}));
+        @compileError(comptimePrint("{f} not support .rawChoices", .{self}));
     }
     if (self.meta.ranges != null or self.meta.choices != null) {
-        @compileError(comptimePrint("{} .rawChoices conflicts with .ranges or .choices", .{self}));
+        @compileError(comptimePrint("{f} .rawChoices conflicts with .ranges or .choices", .{self}));
     }
     if (cs.len == 0) {
         @compileError(comptimePrint("requires at least one raw_choice", .{}));
@@ -183,13 +183,13 @@ pub fn rawChoices(self: Self, cs: []const String) Self {
 }
 pub fn rawDefault(self: Self, s: String) Self {
     if (isOptional(self.T)) {
-        @compileError(comptimePrint("{} not support .rawDefault, it's forced to be null", .{self}));
+        @compileError(comptimePrint("{f} not support .rawDefault, it's forced to be null", .{self}));
     }
     if (isSlice(self.T)) {
-        @compileError(comptimePrint("{} not support .rawDefault, it's forced to be empty slice", .{self}));
+        @compileError(comptimePrint("{f} not support .rawDefault, it's forced to be empty slice", .{self}));
     }
     if (isArray(self.T)) {
-        @compileError(comptimePrint("{} not support .rawDefault", .{self}));
+        @compileError(comptimePrint("{f} not support .rawDefault", .{self}));
     }
     var arg = self;
     arg.meta.rawDefault = s;
@@ -219,13 +219,13 @@ pub fn _checkOut(self: Self) Self {
             }
         }
         if (self.meta.default != null and self.meta.rawDefault != null) {
-            @compileError(comptimePrint("{} .rawDefault conflicts with .default", .{self}));
+            @compileError(comptimePrint("{f} .rawDefault conflicts with .default", .{self}));
         }
     }
     if (self.class == .opt or self.class == .optArg) {
         // Check short and long
         if (self.meta.short.len == 0 and self.meta.long.len == 0) {
-            @compileError(comptimePrint("{} requires short or long", .{self}));
+            @compileError(comptimePrint("{f} requires short or long", .{self}));
         }
     }
     if (self.class == .optArg or self.class == .posArg) {
@@ -236,7 +236,7 @@ pub fn _checkOut(self: Self) Self {
     }
     if (self.meta.rawDefault) |s| {
         if (!self.checkInput(s)) {
-            @compileError(comptimePrint("{} invalid default input: {s}", .{ self, s }));
+            @compileError(comptimePrint("{f} invalid default input: {s}", .{ self, s }));
         }
     }
     return arg;
@@ -274,12 +274,12 @@ fn checkValue(self: Self, value: Base(self.T)) bool {
         if (comptime self.meta.ranges) |_| {
             const rs_found = self.getRanges().?.contain(value);
             if (!cs_found and !rs_found) {
-                self.log("parsed as {} but out of choices{} and ranges{}", .{ any(value, .{}), any(cs.*, .{}), any(self.getRanges().?.rs, .{}) });
+                self.log("parsed as {f} but out of choices{f} and ranges{f}", .{ any(value, .{}), any(cs.*, .{}), any(self.getRanges().?.rs, .{}) });
             }
             return cs_found or rs_found;
         } else {
             if (!cs_found) {
-                self.log("parsed as {} but out of choices{}", .{ any(value, .{}), any(cs.*, .{}) });
+                self.log("parsed as {f} but out of choices{f}", .{ any(value, .{}), any(cs.*, .{}) });
             }
             return cs_found;
         }
@@ -287,7 +287,7 @@ fn checkValue(self: Self, value: Base(self.T)) bool {
         if (comptime self.meta.ranges) |_| {
             const rs_found = self.getRanges().?.contain(value);
             if (!rs_found) {
-                self.log("parsed as {} but out of ranges{}", .{ any(value, .{}), any(self.getRanges().?.rs, .{}) });
+                self.log("parsed as {f} but out of ranges{f}", .{ any(value, .{}), any(self.getRanges().?.rs, .{}) });
             }
             return rs_found;
         } else {
@@ -303,7 +303,7 @@ fn getCallbackFn(self: Self) ?*const fn (*TryOptional(self.T)) void {
 }
 pub fn parseValue(self: Self, s: String, a_maybe: ?Allocator) ?Base(self.T) {
     if (!self.checkInput(s)) {
-        self.log("to parse {s} but out of rawChoices{}", .{ s, any(self.meta.rawChoices, .{}) });
+        self.log("to parse {s} but out of rawChoices{f}", .{ s, any(self.meta.rawChoices, .{}) });
         return null;
     }
     if (if (comptime self.getParseFn()) |f| f(s, a_maybe) else par.any(Base(self.T), s, a_maybe)) |value| {
@@ -360,11 +360,11 @@ fn consumeOptArg(self: Self, r: anytype, it: *token.Iter, a_maybe: ?Allocator) E
         if (comptime isArray(self.T)) {
             for (&@field(r, self.name), 0..) |*item, i| {
                 const t = it.nextMust() catch |err| {
-                    self.log("requires {s}[{d}] after {s} but {any}", .{ self.meta.argName.?, i, prefix, err });
+                    self.log("requires {s}[{d}] after {f} but {any}", .{ self.meta.argName.?, i, prefix, err });
                     return Error.Missing;
                 };
                 if (t != .arg) {
-                    self.log("requires {s}[{d}] after {s} but {}", .{ self.meta.argName.?, i, prefix, t });
+                    self.log("requires {s}[{d}] after {f} but {f}", .{ self.meta.argName.?, i, prefix, t });
                     return Error.Missing;
                 }
                 s = t.arg;
@@ -372,13 +372,13 @@ fn consumeOptArg(self: Self, r: anytype, it: *token.Iter, a_maybe: ?Allocator) E
             }
         } else {
             const t = it.nextMust() catch |err| {
-                self.log("requires {s} after {s} but {any}", .{ self.meta.argName.?, prefix, err });
+                self.log("requires {s} after {f} but {any}", .{ self.meta.argName.?, prefix, err });
                 return Error.Missing;
             };
             s = switch (t) {
                 .optArg, .arg => |arg| arg,
                 else => {
-                    self.log("requires {s} after {s} but {}", .{ self.meta.argName.?, prefix, t });
+                    self.log("requires {s} after {f} but {f}", .{ self.meta.argName.?, prefix, t });
                     return Error.Missing;
                 },
             };
@@ -392,7 +392,7 @@ fn consumeOptArg(self: Self, r: anytype, it: *token.Iter, a_maybe: ?Allocator) E
                 list.appendSliceAssumeCapacity(@field(r, self.name));
                 list.appendAssumeCapacity(value);
                 a_maybe.?.free(@field(r, self.name));
-                break :blk list.toOwnedSlice() catch return Error.Allocator;
+                break :blk list.toOwnedSlice(a_maybe.?) catch return Error.Allocator;
             } else value;
         }
         return true;
@@ -645,7 +645,7 @@ test "Consume posArg" {
 }
 test "Consume posArg with ranges or rawChoices" {
     const Mem = struct {
-        buf: []u8 = undefined,
+        buf: []u8 = &@as([0]u8, .{}),
         len: usize,
         pub fn parse(s: String, a: ?Allocator) ?@This() {
             const allocator = a orelse return null;

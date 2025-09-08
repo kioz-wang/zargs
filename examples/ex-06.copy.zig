@@ -29,9 +29,11 @@ pub fn main() !void {
     if (args.verbose) {
         std.debug.print("Try copy {s} to {s} with max 0x{x} bytes\n", .{ args.source.s, args.target.s, args.max });
     }
-    // const content = try args.source.v.reader().any().readAllAlloc(allocator, args.max);
+    // var reader = args.source.v.reader(&@as([0]u8, .{}));
+    // const content = try reader.interface.readAlloc(allocator, args.max);
     // defer allocator.free(content);
-    try args.target.v.writer().any().writeAll(args.source.v);
+    var writer = args.target.v.writer(&@as([0]u8, .{}));
+    try writer.interface.writeAll(args.source.v);
     if (args.verbose) {
         std.debug.print("Done with 0x{x} bytes\n", .{args.source.v.len});
     }

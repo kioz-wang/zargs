@@ -396,14 +396,14 @@ pub fn parseFrom(self: Self, it: *TokenIter, a_maybe: ?Allocator) Error!self.Res
                     if (hit) {
                         if (matched.pushOnce(a.name) == null) {
                             if ((a.class == .opt and a.T != bool) or (a.class == .optArg and isSlice(a.T))) break;
-                            self.log("match {} again with {}", .{ a, t.opt });
+                            self.log("match {f} again with {f}", .{ a, t.opt });
                             return Error.RepeatOpt;
                         }
                         break;
                     }
                 }
                 if (hit) continue;
-                self.log("unknown option {}", .{t.opt});
+                self.log("unknown option {f}", .{t.opt});
                 return Error.UnknownOpt;
             },
             .posArg, .arg => {
@@ -420,7 +420,7 @@ pub fn parseFrom(self: Self, it: *TokenIter, a_maybe: ?Allocator) Error!self.Res
                 if (a.meta.rawDefault) |s| {
                     @field(r, a.name) = a.parseValue(s, a_maybe) orelse return Error.InvalidOptArg;
                 } else {
-                    self.log("requires {} but not found", .{a});
+                    self.log("requires {f} but not found", .{a});
                     return Error.MissingOptArg;
                 }
             }
