@@ -4,11 +4,11 @@
 
 Another Comptime-argparse for Zig! Let's start to build your command line!
 
-![badge x86_64-linux](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.x86_64-linux.svg)
-![badge aarch64-linux](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.aarch64-linux.svg)
-![badge x86_64-windows](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.x86_64-windows.svg)
-![badge x86_64-macos](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.x86_64-macos.svg)
-![badge aarch64-macos](https://gist.githubusercontent.com/kioz-wang/ba3b3d2a170d085a3598421203a4988b/raw/027e2590a6ade0e6db60a725a01d651c33bea83a/ci-badge.zargs.aarch64-macos.svg)
+![badge x86_64-linux](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kioz-wang/4ee5d4664cddf8c4c3b5d08d2b019005/raw/result.json)
+![badge aarch64-linux](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kioz-wang/150025a7223f80c8a8c91e6e058514b3/raw/result.json)
+![badge x86_64-windows](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kioz-wang/8480c9aab4afcd027dd32a7f36ecd539/raw/result.json)
+![badge x86_64-macos](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kioz-wang/7b70bda23bc984a837589e779117cfbc/raw/result.json)
+![badge aarch64-macos](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kioz-wang/585827cfa91f653738dd0893ba65eb93/raw/result.json)
 
 ![asciicast](.asset/demo.gif)
 

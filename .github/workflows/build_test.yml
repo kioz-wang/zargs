@@ -14,7 +14,6 @@ permissions:
   contents: read
 
 env:
-  GIST_ID: ${{ vars.GIST_ID }}
   GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
   GITHUB_API_VERSION: 2022-11-28
 
@@ -34,14 +33,19 @@ jobs:
         include:
           - target: x86_64-linux
             runs-on: ubuntu-latest
+            GIST_ID: 4ee5d4664cddf8c4c3b5d08d2b019005
           - target: aarch64-linux
             runs-on: ubuntu-24.04-arm
+            GIST_ID: 150025a7223f80c8a8c91e6e058514b3
           - target: x86_64-macos
             runs-on: macos-13
+            GIST_ID: 7b70bda23bc984a837589e779117cfbc
           - target: aarch64-macos
             runs-on: macos-latest
+            GIST_ID: 585827cfa91f653738dd0893ba65eb93
           - target: x86_64-windows
             runs-on: windows-latest
+            GIST_ID: 8480c9aab4afcd027dd32a7f36ecd539
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Setup Zig
@@ -58,22 +62,21 @@ jobs:
       - name: Test
         run: zig build test -Dtarget=${{ matrix.target }}
 
-      - name: Generate filename
+      - name: Prepare badge
         if: always()
         shell: bash
         run: |
-          REPO_NAME=$(echo "${{ github.repository }}" | awk -F/ '{print $2}')
-          echo "FILENAME=ci-badge.$REPO_NAME.${{ matrix.target }}.svg" >> $GITHUB_ENV
+          MESSAGE="${{ matrix.target }} ${{ job.status }}"
+          echo MESSAGE="$MESSAGE" >> $GITHUB_ENV
           COLOR=$([ ${{ job.status }} = "success" ] && echo "brightgreen" || echo "red")
-          echo "COLOR=$COLOR" >> $GITHUB_ENV
+          echo COLOR="$COLOR" >> $GITHUB_ENV
 
       - name: Update badge
         if: always()
-        uses: schneegans/dynamic-badges-action@v1.7.0
+        uses: colinparsonsme/upload-status-badge@v0
         with:
           auth: ${{ secrets.GIST_TOKEN }}
-          gistID: ${{ vars.GIST_ID }}
-          filename: ${{ env.FILENAME }}
-          label: ${{ matrix.target }}
-          message: test
-          color: ${{ env.COLOR }}
+          gistID: ${{ matrix.GIST_ID }}
+          badge-label: ${{ env.MESSAGE }}
+          custom-message: test
+          custom-color: ${{ env.COLOR }}
