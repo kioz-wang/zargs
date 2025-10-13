@@ -76,7 +76,7 @@ jobs:
         uses: colinparsonsme/upload-status-badge@v0
         with:
           auth: ${{ secrets.GIST_TOKEN }}
-          gistID: ${{ matrix.GIST_ID }}
+          gist-id: ${{ matrix.GIST_ID }}
           badge-label: ${{ env.MESSAGE }}
           custom-message: test
           custom-color: ${{ env.COLOR }}
