@@ -77,12 +77,11 @@ pub fn build(b: *std.Build) void {
             }
             var exe_name = e.name[ex_prefix.len..];
             exe_name = exe_name[0..(exe_name.len - ex_suffix.len)];
-            const ex_exe = b.addExecutable(.{
-                .name = exe_name,
+            const ex_exe = b.addExecutable(.{ .name = exe_name, .root_module = b.createModule(.{
                 .root_source_file = b.path(ex_dirname).path(b, e.name),
                 .target = target,
                 .optimize = optimize,
-            });
+            }) });
             ex_exe.root_module.addImport("zargs", mod_zargs);
             ex_exe.root_module.addImport("par", mod_par);
             ex_exe.root_module.addImport("ztype", mod_ztype);
