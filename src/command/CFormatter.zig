@@ -21,9 +21,9 @@ pub fn init(c: Command) Self {
     self.left_length = blk: {
         var pure = self;
         pure.c._config.style = .none;
-        var counting = std.io.countingWriter(std.io.null_writer);
-        try pure.usage1(counting.writer());
-        break :blk counting.bytes_written;
+        var counting = std.Io.Writer.Discarding.init(&@as([0]u8, .{}));
+        try pure.usage1(&counting.writer);
+        break :blk counting.fullCount();
     };
     return self;
 }
@@ -49,7 +49,7 @@ pub fn usage(self: Self, w: anytype) !void {
         try AFormatter.init(m, config).usage(w);
     }
     if (self.c._stat.posArg != 0 or self.c._stat.cmd != 0) {
-        try w.print(" {}[{s}]{}", .{
+        try w.print(" {f}[{s}]{f}", .{
             sRec.apply(sConfig.usage.optional),
             tConfig.terminator,
             sRec.reset(),
@@ -86,7 +86,7 @@ pub fn usage1(self: Self, w: anytype) !void {
     var sRec = Config.StyleRecord(3){};
     try w.writeAll(self.c.name[0]);
     if (self.c.name.len > 1) {
-        try w.print("{}{}{}", .{
+        try w.print("{f}{f}{f}", .{
             sRec.apply(sConfig.usage.alias),
             any(@as([]const LiteralString, self.c.name[1..]), .{ .multiple = .{ .begin = ", ", .separator = ", ", .end = "" } }),
             sRec.reset(),
@@ -119,7 +119,7 @@ pub fn help(self: Self, w: anytype) !void {
     _, const fConfig, const sConfig = config.destruct();
     var sRec = Config.StyleRecord(5){};
 
-    try w.print("{}Usage:{}\n{s}", .{
+    try w.print("{f}Usage:{f}\n{s}", .{
         sRec.apply(sConfig.title),
         sRec.reset(),
         " " ** fConfig.indent,
@@ -135,7 +135,7 @@ pub fn help(self: Self, w: anytype) !void {
         try w.writeByte('\n');
         var is_first = true;
         if (self.c.meta.version) |s| {
-            try w.print("{}Version{} {s}", .{
+            try w.print("{f}Version{f} {s}", .{
                 sRec.apply(sConfig.title),
                 sRec.reset(),
                 s,
@@ -144,7 +144,7 @@ pub fn help(self: Self, w: anytype) !void {
         }
         if (self.c.meta.author) |s| {
             if (!is_first) try w.writeByte('\t');
-            try w.print("{}Author{} <{s}>", .{
+            try w.print("{f}Author{f} <{s}>", .{
                 sRec.apply(sConfig.title),
                 sRec.reset(),
                 s,
@@ -153,7 +153,7 @@ pub fn help(self: Self, w: anytype) !void {
         }
         if (self.c.meta.homepage) |s| {
             if (!is_first) try w.writeByte('\t');
-            try w.print("{}Homepage{} {}{s}{}", .{
+            try w.print("{f}Homepage{f} {f}{s}{f}", .{
                 sRec.apply(sConfig.title),
                 sRec.reset(),
                 sRec.apply(sConfig.homepage),
@@ -165,7 +165,7 @@ pub fn help(self: Self, w: anytype) !void {
     }
 
     if (self.c._stat.opt != 0 or self.c._builtin_help != null) {
-        try w.print("\n{}Option:{}\n", .{
+        try w.print("\n{f}Option:{f}\n", .{
             sRec.apply(sConfig.title),
             sRec.reset(),
         });
@@ -179,7 +179,7 @@ pub fn help(self: Self, w: anytype) !void {
     }
 
     if (self.c._stat.optArg != 0) {
-        try w.print("\n{}Option with arguments:{}\n", .{
+        try w.print("\n{f}Option with arguments:{f}\n", .{
             sRec.apply(sConfig.title),
             sRec.reset(),
         });
@@ -190,7 +190,7 @@ pub fn help(self: Self, w: anytype) !void {
     }
 
     if (self.c._stat.posArg != 0) {
-        try w.print("\n{}Positional arguments:{}\n", .{
+        try w.print("\n{f}Positional arguments:{f}\n", .{
             sRec.apply(sConfig.title),
             sRec.reset(),
         });
@@ -201,7 +201,7 @@ pub fn help(self: Self, w: anytype) !void {
     }
 
     if (self.c._stat.cmd != 0) {
-        try w.print("\n{}Commands:{}\n", .{
+        try w.print("\n{f}Commands:{f}\n", .{
             sRec.apply(sConfig.title),
             sRec.reset(),
         });

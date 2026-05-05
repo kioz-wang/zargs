@@ -39,7 +39,7 @@ pub fn main() !void {
     var args = cmd.config(.{ .style = .classic }).parse(allocator) catch |e|
         zargs.exitf(e, 1, "\n{s}\n", .{cmd.usageString()});
     defer cmd.destroy(&args, allocator);
-    if (args.logfile) |logfile| std.debug.print("Store log into {}\n", .{logfile});
+    if (args.logfile) |logfile| std.debug.print("Store log into {f}\n", .{logfile});
     switch (args.action) {
         .install => |a| {
             std.debug.print("Installing {s}\n", .{a.name});

@@ -76,7 +76,7 @@ pub const Collection = struct {
             pub fn is_universal(self: Self) bool {
                 return self.left == null and self.right == null;
             }
-            pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) @TypeOf(writer).Error!void {
+            fn formatInner(self: Self, writer: *std.io.Writer, comptime fmode: u8, number: ?std.fmt.Number) std.io.Writer.Error!void {
                 const s_empty = "∅";
                 const s_universal = "U";
                 const s_infinity = "∞";
@@ -90,17 +90,23 @@ pub const Collection = struct {
                 }
                 if (self.left) |left| {
                     try writer.writeAll("[");
-                    try any(left, .{}).format(fmt, options, writer);
+                    try any(left, .{}).formatInner(writer, fmode, number);
                 } else {
                     try writer.writeAll(comptimePrint("(-{s}", .{s_infinity}));
                 }
                 try writer.writeAll(",");
                 if (self.right) |right| {
-                    try any(right, .{}).format(fmt, options, writer);
+                    try any(right, .{}).formatInner(writer, fmode, number);
                 } else {
                     try writer.writeAll(s_infinity);
                 }
                 try writer.writeAll(")");
+            }
+            pub fn format(self: Self, writer: *std.io.Writer) std.io.Writer.Error!void {
+                return try self.formatInner(writer, 'f', null);
+            }
+            pub fn formatNumber(self: Self, writer: *std.io.Writer, number: std.fmt.Number) std.io.Writer.Error!void {
+                return try self.formatInner(writer, 'n', number);
             }
             pub fn contain(self: Self, v: T) bool {
                 if (self.left) |left| {
@@ -130,11 +136,11 @@ pub const Collection = struct {
         }
         test "Range format" {
             var buffer: [16]u8 = undefined;
-            try testing.expectEqualStrings("U", try bufPrint(&buffer, "{}", .{Range(u32).universal}));
-            try testing.expectEqualStrings("∅", try bufPrint(&buffer, "{}", .{Range(u32).empty}));
-            try testing.expectEqualStrings("(-∞,1)", try bufPrint(&buffer, "{}", .{comptime Range(i32).init(null, 1)}));
-            try testing.expectEqualStrings("[-1,1)", try bufPrint(&buffer, "{}", .{comptime Range(i32).init(-1, 1)}));
-            try testing.expectEqualStrings("[-1,∞)", try bufPrint(&buffer, "{}", .{comptime Range(i32).init(-1, null)}));
+            try testing.expectEqualStrings("U", try bufPrint(&buffer, "{f}", .{Range(u32).universal}));
+            try testing.expectEqualStrings("∅", try bufPrint(&buffer, "{f}", .{Range(u32).empty}));
+            try testing.expectEqualStrings("(-∞,1)", try bufPrint(&buffer, "{f}", .{comptime Range(i32).init(null, 1)}));
+            try testing.expectEqualStrings("[-1,1)", try bufPrint(&buffer, "{f}", .{comptime Range(i32).init(-1, 1)}));
+            try testing.expectEqualStrings("[-1,∞)", try bufPrint(&buffer, "{f}", .{comptime Range(i32).init(-1, null)}));
             try testing.expectEqualStrings("[  -f,  +c)", try bufPrint(&buffer, "{x:>4}", .{comptime Range(i32).init(-0xf, 0xc)}));
         }
         test "Range contain" {
@@ -319,16 +325,16 @@ pub const Compare = struct {
 };
 
 pub fn exit(catched: anyerror, status: u8) noreturn {
-    const stderr = std.io.getStdErr().writer();
-    stderr.print("catch: {any}\n", .{catched}) catch unreachable;
+    var stderr = std.fs.File.stderr().writer(&@as([0]u8, .{}));
+    stderr.interface.print("catch: {any}\n", .{catched}) catch unreachable;
     std.process.exit(status);
 }
 
 pub fn exitf(catched: ?anyerror, status: u8, comptime fmt: String, args: anytype) noreturn {
-    const stderr = std.io.getStdErr().writer();
+    var stderr = std.fs.File.stderr().writer(&@as([0]u8, .{}));
     if (catched) |e|
-        stderr.print("catch: {any}\n", .{e}) catch unreachable;
-    stderr.print(fmt ++ "\n", args) catch unreachable;
+        stderr.interface.print("catch: {any}\n", .{e}) catch unreachable;
+    stderr.interface.print(fmt ++ "\n", args) catch unreachable;
     std.process.exit(status);
 }
 

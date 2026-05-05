@@ -19,7 +19,7 @@ pub fn main() !void {
             install.callBack(struct {
                 fn f(r: *install.Result()) void {
                     r.count *= 2;
-                    std.debug.print("[{s}] Installing {s} (count:{d})\n", .{ install.name, r.name, r.count });
+                    std.debug.print("[{any}] Installing {s} (count:{d})\n", .{ install.name, r.name, r.count });
                 }
             }.f),
         )
@@ -27,14 +27,14 @@ pub fn main() !void {
             remove.callBack(struct {
                 fn f(r: *remove.Result()) void {
                     r.count *= 10;
-                    std.debug.print("[{s}] Removing {s} (count:{d})\n", .{ remove.name, r.name, r.count });
+                    std.debug.print("[{any}] Removing {s} (count:{d})\n", .{ remove.name, r.name, r.count });
                 }
             }.f),
         )
         .arg(Arg.opt("verbose", u32).short('v'));
     const cmd = _cmd.callBack(struct {
         fn f(r: *_cmd.Result()) void {
-            std.debug.print("[{s}] Success to do {s}\n", .{ _cmd.name, @tagName(r.action) });
+            std.debug.print("[{any}] Success to do {s}\n", .{ _cmd.name, @tagName(r.action) });
         }
     }.f);
 

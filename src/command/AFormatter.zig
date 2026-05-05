@@ -24,9 +24,9 @@ pub fn init(arg: Arg, config: Config) Self {
     self.left_length = blk: {
         var pure = self;
         pure.config.style = .none;
-        var counting = std.io.countingWriter(std.io.null_writer);
-        try pure.usage1(counting.writer());
-        break :blk counting.bytes_written;
+        var counting = std.Io.Writer.Discarding.init(&@as([0]u8, .{}));
+        try pure.usage1(&counting.writer);
+        break :blk counting.fullCount();
     };
     return self;
 }
@@ -37,13 +37,13 @@ pub fn usage(self: Self, w: anytype) !void {
     var is_first = true;
 
     if (meta.default != null or meta.rawDefault != null or ztype.checker.isSlice(self.arg.T)) {
-        try w.print("{}", .{sRec.apply(sConfig.usage.optional)});
+        try w.print("{f}", .{sRec.apply(sConfig.usage.optional)});
         if (!ztype.checker.isSlice(self.arg.T)) {
             try w.writeByte('[');
         }
     }
     if ((meta.short.len > 0 or meta.long.len > 0) and meta.argName != null) {
-        try w.print("{}", .{sRec.apply(sConfig.usage.optarg)});
+        try w.print("{f}", .{sRec.apply(sConfig.usage.optarg)});
     }
     if (meta.short.len > 0) {
         try w.writeAll(self.config.token.prefix.short);
@@ -58,7 +58,7 @@ pub fn usage(self: Self, w: anytype) !void {
     }
     if (meta.argName) |s| {
         if (!is_first) try w.writeByte(' ');
-        try w.print("{}", .{sRec.apply(sConfig.usage.argument)});
+        try w.print("{f}", .{sRec.apply(sConfig.usage.argument)});
         if (!is_first or (meta.default == null and meta.rawDefault == null)) {
             try w.writeByte('{');
         }
@@ -73,12 +73,12 @@ pub fn usage(self: Self, w: anytype) !void {
         }
     }
     if (meta.default != null or meta.rawDefault != null or ztype.checker.isSlice(self.arg.T)) {
-        try w.print("{}", .{sRec.restore(sConfig.usage.optional)});
+        try w.print("{f}", .{sRec.restore(sConfig.usage.optional)});
         if (!ztype.checker.isSlice(self.arg.T)) {
             try w.writeByte(']');
         }
     }
-    try w.print("{}", .{sRec.reset()});
+    try w.print("{f}", .{sRec.reset()});
     if (self.arg.class == .opt and self.arg.T != bool or self.arg.class == .optArg and ztype.checker.isSlice(self.arg.T)) {
         try w.writeAll("...");
     }
@@ -91,21 +91,21 @@ fn usage1(self: Self, w: anytype) !void {
 
     for (meta.short, 0..) |short, i| {
         if (i != 0) {
-            try w.print("{}", .{sRec.apply(sConfig.usage.alias)});
+            try w.print("{f}", .{sRec.apply(sConfig.usage.alias)});
         }
         if (is_first) is_first = false else try w.writeAll(", ");
         try w.writeAll(tConfig.prefix.short);
         try w.writeByte(short);
-        try w.print("{}", .{sRec.reset()});
+        try w.print("{f}", .{sRec.reset()});
     }
     for (meta.long, 0..) |long, i| {
         if (i != 0) {
-            try w.print("{}", .{sRec.apply(sConfig.usage.alias)});
+            try w.print("{f}", .{sRec.apply(sConfig.usage.alias)});
         }
         if (is_first) is_first = false else try w.writeAll(", ");
         try w.writeAll(tConfig.prefix.long);
         try w.writeAll(long);
-        try w.print("{}", .{sRec.reset()});
+        try w.print("{f}", .{sRec.reset()});
     }
     if (meta.argName) |s| {
         if (!is_first) try w.writeByte(' ');
@@ -150,7 +150,7 @@ pub fn help(self: Self, w: anytype) !void {
         }
         if (meta.default != null or meta.rawDefault != null) {
             if (meta.help != null) try w.writeByte(' ');
-            try w.print("{}({s} is {}{}{}){}", .{
+            try w.print("{f}({s} is {f}{f}{f}){f}", .{
                 sRec.apply(sConfig.help.default),
                 if (meta.default != null) "default" else "default input",
                 sRec.apply(sConfig.help.defaultValue),
@@ -163,23 +163,23 @@ pub fn help(self: Self, w: anytype) !void {
 
     if (meta.ranges != null or meta.choices != null) {
         try self.indent(w, &is_firstline);
-        try w.print("{}possible: {}", .{
+        try w.print("{f}possible: {f}", .{
             sRec.apply(sConfig.help.possible),
             sRec.apply(sConfig.help.possibleValue),
         });
         if (meta.ranges) |_| {
-            try w.print("{}", .{any(self.arg.getRanges().?.rs, .{ .multiple = .dump(" or ", 1) })});
+            try w.print("{f}", .{any(self.arg.getRanges().?.rs, .{ .multiple = .dump(" or ", 1) })});
         }
         if (meta.choices) |_| {
             if (meta.ranges != null) try w.writeAll(" or ");
-            try w.print("{}", .{any(self.arg.getChoices().?.*, .{})});
+            try w.print("{f}", .{any(self.arg.getChoices().?.*, .{})});
         }
-        try w.print("{}", .{sRec.reset()});
+        try w.print("{f}", .{sRec.reset()});
     }
 
     if (meta.rawChoices) |cs| {
         try self.indent(w, &is_firstline);
-        try w.print("{}possible inputs: {}{}{}", .{
+        try w.print("{f}possible inputs: {f}{f}{f}", .{
             sRec.apply(sConfig.help.possible),
             sRec.apply(sConfig.help.possibleInput),
             any(cs, .{}),
@@ -190,7 +190,7 @@ pub fn help(self: Self, w: anytype) !void {
     if (meta.ranges == null and meta.choices == null and meta.rawChoices == null) {
         if (@typeInfo(Base(self.arg.T)) == .@"enum" and self.arg.getParseFn() == null and !std.meta.hasMethod(Base(self.arg.T), "parse")) {
             try self.indent(w, &is_firstline);
-            try w.print("{}Enum: {}{}{}", .{
+            try w.print("{f}Enum: {f}{f}{f}", .{
                 sRec.apply(sConfig.help.enum_),
                 sRec.apply(sConfig.help.enumValue),
                 any(std.meta.fieldNames(Base(self.arg.T)).*, .{}),
